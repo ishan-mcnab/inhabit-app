@@ -2,12 +2,54 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 
-type Step = 'welcome' | 'name'
+type Step = 'welcome' | 'name' | 'goals'
+
+const GOAL_PURPLE = '#534AB7'
+
+const GOAL_OPTIONS = [
+  {
+    id: 'physical_fitness',
+    title: 'Physical Fitness',
+    emoji: '💪',
+    subtitle: 'Weightlifting, Sports, Staying Active',
+  },
+  {
+    id: 'health_habits',
+    title: 'Health Habits',
+    emoji: '🛌',
+    subtitle: 'Sleep, Diet, Hydration',
+  },
+  {
+    id: 'skills_growth',
+    title: 'Skills & Growth',
+    emoji: '🧠',
+    subtitle: 'Career, Side Hustle, Hobbies',
+  },
+  {
+    id: 'building_confidence',
+    title: 'Building Confidence',
+    emoji: '👊',
+    subtitle: 'Public Speaking, Social Skills, Self-Image',
+  },
+  {
+    id: 'mental_emotional_health',
+    title: 'Mental & Emotional Health',
+    emoji: '🧘',
+    subtitle: 'Meditation, Journaling, Mindfulness',
+  },
+  {
+    id: 'financial_goals',
+    title: 'Financial Goals',
+    emoji: '💰',
+    subtitle: 'Saving, Budgeting, Income',
+  },
+] as const
 
 export function Onboarding() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('welcome')
   const [displayName, setDisplayName] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [nameError, setNameError] = useState<string | null>(null)
   const [checking, setChecking] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -46,7 +88,16 @@ export function Onboarding() {
     void redirectIfOnboarded()
   }, [redirectIfOnboarded])
 
-  async function handleContinue(e: React.FormEvent) {
+  function toggleCategory(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function handleNameContinue(e: React.FormEvent) {
     e.preventDefault()
     setFormError(null)
     const trimmed = displayName.trim()
@@ -55,6 +106,13 @@ export function Onboarding() {
       return
     }
     setNameError(null)
+    setDisplayName(trimmed)
+    setStep('goals')
+  }
+
+  async function handleGoalsFinish() {
+    if (selectedIds.size === 0) return
+    setFormError(null)
 
     setSubmitting(true)
     const {
@@ -68,10 +126,13 @@ export function Onboarding() {
       return
     }
 
+    const categories = Array.from(selectedIds).sort()
+
     const { error } = await supabase.from('users').upsert(
       {
         id: user.id,
-        display_name: trimmed,
+        display_name: displayName.trim(),
+        goal_categories: categories,
         onboarded: true,
       },
       { onConflict: 'id' },
@@ -137,62 +198,134 @@ export function Onboarding() {
     )
   }
 
-  return (
-    <div className="flex min-h-screen flex-col bg-app-bg px-6 py-10">
-      <div className="mx-auto flex w-full max-w-[22rem] flex-1 flex-col justify-center">
-        <h1 className="text-3xl font-bold tracking-tight text-white">
-          What should we call you?
-        </h1>
-        <p className="mt-2 text-sm font-medium text-zinc-400">
-          This is how we&apos;ll greet you in the app.
-        </p>
+  if (step === 'name') {
+    return (
+      <div className="flex min-h-screen flex-col bg-app-bg px-6 py-10">
+        <div className="mx-auto flex w-full max-w-[22rem] flex-1 flex-col justify-center">
+          <h1 className="text-3xl font-bold tracking-tight text-white">
+            What should we call you?
+          </h1>
+          <p className="mt-2 text-sm font-medium text-zinc-400">
+            This is how we&apos;ll greet you in the app.
+          </p>
 
-        <form
-          className="mt-10 flex flex-col gap-5"
-          onSubmit={handleContinue}
-          noValidate
-        >
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="onboarding-display-name"
-              className="text-sm font-semibold text-zinc-200"
-            >
-              Display name
-            </label>
-            <input
-              id="onboarding-display-name"
-              name="displayName"
-              type="text"
-              autoComplete="name"
-              value={displayName}
-              onChange={(ev) => {
-                setDisplayName(ev.target.value)
-                if (nameError) setNameError(null)
-              }}
-              className="rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none transition-[border-color,box-shadow] placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30"
-              placeholder="Your name"
-            />
-            {nameError ? (
+          <form
+            className="mt-10 flex flex-col gap-5"
+            onSubmit={handleNameContinue}
+            noValidate
+          >
+            <div className="flex flex-col gap-2">
+              <label
+                htmlFor="onboarding-display-name"
+                className="text-sm font-semibold text-zinc-200"
+              >
+                Display name
+              </label>
+              <input
+                id="onboarding-display-name"
+                name="displayName"
+                type="text"
+                autoComplete="name"
+                value={displayName}
+                onChange={(ev) => {
+                  setDisplayName(ev.target.value)
+                  if (nameError) setNameError(null)
+                }}
+                className="rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none transition-[border-color,box-shadow] placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30"
+                placeholder="Your name"
+              />
+              {nameError ? (
+                <p className="text-sm font-medium text-red-400" role="alert">
+                  {nameError}
+                </p>
+              ) : null}
+            </div>
+
+            {formError ? (
               <p className="text-sm font-medium text-red-400" role="alert">
-                {nameError}
+                {formError}
               </p>
             ) : null}
-          </div>
 
-          {formError ? (
-            <p className="text-sm font-medium text-red-400" role="alert">
-              {formError}
-            </p>
-          ) : null}
+            <button
+              type="submit"
+              className="mt-2 rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg transition-opacity disabled:opacity-50"
+            >
+              Continue
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
+  const canFinish = selectedIds.size > 0
+
+  return (
+    <div className="flex min-h-screen flex-col bg-app-bg px-5 pb-10 pt-8">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+        <h1 className="text-3xl font-bold tracking-tight text-white">
+          What are you working on?
+        </h1>
+        <p className="mt-2 text-base font-semibold text-zinc-400">
+          Pick all that apply.
+        </p>
+
+        <div className="mt-8 grid grid-cols-2 gap-3">
+          {GOAL_OPTIONS.map((opt) => {
+            const selected = selectedIds.has(opt.id)
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => toggleCategory(opt.id)}
+                className={[
+                  'flex flex-col rounded-2xl border-2 p-3.5 text-left transition-colors',
+                  'min-h-[7.5rem] active:scale-[0.98]',
+                  selected
+                    ? 'shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]'
+                    : 'border-zinc-800 bg-app-surface hover:border-zinc-700',
+                ].join(' ')}
+                style={
+                  selected
+                    ? {
+                        borderColor: GOAL_PURPLE,
+                        backgroundColor: 'rgba(83, 74, 183, 0.12)',
+                      }
+                    : undefined
+                }
+              >
+                <span className="text-sm font-bold leading-tight text-white">
+                  {opt.title}{' '}
+                  <span className="text-base" aria-hidden>
+                    {opt.emoji}
+                  </span>
+                </span>
+                <span className="mt-2 text-[11px] font-medium leading-snug text-zinc-500">
+                  {opt.subtitle}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {formError ? (
+          <p className="mt-6 text-sm font-medium text-red-400" role="alert">
+            {formError}
+          </p>
+        ) : null}
+
+        <div className="mt-auto pt-10">
           <button
-            type="submit"
-            disabled={submitting}
-            className="mt-2 rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg transition-opacity disabled:opacity-50"
+            type="button"
+            disabled={!canFinish || submitting}
+            onClick={() => void handleGoalsFinish()}
+            className="w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {submitting ? 'Saving…' : 'Continue'}
+            {submitting ? 'Saving…' : "Let's go"}
           </button>
-        </form>
+        </div>
       </div>
     </div>
   )
