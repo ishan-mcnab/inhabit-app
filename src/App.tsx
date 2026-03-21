@@ -3,8 +3,10 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireGuest } from './components/RequireGuest'
+import { RequireOnboarded } from './components/RequireOnboarded'
 import { TabPlaceholder } from './components/TabPlaceholder'
 import { Login } from './pages/Login'
+import { Onboarding } from './pages/Onboarding'
 import { SignUp } from './pages/SignUp'
 import { supabase } from './supabase'
 
@@ -38,16 +40,22 @@ function App() {
         <Route path="signup" element={<SignUp />} />
       </Route>
       <Route element={<RequireAuth />}>
-        <Route element={<Layout />}>
-          <Route index element={<Navigate to="/today" replace />} />
-          <Route path="today" element={<TabPlaceholder title="Today" />} />
-          <Route path="goals" element={<TabPlaceholder title="Goals" />} />
-          <Route
-            path="progress"
-            element={<TabPlaceholder title="Progress" />}
-          />
-          <Route path="profile" element={<TabPlaceholder title="Profile" />} />
-          <Route path="*" element={<Navigate to="/today" replace />} />
+        <Route path="onboarding" element={<Onboarding />} />
+        <Route element={<RequireOnboarded />}>
+          <Route element={<Layout />}>
+            <Route index element={<Navigate to="/today" replace />} />
+            <Route path="today" element={<TabPlaceholder title="Today" />} />
+            <Route path="goals" element={<TabPlaceholder title="Goals" />} />
+            <Route
+              path="progress"
+              element={<TabPlaceholder title="Progress" />}
+            />
+            <Route
+              path="profile"
+              element={<TabPlaceholder title="Profile" />}
+            />
+            <Route path="*" element={<Navigate to="/today" replace />} />
+          </Route>
         </Route>
       </Route>
     </Routes>
