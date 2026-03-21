@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-app-bg: #0d0d0f;
+  --color-app-surface: #16161a;
+  --color-app-muted: #a1a1aa;
+  --color-app-accent: #a78bfa;
+  --color-tab-bar: #141418;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply m-0 min-h-screen bg-app-bg text-zinc-100 antialiased;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}
