@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { TabPlaceholder } from './components/TabPlaceholder'
+import { Login } from './pages/Login'
+import { SignUp } from './pages/SignUp'
 import { supabase } from './supabase'
 
 function App() {
@@ -29,6 +31,8 @@ function App() {
 
   return (
     <Routes>
+      <Route path="login" element={<Login />} />
+      <Route path="signup" element={<SignUp />} />
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/today" replace />} />
         <Route path="today" element={<TabPlaceholder title="Today" />} />
