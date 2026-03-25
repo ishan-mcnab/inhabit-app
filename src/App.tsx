@@ -5,6 +5,8 @@ import { RequireAuth } from './components/RequireAuth'
 import { RequireGuest } from './components/RequireGuest'
 import { RequireOnboarded } from './components/RequireOnboarded'
 import { TabPlaceholder } from './components/TabPlaceholder'
+import { CreateGoal } from './pages/CreateGoal'
+import { Goals } from './pages/Goals'
 import { Login } from './pages/Login'
 import { Onboarding } from './pages/Onboarding'
 import { SignUp } from './pages/SignUp'
@@ -45,7 +47,8 @@ function App() {
           <Route element={<Layout />}>
             <Route index element={<Navigate to="/today" replace />} />
             <Route path="today" element={<TabPlaceholder title="Today" />} />
-            <Route path="goals" element={<TabPlaceholder title="Goals" />} />
+            <Route path="goals" element={<Goals />} />
+            <Route path="goals/new" element={<CreateGoal />} />
             <Route
               path="progress"
               element={<TabPlaceholder title="Progress" />}
