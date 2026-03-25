@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   GOAL_CATEGORY_PILLS,
   GOAL_PURPLE,
   type GoalCategoryId,
 } from '../constants/goalCategoryPills'
+import { supabase } from '../supabase'
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear()
@@ -44,14 +45,27 @@ export function CreateGoal() {
   const [description, setDescription] = useState('')
   const [titleError, setTitleError] = useState<string | null>(null)
   const [categoryError, setCategoryError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const successNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (successNavTimerRef.current !== null) {
+        clearTimeout(successNavTimerRef.current)
+      }
+    }
+  }, [])
 
   function selectCategory(id: GoalCategoryId) {
     setCategoryId(id)
     if (categoryError) setCategoryError(null)
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setFormError(null)
 
     const trimmedTitle = title.trim()
     let valid = true
@@ -69,8 +83,41 @@ export function CreateGoal() {
     }
     if (!valid) return
 
-    // UI only — Supabase wiring comes later
-    void navigate('/goals', { replace: true })
+    setSaving(true)
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setSaving(false)
+      setFormError(userError?.message ?? 'Not signed in')
+      return
+    }
+
+    const descTrimmed = description.trim()
+    const { error } = await supabase.from('goals').insert({
+      user_id: user.id,
+      title: trimmedTitle,
+      category: categoryId,
+      description: descTrimmed.length > 0 ? descTrimmed : null,
+      target_date: targetDate,
+      progress_percent: 0,
+      status: 'active',
+    })
+
+    setSaving(false)
+
+    if (error) {
+      setFormError(error.message)
+      return
+    }
+
+    setSaveSuccess(true)
+    successNavTimerRef.current = setTimeout(() => {
+      successNavTimerRef.current = null
+      void navigate('/goals', { replace: true })
+    }, 900)
   }
 
   return (
@@ -111,7 +158,8 @@ export function CreateGoal() {
                 if (titleError) setTitleError(null)
               }}
               placeholder="What's your goal?"
-              className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30"
+              disabled={saving || saveSuccess}
+              className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 disabled:opacity-50"
             />
             {titleError ? (
               <p className="mt-2 text-sm font-medium text-red-400" role="alert">
@@ -132,10 +180,11 @@ export function CreateGoal() {
                     key={pill.id}
                     type="button"
                     aria-pressed={selected}
+                    disabled={saving || saveSuccess}
                     onClick={() => selectCategory(pill.id)}
                     className={[
                       'rounded-full border-2 px-3 py-3 text-left text-sm font-bold leading-tight text-white transition-colors',
-                      'min-h-[3rem] active:scale-[0.98]',
+                      'min-h-[3rem] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50',
                       selected ? '' : 'border-zinc-800 bg-app-surface hover:border-zinc-700',
                     ].join(' ')}
                     style={
@@ -175,7 +224,8 @@ export function CreateGoal() {
               max={maxStr}
               value={targetDate}
               onChange={(ev) => setTargetDate(ev.target.value)}
-              className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 [color-scheme:dark]"
+              disabled={saving || saveSuccess}
+              className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 [color-scheme:dark] disabled:opacity-50"
             />
             <p className="mt-1.5 text-xs font-medium text-zinc-500">
               Up to 90 days from today
@@ -195,19 +245,39 @@ export function CreateGoal() {
               value={description}
               onChange={(ev) => setDescription(ev.target.value)}
               placeholder="Describe your goal..."
-              className="mt-2 w-full resize-none rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30"
+              disabled={saving || saveSuccess}
+              className="mt-2 w-full resize-none rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 disabled:opacity-50"
             />
+
+            {formError ? (
+              <p
+                className="mt-6 text-sm font-medium text-red-400"
+                role="alert"
+              >
+                {formError}
+              </p>
+            ) : null}
           </div>
         </div>
 
         <div className="shrink-0 border-t border-zinc-800/60 bg-app-bg px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-lg">
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity active:opacity-90"
-            >
-              Create Goal
-            </button>
+            {saveSuccess ? (
+              <p
+                className="w-full rounded-xl bg-emerald-500/15 py-4 text-center text-base font-bold tracking-wide text-emerald-400 ring-1 ring-emerald-500/40"
+                role="status"
+              >
+                Goal created
+              </p>
+            ) : (
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity active:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? 'Creating…' : 'Create Goal'}
+              </button>
+            )}
           </div>
         </div>
       </form>
