@@ -116,47 +116,54 @@ export function Goals() {
               const pct = clampPercent(goal.progress_percent)
               return (
                 <li key={goal.id}>
-                  <article className="flex gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm">
-                    <div
-                      className="w-1 shrink-0 self-stretch rounded-full"
-                      style={{ backgroundColor: accent }}
-                      aria-hidden
-                    />
-                    <div className="min-w-0 flex-1">
-                    <h2 className="text-lg font-bold leading-snug text-white">
-                      {goal.title}
-                    </h2>
-                    <p className="mt-2 text-sm font-semibold text-zinc-400">
-                      <span aria-hidden>{emoji}</span>{' '}
-                      <span className="text-zinc-300">{label}</span>
-                    </p>
-                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Target{' '}
-                      <span className="text-zinc-400">
-                        {formatTargetDate(goal.target_date)}
-                      </span>
-                    </p>
-                    <div className="mt-4">
-                      <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
-                        <span>Progress</span>
-                        <span className="tabular-nums text-zinc-400">{pct}%</span>
-                      </div>
+                  <Link
+                    to={`/goals/${goal.id}`}
+                    className="block rounded-2xl outline-none ring-app-accent/0 transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-app-accent/50"
+                  >
+                    <article className="flex gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm transition-colors hover:border-zinc-700/80">
                       <div
-                        className="mt-1.5 h-2 overflow-hidden rounded-full bg-zinc-800"
-                        role="progressbar"
-                        aria-valuenow={pct}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label="Goal progress"
-                      >
-                        <div
-                          className="h-full rounded-full bg-app-accent transition-[width] duration-300"
-                          style={{ width: `${pct}%` }}
-                        />
+                        className="w-1 shrink-0 self-stretch rounded-full"
+                        style={{ backgroundColor: accent }}
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-lg font-bold leading-snug text-white">
+                          {goal.title}
+                        </h2>
+                        <p className="mt-2 text-sm font-semibold text-zinc-400">
+                          <span aria-hidden>{emoji}</span>{' '}
+                          <span className="text-zinc-300">{label}</span>
+                        </p>
+                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                          Target{' '}
+                          <span className="text-zinc-400">
+                            {formatTargetDate(goal.target_date)}
+                          </span>
+                        </p>
+                        <div className="mt-4">
+                          <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
+                            <span>Progress</span>
+                            <span className="tabular-nums text-zinc-400">
+                              {pct}%
+                            </span>
+                          </div>
+                          <div
+                            className="mt-1.5 h-2 overflow-hidden rounded-full bg-zinc-800"
+                            role="progressbar"
+                            aria-valuenow={pct}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label="Goal progress"
+                          >
+                            <div
+                              className="h-full rounded-full bg-app-accent transition-[width] duration-300"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    </div>
-                  </article>
+                    </article>
+                  </Link>
                 </li>
               )
             })}
