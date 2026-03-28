@@ -198,6 +198,3 @@ export async function generateMissions(
   return assertGeneratedMissions(parsed)
 }
 
-void generateMissions('Get to 175 lbs', 'physical_fitness', '2025-06-01')
-  .then((r) => console.log('Mission result:', r))
-  .catch((e) => console.error('Mission error:', e))

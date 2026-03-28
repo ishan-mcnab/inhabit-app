@@ -10,6 +10,7 @@ import { Goals } from './pages/Goals'
 import { Login } from './pages/Login'
 import { Onboarding } from './pages/Onboarding'
 import { SignUp } from './pages/SignUp'
+import { Today } from './pages/Today'
 import { supabase } from './supabase'
 
 function App() {
@@ -46,7 +47,7 @@ function App() {
         <Route element={<RequireOnboarded />}>
           <Route element={<Layout />}>
             <Route index element={<Navigate to="/today" replace />} />
-            <Route path="today" element={<TabPlaceholder title="Today" />} />
+            <Route path="today" element={<Today />} />
             <Route path="goals" element={<Goals />} />
             <Route path="goals/new" element={<CreateGoal />} />
             <Route
