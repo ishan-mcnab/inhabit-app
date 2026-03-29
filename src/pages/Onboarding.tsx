@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { OnboardingContextStep } from '../components/onboarding/OnboardingContextStep'
+import { ONBOARDING_CONTEXT_FIELDS } from '../constants/onboardingContextConfig'
+import type { GoalContextCategoryId } from '../types/goalContext'
 import { supabase } from '../supabase'
 
-type Step = 'welcome' | 'name' | 'goals'
+type Step = 'welcome' | 'name' | 'goals' | 'context'
 
 const GOAL_PURPLE = '#534AB7'
 
 const GOAL_OPTIONS = [
   {
-    id: 'physical_fitness',
-    title: 'Physical Fitness',
+    id: 'fitness_consistency',
+    title: 'Fitness Consistency',
     emoji: '💪',
-    subtitle: 'Weightlifting, Sports, Staying Active',
+    subtitle: 'Show up. Track it. Build the habit.',
   },
   {
     id: 'health_habits',
@@ -45,16 +48,50 @@ const GOAL_OPTIONS = [
   },
 ] as const
 
+function isGoalContextCategoryId(id: string): id is GoalContextCategoryId {
+  return id in ONBOARDING_CONTEXT_FIELDS
+}
+
+function buildGoalContextPayload(
+  order: string[],
+  draft: Record<string, Record<string, string>>,
+): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {}
+  for (const cat of order) {
+    if (!isGoalContextCategoryId(cat)) continue
+    const fields = ONBOARDING_CONTEXT_FIELDS[cat]
+    const src = draft[cat] ?? {}
+    const obj: Record<string, string> = {}
+    for (const f of fields) {
+      const raw = (src[f.key] ?? '').trim()
+      if (f.required) {
+        obj[f.key] = raw
+      } else if (raw !== '') {
+        obj[f.key] = raw
+      }
+    }
+    out[cat] = obj
+  }
+  return out
+}
+
 export function Onboarding() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('welcome')
   const [displayName, setDisplayName] = useState('')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  /** Selection order = order of context screens */
+  const [selectedOrder, setSelectedOrder] = useState<string[]>([])
+  const [contextIndex, setContextIndex] = useState(0)
+  const [contextDraft, setContextDraft] = useState<
+    Record<string, Record<string, string>>
+  >({})
   const [nameError, setNameError] = useState<string | null>(null)
   const [checking, setChecking] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
+
+  const selectedSet = useMemo(() => new Set(selectedOrder), [selectedOrder])
 
   const redirectIfOnboarded = useCallback(async () => {
     setBootError(null)
@@ -89,11 +126,9 @@ export function Onboarding() {
   }, [redirectIfOnboarded])
 
   function toggleCategory(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
+    setSelectedOrder((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+      return [...prev, id]
     })
   }
 
@@ -110,9 +145,35 @@ export function Onboarding() {
     setStep('goals')
   }
 
-  async function handleGoalsFinish() {
-    if (selectedIds.size === 0) return
+  function handleGoalsContinue() {
+    if (selectedOrder.length === 0) return
     setFormError(null)
+    setContextIndex(0)
+    setStep('context')
+  }
+
+  function handleContextFieldChange(cat: string, key: string, value: string) {
+    setContextDraft((prev) => ({
+      ...prev,
+      [cat]: { ...(prev[cat] ?? {}), [key]: value },
+    }))
+  }
+
+  function handleContextBack() {
+    setFormError(null)
+    if (contextIndex <= 0) {
+      setStep('goals')
+      return
+    }
+    setContextIndex((i) => i - 1)
+  }
+
+  async function handleContextContinue() {
+    setFormError(null)
+    if (contextIndex < selectedOrder.length - 1) {
+      setContextIndex((i) => i + 1)
+      return
+    }
 
     setSubmitting(true)
     const {
@@ -126,13 +187,14 @@ export function Onboarding() {
       return
     }
 
-    const categories = Array.from(selectedIds).sort()
+    const goal_context = buildGoalContextPayload(selectedOrder, contextDraft)
 
     const { error } = await supabase.from('users').upsert(
       {
         id: user.id,
         display_name: displayName.trim(),
-        goal_categories: categories,
+        goal_categories: [...selectedOrder],
+        goal_context,
         onboarded: true,
       },
       { onConflict: 'id' },
@@ -259,7 +321,98 @@ export function Onboarding() {
     )
   }
 
-  const canFinish = selectedIds.size > 0
+  if (step === 'context') {
+    if (selectedOrder.length === 0) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-app-bg px-6">
+          <p className="text-center text-sm text-zinc-500">
+            Select at least one focus area to continue.
+          </p>
+          <button
+            type="button"
+            onClick={() => setStep('goals')}
+            className="rounded-xl bg-white px-6 py-3 text-sm font-bold text-app-bg"
+          >
+            Back to categories
+          </button>
+        </div>
+      )
+    }
+
+    if (contextIndex < 0 || contextIndex >= selectedOrder.length) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-app-bg px-6">
+          <p className="text-center text-sm text-zinc-500">
+            Invalid step. Return to category selection.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setContextIndex(0)
+              setStep('goals')
+            }}
+            className="rounded-xl bg-white px-6 py-3 text-sm font-bold text-app-bg"
+          >
+            Back to categories
+          </button>
+        </div>
+      )
+    }
+
+    const catRaw = selectedOrder[contextIndex]
+    if (!isGoalContextCategoryId(catRaw)) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-app-bg px-6">
+          <p className="text-center text-sm text-zinc-500">
+            Unknown category. Please go back and try again.
+          </p>
+          <button
+            type="button"
+            onClick={() => setStep('goals')}
+            className="rounded-xl bg-white px-6 py-3 text-sm font-bold text-app-bg"
+          >
+            Back to categories
+          </button>
+        </div>
+      )
+    }
+
+    const categoryId = catRaw
+    const meta = GOAL_OPTIONS.find((o) => o.id === categoryId)
+    if (!meta) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-app-bg px-6">
+          <button
+            type="button"
+            onClick={() => setStep('goals')}
+            className="rounded-xl bg-white px-6 py-3 text-sm font-bold text-app-bg"
+          >
+            Back to categories
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <OnboardingContextStep
+        categoryId={categoryId}
+        headingEmoji={meta.emoji}
+        headingTitle={meta.title}
+        stepNumber={contextIndex + 1}
+        totalSteps={selectedOrder.length}
+        values={contextDraft[categoryId] ?? {}}
+        onFieldChange={(key, value) =>
+          handleContextFieldChange(categoryId, key, value)
+        }
+        onBack={handleContextBack}
+        onContinue={() => void handleContextContinue()}
+        submitting={submitting}
+        formError={formError}
+      />
+    )
+  }
+
+  const canFinish = selectedOrder.length > 0
 
   return (
     <div className="flex min-h-screen flex-col bg-app-bg px-5 pb-10 pt-8">
@@ -273,7 +426,7 @@ export function Onboarding() {
 
         <div className="mt-8 grid grid-cols-2 gap-3">
           {GOAL_OPTIONS.map((opt) => {
-            const selected = selectedIds.has(opt.id)
+            const selected = selectedSet.has(opt.id)
             return (
               <button
                 key={opt.id}
@@ -319,11 +472,11 @@ export function Onboarding() {
         <div className="mt-auto pt-10">
           <button
             type="button"
-            disabled={!canFinish || submitting}
-            onClick={() => void handleGoalsFinish()}
+            disabled={!canFinish}
+            onClick={handleGoalsContinue}
             className="w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {submitting ? 'Saving…' : "Let's go"}
+            Let&apos;s go
           </button>
         </div>
       </div>

@@ -1,6 +1,5 @@
-/** Display categories for goal creation / onboarding-style UIs */
+/** Categories shown when creating a goal (fitness is tracked as habits, not goals). */
 export const GOAL_CATEGORY_PILLS = [
-  { id: 'physical_fitness', label: 'Physical Fitness', emoji: '💪' },
   { id: 'health_habits', label: 'Health Habits', emoji: '🛌' },
   { id: 'skills_growth', label: 'Skills & Growth', emoji: '🧠' },
   { id: 'building_confidence', label: 'Building Confidence', emoji: '👊' },
@@ -16,8 +15,21 @@ export type GoalCategoryId = (typeof GOAL_CATEGORY_PILLS)[number]['id']
 
 export const GOAL_PURPLE = '#534AB7'
 
-/** Subtle left-border color per category for goal cards */
-export const GOAL_CATEGORY_BORDER: Record<GoalCategoryId, string> = {
+const EXTRA_CATEGORY_DISPLAY: Record<string, { label: string; emoji: string }> = {
+  fitness_consistency: {
+    label: 'Fitness Consistency',
+    emoji: '💪',
+  },
+  /** Legacy goals saved before slug rename */
+  physical_fitness: {
+    label: 'Physical Fitness',
+    emoji: '💪',
+  },
+}
+
+/** Subtle left-border color per category for goal cards and related UI */
+export const GOAL_CATEGORY_BORDER: Record<string, string> = {
+  fitness_consistency: '#ea580c',
   physical_fitness: '#ea580c',
   health_habits: '#22c55e',
   skills_growth: '#534AB7',
@@ -32,13 +44,13 @@ export function getGoalCategoryDisplay(slug: string | null | undefined): {
 } {
   const pill = GOAL_CATEGORY_PILLS.find((p) => p.id === slug)
   if (pill) return { label: pill.label, emoji: pill.emoji }
+  if (slug && EXTRA_CATEGORY_DISPLAY[slug]) {
+    return EXTRA_CATEGORY_DISPLAY[slug]
+  }
   return { label: slug?.replace(/_/g, ' ') ?? 'Goal', emoji: '🎯' }
 }
 
-export function getCategoryBorderColor(
-  slug: string | null | undefined,
-): string {
+export function getCategoryBorderColor(slug: string | null | undefined): string {
   if (!slug) return '#3f3f46'
-  const key = slug as GoalCategoryId
-  return GOAL_CATEGORY_BORDER[key] ?? '#3f3f46'
+  return GOAL_CATEGORY_BORDER[slug] ?? '#3f3f46'
 }
