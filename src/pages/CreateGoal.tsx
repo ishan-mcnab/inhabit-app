@@ -6,6 +6,7 @@ import {
   type GoalCategoryId,
 } from '../constants/goalCategoryPills'
 import { generateMissions } from '../lib/generateMissions'
+import { calculateTotalWeeks } from '../lib/goalProgress'
 import { supabase } from '../supabase'
 
 type DurationPresetId = '1m' | '3m' | '6m' | '1y'
@@ -49,12 +50,6 @@ function parseIsoLocal(iso: string): Date {
   const d = new Date(parts[0], parts[1] - 1, parts[2])
   d.setHours(0, 0, 0, 0)
   return d
-}
-
-function durationWeeksBetween(today: Date, targetIso: string): number {
-  const end = parseIsoLocal(targetIso)
-  const ms = end.getTime() - today.getTime()
-  return Math.max(1, Math.ceil(ms / (7 * 86_400_000)))
 }
 
 function clampDateStr(iso: string, minIso: string, maxIso: string): string {
@@ -277,7 +272,9 @@ export function CreateGoal() {
     if (!valid || !categoryId) return
 
     const category = categoryId
-    const durationWeeks = durationWeeksBetween(today, targetDate)
+    const totalWeeks = calculateTotalWeeks(targetDate)
+    const batchStartWeek = 1
+    const batchEndWeek = Math.min(4, totalWeeks)
 
     setSubmitPhase('saving_goal')
 
@@ -357,8 +354,10 @@ export function CreateGoal() {
       trimmedTitle,
       category,
       targetDate,
-      durationWeeks,
       userContext,
+      batchStartWeek,
+      batchEndWeek,
+      totalWeeks,
     ])
 
     let missions: Awaited<ReturnType<typeof generateMissions>>
@@ -367,8 +366,10 @@ export function CreateGoal() {
         trimmedTitle,
         category,
         targetDate,
-        durationWeeks,
         userContext,
+        batchStartWeek,
+        batchEndWeek,
+        totalWeeks,
       )
     } catch (err) {
       console.error('generateMissions threw:', err)
@@ -387,7 +388,7 @@ export function CreateGoal() {
       goal_id: goalId,
       user_id: user.id,
       title: questTitle,
-      week_number: i + 1,
+      week_number: batchStartWeek + i,
       completed: false,
       xp_reward: 150,
     }))

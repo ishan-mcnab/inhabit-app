@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
+import { generateMissions } from '../lib/generateMissions'
+import {
+  calculateCurrentWeekFromGoalStart,
+  calculateProgressPercent,
+  calculateTotalWeeks,
+  weeklyQuestBatchRanges,
+} from '../lib/goalProgress'
 import { supabase } from '../supabase'
 
 const QUEST_PURPLE = '#534AB7'
@@ -12,6 +19,9 @@ type GoalRow = {
   category: string | null
   target_date: string | null
   progress_percent: number
+  status: string
+  completed_at: string | null
+  created_at: string
 }
 
 type WeeklyQuestRow = {
@@ -45,13 +55,6 @@ function pickCurrentWeekQuest(quests: WeeklyQuestRow[]): WeeklyQuestRow | null {
   if (quests.every((q) => !q.completed)) return quests[0]
   const firstIncomplete = quests.find((q) => !q.completed)
   return firstIncomplete ?? quests[quests.length - 1]
-}
-
-function progressFromQuests(quests: WeeklyQuestRow[]): number {
-  const n = quests.length
-  if (n === 0) return 0
-  const done = quests.filter((q) => q.completed).length
-  return Math.round((done / n) * 100)
 }
 
 function DetailSkeleton() {
@@ -108,6 +111,13 @@ export function GoalDetail() {
   const [userId, setUserId] = useState<string | null>(null)
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [successFlashId, setSuccessFlashId] = useState<string | null>(null)
+  const [generatingNextBatch, setGeneratingNextBatch] = useState(false)
+  const [batchUnlockBanner, setBatchUnlockBanner] = useState<string | null>(
+    null,
+  )
+  const [nextBatchError, setNextBatchError] = useState<string | null>(null)
+
+  const batchGenInFlight = useRef(false)
 
   const load = useCallback(async () => {
     if (!goalId) {
@@ -136,7 +146,9 @@ export function GoalDetail() {
     const [goalRes, questsRes] = await Promise.all([
       supabase
         .from('goals')
-        .select('id,title,category,target_date,progress_percent')
+        .select(
+          'id,title,category,target_date,progress_percent,status,completed_at,created_at',
+        )
         .eq('id', goalId)
         .eq('user_id', user.id)
         .maybeSingle(),
@@ -163,7 +175,13 @@ export function GoalDetail() {
       return
     }
 
-    setGoal(goalRes.data as GoalRow)
+    const raw = goalRes.data as Partial<GoalRow> & GoalRow
+    setGoal({
+      ...raw,
+      status: raw.status ?? 'active',
+      completed_at: raw.completed_at ?? null,
+      created_at: raw.created_at ?? new Date().toISOString(),
+    })
 
     if (questsRes.error) {
       setQuests([])
@@ -179,19 +197,220 @@ export function GoalDetail() {
     void load()
   }, [load])
 
-  const currentQuest = useMemo(() => pickCurrentWeekQuest(quests), [quests])
+  const totalWeeks = useMemo(() => {
+    if (!goal?.target_date) return Math.max(1, quests.length || 1)
+    return calculateTotalWeeks(goal.target_date)
+  }, [goal?.target_date, quests.length])
+
+  const currentWeekFromStart = useMemo(() => {
+    if (!goal?.created_at) return 1
+    return calculateCurrentWeekFromGoalStart(goal.created_at)
+  }, [goal?.created_at])
+
+  const maxQuestWeek = useMemo(
+    () =>
+      quests.length > 0 ? Math.max(...quests.map((q) => q.week_number)) : 0,
+    [quests],
+  )
+
+  const completedQuestCount = useMemo(
+    () => quests.filter((q) => q.completed).length,
+    [quests],
+  )
+
+  const pct = useMemo(() => {
+    if (!goal) return 0
+    if (!goal.target_date && quests.length === 0) {
+      return clampPercent(goal.progress_percent)
+    }
+    const tw =
+      goal.target_date != null && goal.target_date !== ''
+        ? calculateTotalWeeks(goal.target_date)
+        : Math.max(1, quests.length)
+    return calculateProgressPercent(completedQuestCount, tw)
+  }, [goal, quests.length, completedQuestCount])
+
+  const isGoalComplete =
+    goal?.status === 'completed' ||
+    (totalWeeks > 0 && completedQuestCount >= totalWeeks)
+
+  const currentQuest = useMemo(() => {
+    if (quests.length === 0) return null
+    const byCalendar = quests.find(
+      (q) => q.week_number === currentWeekFromStart,
+    )
+    if (byCalendar) return byCalendar
+    return pickCurrentWeekQuest(quests)
+  }, [quests, currentWeekFromStart])
+
   const currentWeekNumber = currentQuest?.week_number ?? null
   const progressAccent = getMissionBoardAccent(goal?.category)
-  const pct = clampPercent(goal?.progress_percent ?? 0)
+  const barColor = isGoalComplete ? '#22c55e' : progressAccent
   const { label: catLabel, emoji: catEmoji } = getGoalCategoryDisplay(
     goal?.category,
   )
 
+  const batchDisplayRanges = useMemo(() => {
+    const span = Math.max(totalWeeks, maxQuestWeek, 1)
+    return weeklyQuestBatchRanges(span)
+  }, [totalWeeks, maxQuestWeek])
+
+  useEffect(() => {
+    if (loading || !goal || !userId || !goalId) return
+    if (goal.status === 'completed') return
+    if (!goal.target_date || !goal.created_at) return
+    if (batchGenInFlight.current) return
+
+    const totalW = calculateTotalWeeks(goal.target_date)
+    const currentW = calculateCurrentWeekFromGoalStart(goal.created_at)
+    const maxExisting =
+      quests.length > 0 ? Math.max(...quests.map((q) => q.week_number)) : 0
+
+    if (maxExisting === 0) return
+    if (maxExisting >= totalW) return
+    if (currentW < maxExisting) return
+
+    batchGenInFlight.current = true
+    setGeneratingNextBatch(true)
+    setNextBatchError(null)
+
+    const run = async () => {
+      try {
+        const { data: fresh } = await supabase
+          .from('weekly_quests')
+          .select('week_number')
+          .eq('goal_id', goalId)
+          .eq('user_id', userId)
+          .order('week_number', { ascending: false })
+          .limit(1)
+
+        const maxNow = fresh?.[0]?.week_number ?? 0
+        const totalNow = calculateTotalWeeks(goal.target_date!)
+        const currentNow = calculateCurrentWeekFromGoalStart(goal.created_at)
+
+        if (maxNow >= totalNow || currentNow < maxNow) {
+          return
+        }
+
+        const batchStart = maxNow + 1
+        const batchEnd = Math.min(maxNow + 4, totalNow)
+
+        const { data: profile } = await supabase
+          .from('users')
+          .select('goal_context')
+          .eq('id', userId)
+          .maybeSingle()
+
+        let userContext: Record<string, unknown> | undefined
+        const cat = goal.category ?? 'health_habits'
+        const rawCtx = profile?.goal_context
+        if (
+          rawCtx &&
+          typeof rawCtx === 'object' &&
+          !Array.isArray(rawCtx) &&
+          cat in (rawCtx as object)
+        ) {
+          const slice = (rawCtx as Record<string, unknown>)[cat]
+          if (
+            slice &&
+            typeof slice === 'object' &&
+            !Array.isArray(slice) &&
+            Object.values(slice as Record<string, unknown>).some(
+              (v) => typeof v === 'string' && v.trim().length > 0,
+            )
+          ) {
+            userContext = slice as Record<string, unknown>
+          }
+        }
+
+        const missions = await generateMissions(
+          goal.title,
+          cat,
+          goal.target_date!,
+          userContext,
+          batchStart,
+          batchEnd,
+          totalNow,
+        )
+
+        const rows = missions.weekly_quests.map((title, i) => ({
+          goal_id: goalId,
+          user_id: userId,
+          title,
+          week_number: batchStart + i,
+          completed: false,
+          xp_reward: 150,
+        }))
+
+        const { error: insErr } = await supabase
+          .from('weekly_quests')
+          .insert(rows)
+
+        if (insErr) {
+          setNextBatchError(insErr.message)
+          return
+        }
+
+        setBatchUnlockBanner(
+          `New quests unlocked for weeks ${batchStart}–${batchEnd}!`,
+        )
+        window.setTimeout(() => setBatchUnlockBanner(null), 6500)
+        await load()
+      } catch (e) {
+        setNextBatchError(
+          e instanceof Error ? e.message : 'Could not load next quests',
+        )
+      } finally {
+        batchGenInFlight.current = false
+        setGeneratingNextBatch(false)
+      }
+    }
+
+    void run()
+  }, [loading, goal, quests, userId, goalId, load])
+
   async function handleMarkQuestComplete(quest: WeeklyQuestRow) {
-    if (!userId || !goalId || quest.completed || markingId) return
+    if (
+      !userId ||
+      !goalId ||
+      !goal ||
+      quest.completed ||
+      markingId ||
+      goal.status === 'completed'
+    ) {
+      return
+    }
+
+    const prevQuests = quests
+    const prevGoal = goal
+
+    const nextQuests = quests.map((q) =>
+      q.id === quest.id ? { ...q, completed: true } : q,
+    )
+    const doneCount = nextQuests.filter((q) => q.completed).length
+    const totalW =
+      goal.target_date != null && goal.target_date !== ''
+        ? calculateTotalWeeks(goal.target_date)
+        : Math.max(1, nextQuests.length)
+    const newPct = calculateProgressPercent(doneCount, totalW)
+    const reached100 = doneCount >= totalW && totalW > 0
+    const completedAtIso = reached100 ? new Date().toISOString() : null
 
     setError(null)
     setMarkingId(quest.id)
+
+    setQuests(nextQuests)
+    setGoal((g) =>
+      g
+        ? {
+            ...g,
+            progress_percent: newPct,
+            status: reached100 ? 'completed' : g.status,
+            completed_at: reached100 ? completedAtIso : g.completed_at,
+          }
+        : null,
+    )
+
     const { error: uErr } = await supabase
       .from('weekly_quests')
       .update({ completed: true })
@@ -200,31 +419,49 @@ export function GoalDetail() {
       .eq('goal_id', goalId)
 
     if (uErr) {
+      setQuests(prevQuests)
+      setGoal(prevGoal)
       setMarkingId(null)
       setError(uErr.message)
       return
     }
 
-    const nextQuests = quests.map((q) =>
-      q.id === quest.id ? { ...q, completed: true } : q,
-    )
-    setQuests(nextQuests)
-    const newPct = progressFromQuests(nextQuests)
+    const goalUpdate: {
+      progress_percent: number
+      status?: string
+      completed_at?: string | null
+    } = { progress_percent: newPct }
+
+    if (reached100) {
+      goalUpdate.status = 'completed'
+      goalUpdate.completed_at = completedAtIso
+    }
 
     const { error: gErr } = await supabase
       .from('goals')
-      .update({ progress_percent: newPct })
+      .update(goalUpdate)
       .eq('id', goalId)
       .eq('user_id', userId)
 
-    setMarkingId(null)
-
     if (gErr) {
-      setError(gErr.message)
+      const { error: revErr } = await supabase
+        .from('weekly_quests')
+        .update({ completed: false })
+        .eq('id', quest.id)
+        .eq('user_id', userId)
+        .eq('goal_id', goalId)
+      setQuests(prevQuests)
+      setGoal(prevGoal)
+      setMarkingId(null)
+      setError(
+        revErr
+          ? `${gErr.message} (quest unlock failed: ${revErr.message})`
+          : gErr.message,
+      )
       return
     }
 
-    setGoal((g) => (g ? { ...g, progress_percent: newPct } : null))
+    setMarkingId(null)
     setSuccessFlashId(quest.id)
     window.setTimeout(() => setSuccessFlashId(null), 1200)
   }
@@ -293,6 +530,21 @@ export function GoalDetail() {
             </div>
           ) : null}
 
+          {batchUnlockBanner ? (
+            <div
+              className="mb-4 rounded-xl border border-app-accent/35 bg-app-accent/15 px-4 py-3 text-center text-sm font-semibold text-zinc-100 ring-1 ring-app-accent/25"
+              role="status"
+            >
+              {batchUnlockBanner}
+            </div>
+          ) : null}
+
+          {nextBatchError ? (
+            <p className="mb-3 text-center text-xs font-medium text-amber-400/90">
+              {nextBatchError}
+            </p>
+          ) : null}
+
           <section className="pt-2">
             <h1 className="text-2xl font-bold leading-tight tracking-tight text-white sm:text-3xl">
               {goal.title}
@@ -301,7 +553,10 @@ export function GoalDetail() {
               <span aria-hidden>{catEmoji}</span>{' '}
               <span className="text-zinc-400">{catLabel}</span>
             </p>
-            <p className="mt-3 text-sm font-semibold text-zinc-500">
+            <p className="mt-2 text-sm font-semibold text-zinc-400">
+              Week {currentWeekFromStart} of {totalWeeks}
+            </p>
+            <p className="mt-2 text-sm font-semibold text-zinc-500">
               Due{' '}
               <span className="text-zinc-300">
                 {formatDueDate(goal.target_date)}
@@ -320,7 +575,7 @@ export function GoalDetail() {
                   className="h-full rounded-full transition-[width] duration-500 ease-out"
                   style={{
                     width: `${pct}%`,
-                    backgroundColor: progressAccent,
+                    backgroundColor: barColor,
                   }}
                 />
               </div>
@@ -328,6 +583,14 @@ export function GoalDetail() {
                 {pct}%
               </span>
             </div>
+            {isGoalComplete ? (
+              <div
+                className="mt-4 max-w-lg rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 text-center text-sm font-bold text-emerald-200 ring-1 ring-emerald-500/30"
+                role="status"
+              >
+                Goal Complete!
+              </div>
+            ) : null}
           </section>
 
           <section className="mt-10">
@@ -354,8 +617,7 @@ export function GoalDetail() {
                     {currentQuest.title}
                   </p>
                   <p className="mt-1 text-sm font-medium text-zinc-500">
-                    Week {currentQuest.week_number} of{' '}
-                    {quests.length > 0 ? quests.length : 4}
+                    Week {currentQuest.week_number} of {totalWeeks}
                   </p>
                 </div>
                 <div className="shrink-0 sm:pl-2">
@@ -390,51 +652,78 @@ export function GoalDetail() {
           </section>
 
           <section className="mt-10">
-            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
-              All Quests
-            </h2>
-            <ul className="mt-3 space-y-2">
-              {quests.map((q) => {
-                const isCurrentWeek = q.week_number === currentWeekNumber
-                return (
-                  <li
-                    key={q.id}
-                    className={[
-                      'flex items-start gap-3 rounded-xl border bg-app-surface px-4 py-3 transition-opacity',
-                      q.completed
-                        ? 'border-zinc-800/60 opacity-50'
-                        : 'border-zinc-800/80',
-                      isCurrentWeek
-                        ? 'border-[#534AB7]/45 shadow-[0_0_0_1px_rgba(83,74,183,0.2)]'
-                        : '',
-                    ].join(' ')}
-                  >
-                    <span className="mt-0.5 shrink-0 text-zinc-500">
-                      {q.completed ? (
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-                          <CheckIcon className="h-4 w-4" />
-                        </span>
-                      ) : (
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-600" />
-                      )}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                        Week {q.week_number}
-                      </p>
-                      <p
-                        className={[
-                          'mt-0.5 text-sm font-semibold text-zinc-200',
-                          q.completed ? 'line-through' : '',
-                        ].join(' ')}
-                      >
-                        {q.title}
-                      </p>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
+                All Quests
+              </h2>
+              {generatingNextBatch ? (
+                <span
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500"
+                  aria-live="polite"
+                >
+                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-300" />
+                  Generating…
+                </span>
+              ) : null}
+            </div>
+
+            {batchDisplayRanges.map((range) => {
+              const inBatch = quests.filter(
+                (q) =>
+                  q.week_number >= range.start && q.week_number <= range.end,
+              )
+              if (inBatch.length === 0) return null
+              return (
+                <div key={`${range.start}-${range.end}`} className="mt-4">
+                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-zinc-600">
+                    Weeks {range.start}–{range.end}
+                  </p>
+                  <ul className="space-y-2">
+                    {inBatch.map((q) => {
+                      const isCurrentWeek = q.week_number === currentWeekNumber
+                      return (
+                        <li
+                          key={q.id}
+                          className={[
+                            'flex items-start gap-3 rounded-xl border bg-app-surface px-4 py-3 transition-opacity',
+                            q.completed
+                              ? 'border-zinc-800/60 opacity-50'
+                              : 'border-zinc-800/80',
+                            isCurrentWeek
+                              ? 'border-[#534AB7]/45 shadow-[0_0_0_1px_rgba(83,74,183,0.2)]'
+                              : '',
+                          ].join(' ')}
+                        >
+                          <span className="mt-0.5 shrink-0 text-zinc-500">
+                            {q.completed ? (
+                              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                                <CheckIcon className="h-4 w-4" />
+                              </span>
+                            ) : (
+                              <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-600" />
+                            )}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                              Week {q.week_number}
+                            </p>
+                            <p
+                              className={[
+                                'mt-0.5 text-sm font-semibold text-zinc-200',
+                                q.completed ? 'line-through' : '',
+                              ].join(' ')}
+                            >
+                              {q.title}
+                            </p>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )
+            })}
+
             {quests.length === 0 ? (
               <p className="mt-2 text-sm text-zinc-500">No quests listed.</p>
             ) : null}

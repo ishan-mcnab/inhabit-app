@@ -268,7 +268,10 @@ export function Today() {
         snapshot.length > 0 && snapshot.every((m) => m.completed),
       )
       setCompleteError(error.message)
+      return
     }
+
+    void load()
   }
 
   return (

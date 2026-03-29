@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   GOAL_PURPLE,
   getCategoryBorderColor,
   getGoalCategoryDisplay,
 } from '../constants/goalCategoryPills'
+import {
+  calculateCurrentWeekFromGoalStart,
+  calculateTotalWeeks,
+} from '../lib/goalProgress'
 import { suggestGoals, type SuggestedGoal } from '../lib/suggestGoals'
 import { supabase } from '../supabase'
 
@@ -14,6 +18,16 @@ type GoalRow = {
   category: string | null
   target_date: string | null
   progress_percent: number
+  created_at?: string
+}
+
+type CompletedGoalRow = {
+  id: string
+  title: string
+  category: string | null
+  target_date: string | null
+  progress_percent: number
+  completed_at: string | null
 }
 
 const FITNESS_QUICK_HABITS = [
@@ -36,9 +50,22 @@ function clampPercent(n: number): number {
   return Math.min(100, Math.max(0, n))
 }
 
+function formatCompletedAt(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 export function Goals() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [goals, setGoals] = useState<GoalRow[]>([])
+  const [completedGoals, setCompletedGoals] = useState<CompletedGoalRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [fitnessHabitTitles, setFitnessHabitTitles] = useState<Set<string>>(
@@ -68,13 +95,21 @@ export function Goals() {
       return
     }
 
-    const [{ data, error: queryError }, habitsRes] = await Promise.all([
+    const [activeRes, completedRes, habitsRes] = await Promise.all([
       supabase
         .from('goals')
-        .select('id,title,category,target_date,progress_percent')
+        .select('id,title,category,target_date,progress_percent,created_at')
         .eq('user_id', user.id)
         .eq('status', 'active')
         .order('created_at', { ascending: false }),
+      supabase
+        .from('goals')
+        .select(
+          'id,title,category,target_date,progress_percent,completed_at',
+        )
+        .eq('user_id', user.id)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false, nullsFirst: false }),
       supabase
         .from('habits')
         .select('title')
@@ -84,12 +119,20 @@ export function Goals() {
 
     setLoading(false)
 
-    if (queryError) {
-      setError(queryError.message)
+    if (activeRes.error) {
+      setError(activeRes.error.message)
+      setGoals([])
+      setCompletedGoals([])
       return
     }
 
-    setGoals((data ?? []) as GoalRow[])
+    setGoals((activeRes.data ?? []) as GoalRow[])
+
+    if (completedRes.error) {
+      setCompletedGoals([])
+    } else {
+      setCompletedGoals((completedRes.data ?? []) as CompletedGoalRow[])
+    }
 
     const titles = new Set<string>()
     for (const row of habitsRes.data ?? []) {
@@ -99,8 +142,27 @@ export function Goals() {
   }, [])
 
   useEffect(() => {
+    if (location.pathname !== '/goals') return
     void load()
-  }, [load])
+  }, [location.pathname, load])
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      if (location.pathname !== '/goals') return
+      void load()
+    }
+    const onWindowFocus = () => {
+      if (location.pathname !== '/goals') return
+      void load()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onWindowFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onWindowFocus)
+    }
+  }, [load, location.pathname])
 
   async function handleQuickFitnessHabit(title: string) {
     if (fitnessHabitTitles.has(title)) return
@@ -238,72 +300,144 @@ export function Goals() {
               Retry
             </button>
           </div>
-        ) : goals.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
-            <p className="max-w-xs text-center text-sm font-medium text-zinc-500">
-              No goals yet — tap + to create your first goal
-            </p>
-          </div>
         ) : (
-          <ul className="mx-auto flex max-w-lg flex-col gap-3">
-            {goals.map((goal) => {
-              const { label, emoji } = getGoalCategoryDisplay(goal.category)
-              const accent = getCategoryBorderColor(goal.category)
-              const pct = clampPercent(goal.progress_percent)
-              return (
-                <li key={goal.id}>
-                  <Link
-                    to={`/goals/${goal.id}`}
-                    className="block rounded-2xl outline-none ring-app-accent/0 transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-app-accent/50"
-                  >
-                    <article className="flex gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm transition-colors hover:border-zinc-700/80">
-                      <div
-                        className="w-1 shrink-0 self-stretch rounded-full"
-                        style={{ backgroundColor: accent }}
-                        aria-hidden
-                      />
-                      <div className="min-w-0 flex-1">
-                        <h2 className="text-lg font-bold leading-snug text-white">
-                          {goal.title}
-                        </h2>
-                        <p className="mt-2 text-sm font-semibold text-zinc-400">
-                          <span aria-hidden>{emoji}</span>{' '}
-                          <span className="text-zinc-300">{label}</span>
-                        </p>
-                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                          Target{' '}
-                          <span className="text-zinc-400">
-                            {formatTargetDate(goal.target_date)}
-                          </span>
-                        </p>
-                        <div className="mt-4">
-                          <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
-                            <span>Progress</span>
-                            <span className="tabular-nums text-zinc-400">
-                              {pct}%
-                            </span>
-                          </div>
+          <>
+            {goals.length === 0 ? (
+              completedGoals.length === 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
+                  <p className="max-w-xs text-center text-sm font-medium text-zinc-500">
+                    No goals yet — tap + to create your first goal
+                  </p>
+                </div>
+              ) : (
+                <p className="mx-auto max-w-lg px-1 pb-2 text-center text-sm font-medium text-zinc-500">
+                  No active goals
+                </p>
+              )
+            ) : (
+              <ul className="mx-auto flex max-w-lg flex-col gap-3">
+                {goals.map((goal) => {
+                  const { label, emoji } = getGoalCategoryDisplay(goal.category)
+                  const accent = getCategoryBorderColor(goal.category)
+                  const pct = clampPercent(goal.progress_percent)
+                  const totalW = goal.target_date
+                    ? calculateTotalWeeks(goal.target_date)
+                    : 1
+                  const currentW = goal.created_at
+                    ? calculateCurrentWeekFromGoalStart(goal.created_at)
+                    : 1
+                  return (
+                    <li key={goal.id}>
+                      <Link
+                        to={`/goals/${goal.id}`}
+                        className="block rounded-2xl outline-none ring-app-accent/0 transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-app-accent/50"
+                      >
+                        <article className="flex gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm transition-colors hover:border-zinc-700/80">
                           <div
-                            className="mt-1.5 h-2 overflow-hidden rounded-full bg-zinc-800"
-                            role="progressbar"
-                            aria-valuenow={pct}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label="Goal progress"
-                          >
+                            className="w-1 shrink-0 self-stretch rounded-full"
+                            style={{ backgroundColor: accent }}
+                            aria-hidden
+                          />
+                          <div className="min-w-0 flex-1">
+                            <h2 className="text-lg font-bold leading-snug text-white">
+                              {goal.title}
+                            </h2>
+                            <p className="mt-2 text-sm font-semibold text-zinc-400">
+                              <span aria-hidden>{emoji}</span>{' '}
+                              <span className="text-zinc-300">{label}</span>
+                            </p>
+                            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                              Target{' '}
+                              <span className="text-zinc-400">
+                                {formatTargetDate(goal.target_date)}
+                              </span>
+                            </p>
+                            <div className="mt-4">
+                              <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
+                                <span>Progress</span>
+                                <span className="tabular-nums text-zinc-400">
+                                  {pct}%
+                                </span>
+                              </div>
                             <div
-                              className="h-full rounded-full bg-app-accent transition-[width] duration-300"
-                              style={{ width: `${pct}%` }}
-                            />
+                              className="mt-1.5 h-2 overflow-hidden rounded-full bg-zinc-800"
+                              role="progressbar"
+                              aria-valuenow={pct}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label="Goal progress"
+                            >
+                              <div
+                                className="h-full rounded-full bg-app-accent transition-[width] duration-300"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <p className="mt-2 text-xs font-medium text-zinc-500">
+                              Week {currentW} of {totalW} · {pct}% complete
+                            </p>
                           </div>
                         </div>
-                      </div>
-                    </article>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
+                      </article>
+                    </Link>
+                  </li>
+                  )
+                })}
+              </ul>
+            )}
+
+            {completedGoals.length > 0 ? (
+              <section className="mx-auto mt-10 max-w-lg border-t border-zinc-800/60 pt-8">
+                <h2 className="text-lg font-bold text-white">Completed</h2>
+                <p className="mt-1 text-sm font-medium text-zinc-500">
+                  {completedGoals.length === 1
+                    ? '1 goal completed'
+                    : `${completedGoals.length} goals completed`}
+                </p>
+                <ul className="mt-4 flex flex-col gap-3">
+                  {completedGoals.map((goal) => {
+                    const { label, emoji } = getGoalCategoryDisplay(goal.category)
+                    const accent = getCategoryBorderColor(goal.category)
+                    return (
+                      <li key={goal.id}>
+                        <Link
+                          to={`/goals/${goal.id}`}
+                          className="block rounded-2xl outline-none ring-app-accent/0 transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-app-accent/50"
+                        >
+                          <article className="flex gap-3 rounded-2xl border border-zinc-800/50 bg-app-surface/80 p-4 opacity-90 shadow-sm transition-colors hover:border-zinc-700/60">
+                            <div
+                              className="w-1 shrink-0 self-stretch rounded-full opacity-60"
+                              style={{ backgroundColor: accent }}
+                              aria-hidden
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h2 className="text-base font-bold leading-snug text-zinc-200">
+                                  {goal.title}
+                                </h2>
+                                <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-400 ring-1 ring-emerald-500/35">
+                                  Complete
+                                </span>
+                              </div>
+                              <p className="mt-2 text-sm font-semibold text-zinc-500">
+                                <span aria-hidden>{emoji}</span>{' '}
+                                <span className="text-zinc-400">{label}</span>
+                              </p>
+                              <p className="mt-1 text-xs font-medium text-zinc-600">
+                                Completed{' '}
+                                <span className="text-zinc-500">
+                                  {formatCompletedAt(goal.completed_at)}
+                                </span>
+                              </p>
+                            </div>
+                          </article>
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            ) : null}
+          </>
         )}
 
         <section className="mx-auto mt-10 max-w-lg border-t border-zinc-800/60 pt-8">
