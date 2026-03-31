@@ -30,11 +30,27 @@ type CompletedGoalRow = {
   completed_at: string | null
 }
 
+const LEGACY_TRAINING_LOG_TITLE = "📝 Log today's training"
+
 const FITNESS_QUICK_HABITS = [
   { title: '🏋️ Hit the gym' },
   { title: '🥗 Hit protein target' },
-  { title: "📝 Log today's training" },
+  { title: "📓 Record today's session" },
 ] as const
+
+function fitnessQuickHabitAlreadyAdded(
+  title: string,
+  habitTitles: Set<string>,
+): boolean {
+  if (habitTitles.has(title)) return true
+  if (
+    title === "📓 Record today's session" &&
+    habitTitles.has(LEGACY_TRAINING_LOG_TITLE)
+  ) {
+    return true
+  }
+  return false
+}
 
 function formatTargetDate(isoDate: string | null): string {
   if (!isoDate) return '—'
@@ -72,6 +88,7 @@ export function Goals() {
     () => new Set(),
   )
   const [addingHabitKey, setAddingHabitKey] = useState<string | null>(null)
+  const [fitnessInfoOpen, setFitnessInfoOpen] = useState(false)
 
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [suggestPhase, setSuggestPhase] = useState<
@@ -165,7 +182,7 @@ export function Goals() {
   }, [load, location.pathname])
 
   async function handleQuickFitnessHabit(title: string) {
-    if (fitnessHabitTitles.has(title)) return
+    if (fitnessQuickHabitAlreadyAdded(title, fitnessHabitTitles)) return
     setAddingHabitKey(title)
     const {
       data: { user },
@@ -441,13 +458,60 @@ export function Goals() {
         )}
 
         <section className="mx-auto mt-10 max-w-lg border-t border-zinc-800/60 pt-8">
-          <h2 className="text-lg font-bold text-white">Fitness Habits</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-lg font-bold text-white">Fitness Habits</h2>
+            <button
+              type="button"
+              aria-expanded={fitnessInfoOpen}
+              aria-label={
+                fitnessInfoOpen
+                  ? 'Hide fitness habits info'
+                  : 'Show fitness habits info'
+              }
+              onClick={() => setFitnessInfoOpen((open) => !open)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-600 text-xs font-bold text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
+            >
+              i
+            </button>
+          </div>
+          <div
+            className="grid transition-[grid-template-rows] duration-300 ease-out"
+            style={{
+              gridTemplateRows: fitnessInfoOpen ? '1fr' : '0fr',
+            }}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div
+                className={[
+                  'mt-3 transform transition-[opacity,transform] duration-300 ease-out',
+                  fitnessInfoOpen
+                    ? 'translate-y-0 opacity-100'
+                    : 'pointer-events-none -translate-y-1 opacity-0',
+                ].join(' ')}
+              >
+                <div
+                  className="flex gap-3 rounded-xl border border-zinc-800/80 px-3 py-3"
+                  style={{
+                    backgroundColor: '#141418',
+                    borderLeftWidth: 3,
+                    borderLeftColor: GOAL_PURPLE,
+                  }}
+                >
+                  <p className="text-[13px] font-medium leading-snug text-zinc-500">
+                    InHabit helps you stay consistent with fitness — not generate
+                    workout plans. Add these habits to track your daily showing up,
+                    and pair with your favourite training app for programming.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
           <p className="mt-1.5 text-sm font-medium leading-snug text-zinc-500">
             Track your consistency — bring your own program.
           </p>
           <div className="mt-4 flex flex-col gap-2.5">
             {FITNESS_QUICK_HABITS.map((h) => {
-              const has = fitnessHabitTitles.has(h.title)
+              const has = fitnessQuickHabitAlreadyAdded(h.title, fitnessHabitTitles)
               const busy = addingHabitKey === h.title
               if (has) {
                 return (

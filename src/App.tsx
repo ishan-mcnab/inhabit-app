@@ -10,6 +10,7 @@ import { GoalDetail } from './pages/GoalDetail'
 import { Goals } from './pages/Goals'
 import { Login } from './pages/Login'
 import { Onboarding } from './pages/Onboarding'
+import { Profile } from './pages/Profile'
 import { SignUp } from './pages/SignUp'
 import { Today } from './pages/Today'
 import { supabase } from './supabase'
@@ -56,10 +57,7 @@ function App() {
               path="progress"
               element={<TabPlaceholder title="Progress" />}
             />
-            <Route
-              path="profile"
-              element={<TabPlaceholder title="Profile" />}
-            />
+            <Route path="profile" element={<Profile />} />
             <Route path="*" element={<Navigate to="/today" replace />} />
           </Route>
         </Route>

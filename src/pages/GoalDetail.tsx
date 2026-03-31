@@ -50,11 +50,68 @@ function clampPercent(n: number): number {
   return Math.min(100, Math.max(0, n))
 }
 
-function pickCurrentWeekQuest(quests: WeeklyQuestRow[]): WeeklyQuestRow | null {
+type QuestProgressionMode = 'weekly' | 'completion'
+
+function isQuestLockedForMode(
+  q: WeeklyQuestRow,
+  sortedQuests: WeeklyQuestRow[],
+  mode: QuestProgressionMode,
+  currentWeekFromStart: number,
+): boolean {
+  if (mode === 'weekly') {
+    return q.week_number > currentWeekFromStart
+  }
+  if (q.week_number <= 1) return false
+  const prev = sortedQuests.find((x) => x.week_number === q.week_number - 1)
+  return !prev?.completed
+}
+
+function formatUnlocksLabel(goalCreatedAt: string, weekNumber: number): string {
+  const base = new Date(goalCreatedAt)
+  const unlock = new Date(base)
+  unlock.setDate(unlock.getDate() + (weekNumber - 1) * 7)
+  const part = unlock.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+  return `Unlocks ${part}`
+}
+
+function pickActiveQuest(
+  quests: WeeklyQuestRow[],
+  currentWeek: number,
+  mode: QuestProgressionMode,
+): WeeklyQuestRow | null {
   if (quests.length === 0) return null
-  if (quests.every((q) => !q.completed)) return quests[0]
-  const firstIncomplete = quests.find((q) => !q.completed)
-  return firstIncomplete ?? quests[quests.length - 1]
+  const sorted = [...quests].sort((a, b) => a.week_number - b.week_number)
+
+  const locked = (q: WeeklyQuestRow) =>
+    isQuestLockedForMode(q, sorted, mode, currentWeek)
+
+  // Completion mode: hero quest is always the first incomplete, unlocked quest
+  if (mode === 'completion') {
+    const unlocked = sorted.filter((q) => !locked(q))
+    if (unlocked.length === 0) return null
+    const firstIncomplete = unlocked.find((q) => !q.completed)
+    return firstIncomplete ?? unlocked[unlocked.length - 1]
+  }
+
+  // Weekly mode: prefer the quest for the current calendar week if it's
+  // unlocked and not yet completed. Otherwise fall back to the next
+  // incomplete, unlocked quest.
+  const byCal = sorted.find((q) => q.week_number === currentWeek)
+  if (byCal && !locked(byCal) && !byCal.completed) {
+    return byCal
+  }
+
+  const unlocked = sorted.filter((q) => !locked(q))
+  if (unlocked.length === 0) return null
+
+  const firstIncomplete = unlocked.find((q) => !q.completed)
+  if (firstIncomplete) return firstIncomplete
+
+  // If everything unlocked is completed, surface the last one as a summary.
+  return unlocked[unlocked.length - 1]
 }
 
 function DetailSkeleton() {
@@ -102,6 +159,25 @@ function CheckIcon({ className }: { className?: string }) {
   )
 }
 
+function LockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M7 11V8a5 5 0 0110 0v3M6 11h12v10H6V11z"
+      />
+    </svg>
+  )
+}
+
 export function GoalDetail() {
   const { goalId } = useParams<{ goalId: string }>()
   const [loading, setLoading] = useState(true)
@@ -116,6 +192,8 @@ export function GoalDetail() {
     null,
   )
   const [nextBatchError, setNextBatchError] = useState<string | null>(null)
+  const [questProgression, setQuestProgression] =
+    useState<QuestProgressionMode>('weekly')
 
   const batchGenInFlight = useRef(false)
 
@@ -143,7 +221,7 @@ export function GoalDetail() {
 
     setUserId(user.id)
 
-    const [goalRes, questsRes] = await Promise.all([
+    const [goalRes, questsRes, userPrefsRes] = await Promise.all([
       supabase
         .from('goals')
         .select(
@@ -158,9 +236,17 @@ export function GoalDetail() {
         .eq('goal_id', goalId)
         .eq('user_id', user.id)
         .order('week_number', { ascending: true }),
+      supabase
+        .from('users')
+        .select('quest_progression')
+        .eq('id', user.id)
+        .maybeSingle(),
     ])
 
     setLoading(false)
+
+    const qpRaw = userPrefsRes.data?.quest_progression
+    setQuestProgression(qpRaw === 'completion' ? 'completion' : 'weekly')
 
     if (goalRes.error) {
       setGoal(null)
@@ -193,6 +279,105 @@ export function GoalDetail() {
     setError(null)
   }, [goalId])
 
+  const generateNextBatch = useCallback(async () => {
+    if (!goal || !userId || !goalId) return
+    if (!goal.target_date || !goal.created_at) return
+    if (batchGenInFlight.current) return
+
+    batchGenInFlight.current = true
+    setGeneratingNextBatch(true)
+    setNextBatchError(null)
+
+    try {
+      const { data: fresh } = await supabase
+        .from('weekly_quests')
+        .select('week_number')
+        .eq('goal_id', goalId)
+        .eq('user_id', userId)
+        .order('week_number', { ascending: false })
+        .limit(1)
+
+      const maxNow = fresh?.[0]?.week_number ?? 0
+      const totalNow = calculateTotalWeeks(goal.target_date!)
+
+      if (maxNow >= totalNow) {
+        return
+      }
+
+      const batchStart = maxNow + 1
+      const batchEnd = Math.min(maxNow + 4, totalNow)
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('goal_context')
+        .eq('id', userId)
+        .maybeSingle()
+
+      let userContext: Record<string, unknown> | undefined
+      const cat = goal.category ?? 'health_habits'
+      const rawCtx = profile?.goal_context
+      if (
+        rawCtx &&
+        typeof rawCtx === 'object' &&
+        !Array.isArray(rawCtx) &&
+        cat in (rawCtx as object)
+      ) {
+        const slice = (rawCtx as Record<string, unknown>)[cat]
+        if (
+          slice &&
+          typeof slice === 'object' &&
+          !Array.isArray(slice) &&
+          Object.values(slice as Record<string, unknown>).some(
+            (v) => typeof v === 'string' && v.trim().length > 0,
+          )
+        ) {
+          userContext = slice as Record<string, unknown>
+        }
+      }
+
+      const missions = await generateMissions(
+        goal.title,
+        cat,
+        goal.target_date!,
+        userContext,
+        batchStart,
+        batchEnd,
+        totalNow,
+      )
+
+      const rows = missions.weekly_quests.map((title, i) => ({
+        goal_id: goalId,
+        user_id: userId,
+        title,
+        week_number: batchStart + i,
+        completed: false,
+        xp_reward: 150,
+      }))
+
+      const { error: insErr } = await supabase
+        .from('weekly_quests')
+        .insert(rows)
+
+      if (insErr) {
+        setNextBatchError(insErr.message)
+        return
+      }
+
+      setBatchUnlockBanner(
+        `New quests unlocked for weeks ${batchStart}–${batchEnd}!`,
+      )
+      window.setTimeout(() => setBatchUnlockBanner(null), 6500)
+      await load()
+    } catch (e) {
+      setNextBatchError(
+        e instanceof Error ? e.message : 'Could not load next quests',
+      )
+    } finally {
+      batchGenInFlight.current = false
+      setGeneratingNextBatch(false)
+    }
+  }, [goal, userId, goalId, load])
+
   useEffect(() => {
     void load()
   }, [load])
@@ -218,6 +403,11 @@ export function GoalDetail() {
     [quests],
   )
 
+  const sortedQuests = useMemo(
+    () => [...quests].sort((a, b) => a.week_number - b.week_number),
+    [quests],
+  )
+
   const pct = useMemo(() => {
     if (!goal) return 0
     if (!goal.target_date && quests.length === 0) {
@@ -234,16 +424,11 @@ export function GoalDetail() {
     goal?.status === 'completed' ||
     (totalWeeks > 0 && completedQuestCount >= totalWeeks)
 
-  const currentQuest = useMemo(() => {
-    if (quests.length === 0) return null
-    const byCalendar = quests.find(
-      (q) => q.week_number === currentWeekFromStart,
-    )
-    if (byCalendar) return byCalendar
-    return pickCurrentWeekQuest(quests)
-  }, [quests, currentWeekFromStart])
+  const currentQuest = useMemo(
+    () => pickActiveQuest(quests, currentWeekFromStart, questProgression),
+    [quests, currentWeekFromStart, questProgression],
+  )
 
-  const currentWeekNumber = currentQuest?.week_number ?? null
   const progressAccent = getMissionBoardAccent(goal?.category)
   const barColor = isGoalComplete ? '#22c55e' : progressAccent
   const { label: catLabel, emoji: catEmoji } = getGoalCategoryDisplay(
@@ -259,7 +444,6 @@ export function GoalDetail() {
     if (loading || !goal || !userId || !goalId) return
     if (goal.status === 'completed') return
     if (!goal.target_date || !goal.created_at) return
-    if (batchGenInFlight.current) return
 
     const totalW = calculateTotalWeeks(goal.target_date)
     const currentW = calculateCurrentWeekFromGoalStart(goal.created_at)
@@ -270,104 +454,8 @@ export function GoalDetail() {
     if (maxExisting >= totalW) return
     if (currentW < maxExisting) return
 
-    batchGenInFlight.current = true
-    setGeneratingNextBatch(true)
-    setNextBatchError(null)
-
-    const run = async () => {
-      try {
-        const { data: fresh } = await supabase
-          .from('weekly_quests')
-          .select('week_number')
-          .eq('goal_id', goalId)
-          .eq('user_id', userId)
-          .order('week_number', { ascending: false })
-          .limit(1)
-
-        const maxNow = fresh?.[0]?.week_number ?? 0
-        const totalNow = calculateTotalWeeks(goal.target_date!)
-        const currentNow = calculateCurrentWeekFromGoalStart(goal.created_at)
-
-        if (maxNow >= totalNow || currentNow < maxNow) {
-          return
-        }
-
-        const batchStart = maxNow + 1
-        const batchEnd = Math.min(maxNow + 4, totalNow)
-
-        const { data: profile } = await supabase
-          .from('users')
-          .select('goal_context')
-          .eq('id', userId)
-          .maybeSingle()
-
-        let userContext: Record<string, unknown> | undefined
-        const cat = goal.category ?? 'health_habits'
-        const rawCtx = profile?.goal_context
-        if (
-          rawCtx &&
-          typeof rawCtx === 'object' &&
-          !Array.isArray(rawCtx) &&
-          cat in (rawCtx as object)
-        ) {
-          const slice = (rawCtx as Record<string, unknown>)[cat]
-          if (
-            slice &&
-            typeof slice === 'object' &&
-            !Array.isArray(slice) &&
-            Object.values(slice as Record<string, unknown>).some(
-              (v) => typeof v === 'string' && v.trim().length > 0,
-            )
-          ) {
-            userContext = slice as Record<string, unknown>
-          }
-        }
-
-        const missions = await generateMissions(
-          goal.title,
-          cat,
-          goal.target_date!,
-          userContext,
-          batchStart,
-          batchEnd,
-          totalNow,
-        )
-
-        const rows = missions.weekly_quests.map((title, i) => ({
-          goal_id: goalId,
-          user_id: userId,
-          title,
-          week_number: batchStart + i,
-          completed: false,
-          xp_reward: 150,
-        }))
-
-        const { error: insErr } = await supabase
-          .from('weekly_quests')
-          .insert(rows)
-
-        if (insErr) {
-          setNextBatchError(insErr.message)
-          return
-        }
-
-        setBatchUnlockBanner(
-          `New quests unlocked for weeks ${batchStart}–${batchEnd}!`,
-        )
-        window.setTimeout(() => setBatchUnlockBanner(null), 6500)
-        await load()
-      } catch (e) {
-        setNextBatchError(
-          e instanceof Error ? e.message : 'Could not load next quests',
-        )
-      } finally {
-        batchGenInFlight.current = false
-        setGeneratingNextBatch(false)
-      }
-    }
-
-    void run()
-  }, [loading, goal, quests, userId, goalId, load])
+    void generateNextBatch()
+  }, [loading, goal, quests, userId, goalId, generateNextBatch])
 
   async function handleMarkQuestComplete(quest: WeeklyQuestRow) {
     if (
@@ -377,6 +465,17 @@ export function GoalDetail() {
       quest.completed ||
       markingId ||
       goal.status === 'completed'
+    ) {
+      return
+    }
+
+    if (
+      isQuestLockedForMode(
+        quest,
+        sortedQuests,
+        questProgression,
+        currentWeekFromStart,
+      )
     ) {
       return
     }
@@ -464,6 +563,22 @@ export function GoalDetail() {
     setMarkingId(null)
     setSuccessFlashId(quest.id)
     window.setTimeout(() => setSuccessFlashId(null), 1200)
+
+    // If all existing quests are now complete but more weeks remain in the
+    // goal, immediately generate the next batch regardless of progression
+    // mode so the UI has something actionable.
+    if (goal.target_date) {
+      const maxExistingWeek =
+        nextQuests.length > 0
+          ? Math.max(...nextQuests.map((q) => q.week_number))
+          : 0
+      const totalWeeksForGoal = calculateTotalWeeks(goal.target_date)
+      const allCurrentComplete = doneCount === nextQuests.length
+
+      if (allCurrentComplete && maxExistingWeek < totalWeeksForGoal) {
+        void generateNextBatch()
+      }
+    }
   }
 
   return (
@@ -598,51 +713,79 @@ export function GoalDetail() {
               This Week&apos;s Quest
             </h2>
             {currentQuest ? (
-              <div
-                className={[
-                  'mt-3 flex flex-col gap-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-md ring-1 ring-zinc-800/40 transition-[transform,box-shadow] duration-300 sm:flex-row sm:items-center sm:justify-between',
-                  currentQuest.completed ? 'opacity-60' : '',
-                  successFlashId === currentQuest.id
-                    ? 'scale-[1.02] shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-500/50'
-                    : '',
-                ].join(' ')}
-              >
-                <div className="min-w-0 flex-1">
-                  <p
+              (() => {
+                const questLocked = isQuestLockedForMode(
+                  currentQuest,
+                  sortedQuests,
+                  questProgression,
+                  currentWeekFromStart,
+                )
+                return (
+                  <div
                     className={[
-                      'text-lg font-bold text-white',
-                      currentQuest.completed ? 'line-through' : '',
+                      'mt-3 flex flex-col gap-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-md ring-1 ring-zinc-800/40 transition-[transform,box-shadow] duration-300 sm:flex-row sm:items-center sm:justify-between',
+                      currentQuest.completed ? 'opacity-60' : '',
+                      questLocked ? 'opacity-40' : '',
+                      successFlashId === currentQuest.id
+                        ? 'scale-[1.02] shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-500/50'
+                        : '',
                     ].join(' ')}
                   >
-                    {currentQuest.title}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-zinc-500">
-                    Week {currentQuest.week_number} of {totalWeeks}
-                  </p>
-                </div>
-                <div className="shrink-0 sm:pl-2">
-                  {currentQuest.completed ? (
-                    <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-bold text-emerald-400 ring-1 ring-emerald-500/40">
-                      Completed
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={!!markingId}
-                      onClick={() => void handleMarkQuestComplete(currentQuest)}
-                      className="w-full rounded-xl px-5 py-3 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                      style={{ backgroundColor: QUEST_PURPLE }}
-                    >
-                      {markingId === currentQuest.id
-                        ? 'Saving…'
-                        : 'Mark Complete'}
-                    </button>
-                  )}
-                </div>
-              </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={[
+                          'text-lg font-bold text-white',
+                          currentQuest.completed ? 'line-through' : '',
+                        ].join(' ')}
+                      >
+                        {currentQuest.title}
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-zinc-500">
+                        Week {currentQuest.week_number} of {totalWeeks}
+                      </p>
+                      {questLocked ? (
+                        <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-zinc-500">
+                          <LockIcon className="h-4 w-4 shrink-0" />
+                          {questProgression === 'weekly'
+                            ? formatUnlocksLabel(
+                                goal.created_at,
+                                currentQuest.week_number,
+                              )
+                            : 'Complete the previous quest to unlock'}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 sm:pl-2">
+                      {currentQuest.completed ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-bold text-emerald-400 ring-1 ring-emerald-500/40">
+                          Completed
+                        </span>
+                      ) : questLocked ? null : (
+                        <button
+                          type="button"
+                          disabled={!!markingId}
+                          onClick={() =>
+                            void handleMarkQuestComplete(currentQuest)
+                          }
+                          className="w-full rounded-xl px-5 py-3 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                          style={{ backgroundColor: QUEST_PURPLE }}
+                        >
+                          {markingId === currentQuest.id
+                            ? 'Saving…'
+                            : 'Mark Complete'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()
             ) : error && quests.length === 0 ? (
               <p className="mt-3 text-sm text-zinc-500">
                 Weekly quests couldn&apos;t be loaded. Tap Retry above.
+              </p>
+            ) : quests.length > 0 ? (
+              <p className="mt-3 text-sm font-semibold text-zinc-500">
+                You&apos;re all caught up on quests for now.
               </p>
             ) : (
               <p className="mt-3 text-sm text-zinc-500">
@@ -680,16 +823,25 @@ export function GoalDetail() {
                   </p>
                   <ul className="space-y-2">
                     {inBatch.map((q) => {
-                      const isCurrentWeek = q.week_number === currentWeekNumber
+                      const questLocked = isQuestLockedForMode(
+                        q,
+                        sortedQuests,
+                        questProgression,
+                        currentWeekFromStart,
+                      )
+                      const isHighlighted =
+                        q.id === currentQuest?.id && !questLocked
                       return (
                         <li
                           key={q.id}
                           className={[
                             'flex items-start gap-3 rounded-xl border bg-app-surface px-4 py-3 transition-opacity',
-                            q.completed
-                              ? 'border-zinc-800/60 opacity-50'
-                              : 'border-zinc-800/80',
-                            isCurrentWeek
+                            questLocked
+                              ? 'border-zinc-800/80 opacity-40'
+                              : q.completed
+                                ? 'border-zinc-800/60 opacity-50'
+                                : 'border-zinc-800/80',
+                            isHighlighted
                               ? 'border-[#534AB7]/45 shadow-[0_0_0_1px_rgba(83,74,183,0.2)]'
                               : '',
                           ].join(' ')}
@@ -698,6 +850,10 @@ export function GoalDetail() {
                             {q.completed ? (
                               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
                                 <CheckIcon className="h-4 w-4" />
+                              </span>
+                            ) : questLocked ? (
+                              <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-600 text-zinc-500">
+                                <LockIcon className="h-3.5 w-3.5" />
                               </span>
                             ) : (
                               <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-600" />
@@ -715,6 +871,16 @@ export function GoalDetail() {
                             >
                               {q.title}
                             </p>
+                            {questLocked ? (
+                              <p className="mt-1.5 text-xs font-semibold text-zinc-500">
+                                {questProgression === 'weekly'
+                                  ? formatUnlocksLabel(
+                                      goal.created_at,
+                                      q.week_number,
+                                    )
+                                  : 'Complete the previous quest to unlock'}
+                              </p>
+                            ) : null}
                           </div>
                         </li>
                       )

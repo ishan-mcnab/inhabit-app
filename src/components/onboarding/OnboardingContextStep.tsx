@@ -78,6 +78,25 @@ export function OnboardingContextStep({
         <p className="mt-2 text-base font-semibold text-zinc-400">
           Help us personalize your plan
         </p>
+        {categoryId === 'fitness_consistency' ? (
+          <div
+            className="mt-4 flex gap-3 rounded-xl border border-zinc-800/80 px-3 py-3"
+            style={{
+              backgroundColor: '#141418',
+              borderLeftWidth: 3,
+              borderLeftColor: GOAL_PURPLE,
+            }}
+          >
+            <span className="shrink-0 text-base leading-none" aria-hidden>
+              💡
+            </span>
+            <p className="text-[13px] font-medium leading-snug text-zinc-500">
+              InHabit tracks your fitness consistency, not your workout
+              programming. We&apos;ll help you show up every day — bring your own
+              program or follow one you love.
+            </p>
+          </div>
+        ) : null}
         <p className="mt-3 text-sm font-bold uppercase tracking-wider text-zinc-500">
           Step {stepNumber} of {totalSteps}
         </p>
