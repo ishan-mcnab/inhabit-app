@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { runFullClearConfetti } from '../lib/fullClearConfetti'
+import { generateOneDailyMissionTitle } from '../lib/openRouterSingle'
 import { supabase } from '../supabase'
 
 function formatLocalDate(d: Date): string {
@@ -130,6 +131,30 @@ export function Today() {
     useState(false)
   const [pressingMissionId, setPressingMissionId] = useState<string | null>(
     null,
+  )
+
+  const [missionMenuOpenId, setMissionMenuOpenId] = useState<string | null>(
+    null,
+  )
+  const [missionMenuAnchor, setMissionMenuAnchor] = useState<{
+    id: string
+    left: number
+    top: number
+    openUp: boolean
+  } | null>(null)
+  const [editingMissionId, setEditingMissionId] = useState<string | null>(null)
+  const [missionTitleDraft, setMissionTitleDraft] = useState('')
+  const [savingMissionId, setSavingMissionId] = useState<string | null>(null)
+  const [regeneratingMissionId, setRegeneratingMissionId] = useState<
+    string | null
+  >(null)
+  const [missionActionError, setMissionActionError] = useState<string | null>(
+    null,
+  )
+  const [confirmRemoveMission, setConfirmRemoveMission] =
+    useState<TodayMission | null>(null)
+  const [removingMissionIds, setRemovingMissionIds] = useState<Set<string>>(
+    () => new Set(),
   )
 
   const deferBannerForConfettiRef = useRef(false)
@@ -274,6 +299,160 @@ export function Today() {
     void load()
   }
 
+  function closeMissionMenu() {
+    setMissionMenuOpenId(null)
+    setMissionMenuAnchor(null)
+  }
+
+  function beginEditMission(m: TodayMission) {
+    closeMissionMenu()
+    setMissionActionError(null)
+    setEditingMissionId(m.id)
+    setMissionTitleDraft(m.title ?? '')
+  }
+
+  function cancelEditMission() {
+    setEditingMissionId(null)
+    setMissionTitleDraft('')
+  }
+
+  async function saveMissionTitle(missionId: string) {
+    if (!userId) return
+    const next = missionTitleDraft.trim()
+    if (!next) {
+      setMissionActionError('Mission title cannot be empty')
+      return
+    }
+    setSavingMissionId(missionId)
+    setMissionActionError(null)
+
+    const prev = missions
+    setMissions((ms) =>
+      ms.map((m) => (m.id === missionId ? { ...m, title: next } : m)),
+    )
+
+    const { error } = await supabase
+      .from('daily_missions')
+      .update({ title: next })
+      .eq('id', missionId)
+      .eq('user_id', userId)
+
+    setSavingMissionId(null)
+
+    if (error) {
+      setMissions(prev)
+      setMissionActionError(error.message)
+      return
+    }
+
+    setEditingMissionId(null)
+    setMissionTitleDraft('')
+  }
+
+  async function regenerateMission(m: TodayMission) {
+    console.log(
+      'Regenerating mission:',
+      m.title,
+      'for goal:',
+      m.goalTitle,
+    )
+    if (!userId) {
+      console.error('Regenerating mission failed: missing userId')
+      return
+    }
+    closeMissionMenu()
+    setMissionActionError(null)
+    setRegeneratingMissionId(m.id)
+    try {
+      const { data: profile, error: pErr } = await supabase
+        .from('users')
+        .select('goal_context')
+        .eq('id', userId)
+        .maybeSingle()
+      if (pErr) throw new Error(pErr.message)
+
+      let userContextText = 'n/a'
+      const raw = profile?.goal_context
+      const cat = m.category ?? 'health_habits'
+      if (
+        raw &&
+        typeof raw === 'object' &&
+        !Array.isArray(raw) &&
+        cat in (raw as object)
+      ) {
+        const slice = (raw as Record<string, unknown>)[cat]
+        if (slice && typeof slice === 'object' && !Array.isArray(slice)) {
+          userContextText = JSON.stringify(slice)
+        }
+      }
+
+      const avoidTitles = missions
+        .filter((x) => x.goal_id === m.goal_id)
+        .map((x) => x.title)
+
+      const nextTitle = await generateOneDailyMissionTitle({
+        goalTitle: m.goalTitle,
+        category: cat,
+        userContextText,
+        avoidTitles,
+      })
+      console.log('Generated new mission:', nextTitle)
+
+      const { error: uErr } = await supabase
+        .from('daily_missions')
+        .update({ title: nextTitle })
+        .eq('id', m.id)
+        .eq('user_id', userId)
+      if (uErr) throw new Error(uErr.message)
+      console.log('Saved to Supabase')
+
+      setMissions((prev) =>
+        prev.map((x) => (x.id === m.id ? { ...x, title: nextTitle } : x)),
+      )
+    } catch (e) {
+      console.error('Regenerate mission failed:', e)
+      setMissionActionError(
+        e instanceof Error ? e.message : 'Could not regenerate mission',
+      )
+    } finally {
+      setRegeneratingMissionId(null)
+    }
+  }
+
+  async function removeMissionConfirmed(m: TodayMission) {
+    console.log('Deleting mission:', m.id)
+    if (!userId) {
+      console.error('Delete mission failed: missing userId')
+      return
+    }
+    setConfirmRemoveMission(null)
+    setMissionActionError(null)
+    const { error } = await supabase
+      .from('daily_missions')
+      .delete()
+      .eq('id', m.id)
+      .eq('user_id', userId)
+    if (error) {
+      console.error('Delete mission failed:', error)
+      setMissionActionError(error.message)
+      return
+    }
+    console.log('Delete successful')
+    setRemovingMissionIds((prev) => {
+      const next = new Set(prev)
+      next.add(m.id)
+      return next
+    })
+    window.setTimeout(() => {
+      setMissions((prev) => prev.filter((x) => x.id !== m.id))
+      setRemovingMissionIds((prev) => {
+        const next = new Set(prev)
+        next.delete(m.id)
+        return next
+      })
+    }, 260)
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       <div
@@ -386,9 +565,19 @@ export function Today() {
                 {completeError}
               </p>
             ) : null}
+            {missionActionError ? (
+              <p className="mb-3 text-center text-sm font-medium text-red-400 transition-opacity">
+                {missionActionError}
+              </p>
+            ) : null}
             {missions.map((m, index) => {
               const accent = getMissionBoardAccent(m.category)
               const isPressing = pressingMissionId === m.id
+              const menuOpen = missionMenuOpenId === m.id
+              const isEditing = editingMissionId === m.id
+              const savingThis = savingMissionId === m.id
+              const regeneratingThis = regeneratingMissionId === m.id
+              const removing = removingMissionIds.has(m.id)
               return (
                 <div key={m.id}>
                   {index > 0 ? (
@@ -399,8 +588,9 @@ export function Today() {
                   ) : null}
                   <div
                     className={[
-                      'flex transform-gpu items-stretch gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm will-change-transform',
+                      'relative flex transform-gpu items-stretch gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm will-change-transform',
                       m.completed ? 'opacity-50' : 'opacity-100',
+                      removing ? 'opacity-0' : '',
                       isPressing
                         ? 'scale-[0.97] transition-none'
                         : 'scale-100 transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
@@ -409,7 +599,13 @@ export function Today() {
                       if (m.completed) return
                       const el = e.target
                       if (!(el instanceof Element)) return
-                      if (!el.closest('[data-mission-checkbox]')) return
+                      if (
+                        !el.closest('[data-mission-checkbox]') &&
+                        !el.closest('[data-mission-menu]')
+                      ) {
+                        return
+                      }
+                      if (el.closest('[data-mission-menu]')) return
                       setPressingMissionId(m.id)
                       window.setTimeout(() => {
                         setPressingMissionId((prev) =>
@@ -425,18 +621,102 @@ export function Today() {
                     />
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div className="min-w-0 flex-1">
-                        <p
-                          className={[
-                            'text-base font-bold leading-snug text-white',
-                            m.completed ? 'line-through' : '',
-                          ].join(' ')}
-                        >
-                          {m.title}
-                        </p>
+                        {isEditing ? (
+                          <div>
+                            <label
+                              htmlFor={`mission-edit-${m.id}`}
+                              className="sr-only"
+                            >
+                              Mission title
+                            </label>
+                            <input
+                              id={`mission-edit-${m.id}`}
+                              type="text"
+                              value={missionTitleDraft}
+                              onChange={(e) =>
+                                setMissionTitleDraft(e.target.value)
+                              }
+                              disabled={savingThis}
+                              className="w-full rounded-xl border border-zinc-800 bg-app-surface px-3 py-2.5 text-sm font-bold text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 disabled:opacity-50"
+                            />
+                            <div className="mt-2 flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => void saveMissionTitle(m.id)}
+                                disabled={savingThis}
+                                className="rounded-xl bg-white px-4 py-2 text-xs font-bold text-app-bg disabled:opacity-50"
+                              >
+                                {savingThis ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditMission}
+                                disabled={savingThis}
+                                className="text-xs font-semibold text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p
+                            className={[
+                              'text-base font-bold leading-snug text-white',
+                              m.completed ? 'line-through' : '',
+                            ].join(' ')}
+                          >
+                            {regeneratingThis ? 'Regenerating…' : m.title}
+                          </p>
+                        )}
                         <p className="mt-1 truncate text-sm font-medium text-zinc-500">
                           {m.goalTitle}
                         </p>
                       </div>
+
+                      {!m.completed && !isEditing ? (
+                        <div className="shrink-0">
+                          <button
+                            type="button"
+                            data-mission-menu
+                            aria-label="Mission options"
+                            aria-expanded={menuOpen}
+                            onClick={(e) => {
+                              const nextOpen = missionMenuOpenId !== m.id
+                              if (!nextOpen) {
+                                closeMissionMenu()
+                                return
+                              }
+                              const rect = (
+                                e.currentTarget as HTMLButtonElement
+                              ).getBoundingClientRect()
+                              const menuW = 224
+                              const menuH = 156
+                              const spaceBelow = window.innerHeight - rect.bottom
+                              const spaceAbove = rect.top
+                              const openUp =
+                                spaceBelow < menuH + 12 && spaceAbove > spaceBelow
+                              const left = Math.max(
+                                8,
+                                Math.min(
+                                  window.innerWidth - menuW - 8,
+                                  rect.right - menuW,
+                                ),
+                              )
+                              const top = openUp
+                                ? Math.max(8, rect.top - menuH - 8)
+                                : rect.bottom + 8
+                              setMissionMenuOpenId(m.id)
+                              setMissionMenuAnchor({ id: m.id, left, top, openUp })
+                            }}
+                            className="flex h-11 w-9 min-h-[44px] min-w-[36px] items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200"
+                          >
+                            <span className="text-xl leading-none" aria-hidden>
+                              ⋯
+                            </span>
+                          </button>
+                        </div>
+                      ) : null}
+
                       <button
                         type="button"
                         data-mission-checkbox
@@ -469,6 +749,91 @@ export function Today() {
           </div>
         )}
       </div>
+
+      {missionMenuOpenId ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40"
+          aria-label="Close mission menu"
+          onClick={closeMissionMenu}
+        />
+      ) : null}
+
+      {missionMenuAnchor && missionMenuOpenId === missionMenuAnchor.id ? (
+        <div
+          className="fixed z-[999] w-56 overflow-hidden rounded-xl border border-zinc-800 bg-app-bg shadow-2xl"
+          style={{ left: missionMenuAnchor.left, top: missionMenuAnchor.top }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              const mm = missions.find((x) => x.id === missionMenuAnchor.id)
+              if (mm) beginEditMission(mm)
+            }}
+            className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
+          >
+            Edit mission title
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const mm = missions.find((x) => x.id === missionMenuAnchor.id)
+              if (mm) void regenerateMission(mm)
+            }}
+            disabled={!!regeneratingMissionId}
+            className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60 disabled:opacity-50"
+          >
+            Regenerate this mission
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const mm = missions.find((x) => x.id === missionMenuAnchor.id)
+              closeMissionMenu()
+              if (mm) setConfirmRemoveMission(mm)
+            }}
+            className="w-full px-4 py-3 text-left text-sm font-semibold text-red-300 hover:bg-zinc-900/60"
+          >
+            Delete this mission
+          </button>
+        </div>
+      ) : null}
+
+      {confirmRemoveMission ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
+          <button
+            type="button"
+            className="absolute inset-0"
+            style={{ backgroundColor: 'rgba(13,13,15,0.8)' }}
+            aria-label="Close remove mission confirmation"
+            onClick={() => setConfirmRemoveMission(null)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-800/80 bg-app-bg p-5 shadow-2xl">
+            <p className="text-base font-bold text-white">
+              Remove this mission from today?
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+              &ldquo;{confirmRemoveMission.title}&rdquo;
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void removeMissionConfirmed(confirmRemoveMission)}
+                className="flex-1 rounded-xl bg-red-500 px-4 py-3.5 text-sm font-bold text-white"
+              >
+                Remove
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmRemoveMission(null)}
+                className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800/40 px-4 py-3.5 text-sm font-bold text-zinc-300"
+              >
+                Keep
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -84,6 +84,7 @@ export function Goals() {
   const [completedGoals, setCompletedGoals] = useState<CompletedGoalRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
   const [fitnessHabitTitles, setFitnessHabitTitles] = useState<Set<string>>(
     () => new Set(),
   )
@@ -162,6 +163,17 @@ export function Goals() {
     if (location.pathname !== '/goals') return
     void load()
   }, [location.pathname, load])
+
+  useEffect(() => {
+    if (location.pathname !== '/goals') return
+    const state = location.state as { toast?: string } | null
+    const msg = state?.toast
+    if (!msg) return
+    setToast(msg)
+    void navigate('/goals', { replace: true, state: {} })
+    const t = window.setTimeout(() => setToast(null), 2200)
+    return () => window.clearTimeout(t)
+  }, [location.pathname, location.state, navigate])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -300,6 +312,11 @@ export function Goals() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4">
+        {toast ? (
+          <div className="mx-auto mb-4 max-w-lg rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/25">
+            {toast}
+          </div>
+        ) : null}
         {loading ? (
           <div className="flex flex-1 flex-col items-center justify-center py-16">
             <p className="text-sm font-medium text-zinc-500">Loading goals…</p>
