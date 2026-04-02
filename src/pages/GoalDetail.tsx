@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { XPToast } from '../components/XPToast'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
+import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import { generateMissions } from '../lib/generateMissions'
 import {
   calculateCurrentWeekFromGoalStart,
@@ -10,6 +12,7 @@ import {
   weeklyQuestBatchRanges,
 } from '../lib/goalProgress'
 import { generateOneWeeklyQuestTitle } from '../lib/openRouterSingle'
+import { awardXP } from '../lib/xp'
 import { supabase } from '../supabase'
 
 const QUEST_PURPLE = '#534AB7'
@@ -260,6 +263,8 @@ export function GoalDetail() {
   )
 
   const batchGenInFlight = useRef(false)
+
+  const { toast: xpToast, enqueueXpToast, onXpToastHide } = useXpToastQueue()
 
   const load = useCallback(async () => {
     if (!goalId) {
@@ -917,6 +922,37 @@ export function GoalDetail() {
     setSuccessFlashId(quest.id)
     window.setTimeout(() => setSuccessFlashId(null), 1200)
 
+    void (async () => {
+      try {
+        const {
+          data: { user },
+          error: authErr,
+        } = await supabase.auth.getUser()
+        if (authErr || !user?.id) {
+          console.error(
+            'Quest XP skipped: no auth session',
+            authErr?.message ?? 'missing user',
+          )
+          return
+        }
+        if (user.id !== userId) {
+          console.error(
+            'Quest XP skipped: auth user id mismatch',
+            user.id,
+            userId,
+          )
+          return
+        }
+
+        console.log('Awarding quest XP...')
+        await awardXP(user.id, 150, 'weekly_quest_complete')
+        console.log('Quest XP awarded, showing toast')
+        enqueueXpToast(150)
+      } catch (xpErr) {
+        console.error('XP award failed (weekly quest):', xpErr)
+      }
+    })()
+
     // If all existing quests are now complete but more weeks remain in the
     // goal, immediately generate the next batch regardless of progression
     // mode so the UI has something actionable.
@@ -1006,6 +1042,14 @@ export function GoalDetail() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
+      {xpToast ? (
+        <XPToast
+          key={xpToast.key}
+          amount={xpToast.amount}
+          visible
+          onHide={onXpToastHide}
+        />
+      ) : null}
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800/60 px-2 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <Link
           to="/goals"

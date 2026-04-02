@@ -1,9 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { XPToast } from '../components/XPToast'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
+import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import { runFullClearConfetti } from '../lib/fullClearConfetti'
 import { generateOneDailyMissionTitle } from '../lib/openRouterSingle'
+import { awardXP } from '../lib/xp'
 import { supabase } from '../supabase'
+
+async function wasFullClearBonusAwardedToday(userId: string): Promise<boolean> {
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const end = new Date()
+  end.setHours(23, 59, 59, 999)
+  const { data, error } = await supabase
+    .from('xp_logs')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('reason', 'full_clear_bonus')
+    .gte('created_at', start.toISOString())
+    .lte('created_at', end.toISOString())
+    .limit(1)
+  if (error) {
+    console.error('full_clear_bonus xp_logs check failed:', error)
+    return true
+  }
+  return (data?.length ?? 0) > 0
+}
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear()
@@ -160,6 +183,8 @@ export function Today() {
   const deferBannerForConfettiRef = useRef(false)
   const confettiCancelRef = useRef<(() => void) | null>(null)
 
+  const { toast: xpToast, enqueueXpToast, onXpToastHide } = useXpToastQueue()
+
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
@@ -241,6 +266,9 @@ export function Today() {
   const total = missions.length
   const allDone = total > 0 && doneCount === total
 
+  // Day 29 — habits: when habit completion ships, award XP here, e.g.
+  // await awardXP(userId, 15, 'habit_complete'); enqueueXpToast(15)
+
   async function handleCompleteMission(missionId: string) {
     if (!userId) return
     const target = missions.find((m) => m.id === missionId)
@@ -295,6 +323,29 @@ export function Today() {
       setCompleteError(error.message)
       return
     }
+
+    void (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        const uid = user?.id
+        if (!uid) return
+
+        await awardXP(uid, 25, 'mission_complete')
+        enqueueXpToast(25)
+
+        if (allCompleteNow) {
+          const already = await wasFullClearBonusAwardedToday(uid)
+          if (!already) {
+            await awardXP(uid, 50, 'full_clear_bonus')
+            enqueueXpToast(50)
+          }
+        }
+      } catch (xpErr) {
+        console.error('XP award failed (mission / full clear):', xpErr)
+      }
+    })()
 
     void load()
   }
@@ -455,6 +506,14 @@ export function Today() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
+      {xpToast ? (
+        <XPToast
+          key={xpToast.key}
+          amount={xpToast.amount}
+          visible
+          onHide={onXpToastHide}
+        />
+      ) : null}
       <div
         className={[
           'grid shrink-0 transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
