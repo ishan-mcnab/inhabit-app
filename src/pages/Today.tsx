@@ -7,11 +7,16 @@ import {
   type CSSProperties,
 } from 'react'
 import { Link } from 'react-router-dom'
+import { GracePassModal } from '../components/GracePassModal'
 import { XPToast } from '../components/XPToast'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import { runFullClearConfetti } from '../lib/fullClearConfetti'
 import { generateOneDailyMissionTitle } from '../lib/openRouterSingle'
+import {
+  ensureMondayGraceReset,
+  useGracePass as redeemGracePass,
+} from '../lib/gracePass'
 import { checkAndUpdateStreak } from '../lib/streak'
 import {
   awardXP,
@@ -403,6 +408,11 @@ export function Today() {
   const [streakCurrent, setStreakCurrent] = useState(0)
   const [, setStreakLongest] = useState(0)
 
+  const [graceModalOpen, setGraceModalOpen] = useState(false)
+  const [graceStreakBeforeMiss, setGraceStreakBeforeMiss] = useState(0)
+  const [gracePassesRemaining, setGracePassesRemaining] = useState(0)
+  const [gracePassSubmitting, setGracePassSubmitting] = useState(false)
+
   const applyFlatXp = useCallback((result: AwardXpResult) => {
     const nextRank =
       typeof result.newRank === 'string' && result.newRank.trim()
@@ -507,12 +517,17 @@ export function Today() {
       setXpProfile(null)
       setStreakCurrent(0)
       setStreakLongest(0)
+      setGraceModalOpen(false)
+      setGraceStreakBeforeMiss(0)
+      setGracePassesRemaining(0)
       setLoadError(userError?.message ?? 'Not signed in')
       setUserId(null)
       return
     }
 
     setUserId(user.id)
+
+    await ensureMondayGraceReset(user.id)
 
     const [goalsRes, missionsRes, userXpRes] = await Promise.all([
       supabase
@@ -538,7 +553,7 @@ export function Today() {
       supabase
         .from('users')
         .select(
-          'total_xp, level, weekly_xp, rank, current_streak, longest_streak',
+          'total_xp, level, weekly_xp, rank, current_streak, longest_streak, grace_passes_remaining',
         )
         .eq('id', user.id)
         .maybeSingle(),
@@ -546,6 +561,9 @@ export function Today() {
 
     setLoading(false)
     setXpProfileLoading(false)
+
+    let streakBeforeMount = 0
+    let graceRem = 0
 
     if (userXpRes.error) {
       console.error('Failed to load XP profile:', userXpRes.error)
@@ -557,6 +575,7 @@ export function Today() {
       })
       setStreakCurrent(0)
       setStreakLongest(0)
+      setGracePassesRemaining(0)
     } else if (userXpRes.data) {
       const d = userXpRes.data as Record<string, unknown>
       setXpProfile({
@@ -580,8 +599,15 @@ export function Today() {
         typeof d.longest_streak === 'number' && !Number.isNaN(d.longest_streak)
           ? Math.max(0, Math.floor(d.longest_streak))
           : 0
+      streakBeforeMount = cs
+      graceRem =
+        typeof d.grace_passes_remaining === 'number' &&
+        !Number.isNaN(d.grace_passes_remaining)
+          ? Math.max(0, Math.floor(d.grace_passes_remaining))
+          : 0
       setStreakCurrent(cs)
       setStreakLongest(ls)
+      setGracePassesRemaining(graceRem)
     } else {
       setXpProfile({
         total_xp: 0,
@@ -591,16 +617,27 @@ export function Today() {
       })
       setStreakCurrent(0)
       setStreakLongest(0)
+      setGracePassesRemaining(0)
     }
 
-    void checkAndUpdateStreak(user.id, 'mount')
-      .then((r) => {
-        setStreakCurrent(r.currentStreak)
-        setStreakLongest(r.longestStreak)
-      })
-      .catch((err) => {
+    if (!userXpRes.error && userXpRes.data) {
+      try {
+        const mountResult = await checkAndUpdateStreak(user.id, 'mount')
+        setStreakCurrent(mountResult.currentStreak)
+        setStreakLongest(mountResult.longestStreak)
+
+        if (mountResult.streakReset && streakBeforeMount > 0) {
+          const key = `inhabit_grace_prompt_${user.id}_${todayStr}`
+          if (!sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, '1')
+            setGraceStreakBeforeMiss(streakBeforeMount)
+            setGraceModalOpen(true)
+          }
+        }
+      } catch (err) {
         console.error('checkAndUpdateStreak (mount) failed:', err)
-      })
+      }
+    }
 
     if (goalsRes.error) {
       setLoadError(goalsRes.error.message)
@@ -892,6 +929,27 @@ export function Today() {
     }, 260)
   }
 
+  const handleGraceUse = useCallback(async () => {
+    if (!userId) return
+    setGracePassSubmitting(true)
+    try {
+      const out = await redeemGracePass(userId, graceStreakBeforeMiss)
+      applyFlatXp(out.awardResult)
+      setStreakCurrent(graceStreakBeforeMiss)
+      setGracePassesRemaining((g) => Math.max(0, g - 1))
+      setGraceModalOpen(false)
+      enqueueStreakToast('🛡️ Streak saved! -30 XP', '#534AB7')
+    } catch (e) {
+      console.error('redeemGracePass failed:', e)
+    } finally {
+      setGracePassSubmitting(false)
+    }
+  }, [userId, graceStreakBeforeMiss, applyFlatXp, enqueueStreakToast])
+
+  const handleGraceDismiss = useCallback(() => {
+    setGraceModalOpen(false)
+  }, [])
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       {userId && xpProfileLoading ? <LevelProgressSkeleton /> : null}
@@ -927,6 +985,14 @@ export function Today() {
           />
         )
       ) : null}
+      <GracePassModal
+        visible={graceModalOpen}
+        streakBeforeMiss={graceStreakBeforeMiss}
+        gracePasses={gracePassesRemaining}
+        useInProgress={gracePassSubmitting}
+        onUseGracePass={handleGraceUse}
+        onDismiss={handleGraceDismiss}
+      />
       <div
         className={[
           'grid shrink-0 transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
