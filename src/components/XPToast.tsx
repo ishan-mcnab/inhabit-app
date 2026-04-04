@@ -5,7 +5,6 @@ const BORDER = 'rgba(255,255,255,0.08)'
 const XP_COLOR = '#EF9F27'
 
 type Props = {
-  amount: number
   visible: boolean
   onHide: () => void
   /**
@@ -13,20 +12,28 @@ type Props = {
    * Use on screens with a tall header (e.g. Today level card) so the pill clears content below the status bar.
    */
   topPaddingClass?: string
-}
+} & (
+  | { variant?: 'xp'; amount: number }
+  | { variant: 'streak'; message: string; accentColor: string }
+)
 
 type Phase = 'gone' | 'enter' | 'shown' | 'leave'
 
 /**
  * Pill toast near top: slide down + fade in, hold 1.5s, fade out, then onHide().
  */
-export function XPToast({
-  amount,
-  visible,
-  onHide,
-  topPaddingClass = 'pt-[max(0.75rem,env(safe-area-inset-top))]',
-}: Props) {
+export function XPToast(props: Props) {
+  const {
+    visible,
+    onHide,
+    topPaddingClass = 'pt-[max(0.75rem,env(safe-area-inset-top))]',
+  } = props
   const [phase, setPhase] = useState<Phase>('enter')
+
+  const effectKey =
+    props.variant === 'streak'
+      ? `streak:${props.message}`
+      : `xp:${props.amount}`
 
   useEffect(() => {
     if (!visible) {
@@ -49,7 +56,7 @@ export function XPToast({
       window.clearTimeout(leaveTimer)
       window.clearTimeout(hideTimer)
     }
-  }, [visible, amount, onHide])
+  }, [visible, effectKey, onHide])
 
   if (!visible) return null
 
@@ -83,9 +90,13 @@ export function XPToast({
       >
         <span
           className="text-sm font-bold tabular-nums tracking-tight"
-          style={{ color: XP_COLOR }}
+          style={{
+            color: props.variant === 'streak' ? props.accentColor : XP_COLOR,
+          }}
         >
-          +{amount} XP
+          {props.variant === 'streak'
+            ? props.message
+            : `+${props.amount} XP`}
         </span>
       </div>
     </div>

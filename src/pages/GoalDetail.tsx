@@ -1043,12 +1043,24 @@ export function GoalDetail() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       {xpToast ? (
-        <XPToast
-          key={xpToast.key}
-          amount={xpToast.amount}
-          visible
-          onHide={onXpToastHide}
-        />
+        xpToast.payload.kind === 'xp' ? (
+          <XPToast
+            key={xpToast.key}
+            variant="xp"
+            amount={xpToast.payload.amount}
+            visible
+            onHide={onXpToastHide}
+          />
+        ) : (
+          <XPToast
+            key={xpToast.key}
+            variant="streak"
+            message={xpToast.payload.message}
+            accentColor={xpToast.payload.accentColor}
+            visible
+            onHide={onXpToastHide}
+          />
+        )
       ) : null}
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800/60 px-2 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <Link

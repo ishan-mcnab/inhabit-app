@@ -1,22 +1,38 @@
 import { useCallback, useRef, useState } from 'react'
 
+export type PillToastPayload =
+  | { kind: 'xp'; amount: number }
+  | { kind: 'streak'; message: string; accentColor: string }
+
+type Queued = { key: number; payload: PillToastPayload }
+
 /**
- * Queue XP toasts one at a time. Do not push+shift inside setState updaters —
- * React Strict Mode may run updaters twice in dev and would drain the queue.
+ * Queue pill toasts one at a time (XP amounts and streak messages).
+ * Do not push+shift inside setState updaters — Strict Mode may run updaters twice in dev.
  */
 export function useXpToastQueue() {
-  const queueRef = useRef<number[]>([])
-  const [toast, setToast] = useState<{ key: number; amount: number } | null>(
-    null,
-  )
+  const queueRef = useRef<PillToastPayload[]>([])
+  const [toast, setToast] = useState<Queued | null>(null)
 
   const enqueueXpToast = useCallback((amount: number) => {
+    const item: PillToastPayload = { kind: 'xp', amount }
     setToast((cur) => {
       if (cur !== null) {
-        queueRef.current.push(amount)
+        queueRef.current.push(item)
         return cur
       }
-      return { key: Date.now(), amount }
+      return { key: Date.now(), payload: item }
+    })
+  }, [])
+
+  const enqueueStreakToast = useCallback((message: string, accentColor: string) => {
+    const item: PillToastPayload = { kind: 'streak', message, accentColor }
+    setToast((cur) => {
+      if (cur !== null) {
+        queueRef.current.push(item)
+        return cur
+      }
+      return { key: Date.now(), payload: item }
     })
   }, [])
 
@@ -25,10 +41,10 @@ export function useXpToastQueue() {
     requestAnimationFrame(() => {
       const next = queueRef.current.shift()
       if (next !== undefined) {
-        setToast({ key: Date.now(), amount: next })
+        setToast({ key: Date.now(), payload: next })
       }
     })
   }, [])
 
-  return { toast, enqueueXpToast, onXpToastHide }
+  return { toast, enqueueXpToast, enqueueStreakToast, onXpToastHide }
 }

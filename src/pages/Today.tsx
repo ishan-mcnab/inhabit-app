@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import { Link } from 'react-router-dom'
 import { XPToast } from '../components/XPToast'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import { runFullClearConfetti } from '../lib/fullClearConfetti'
 import { generateOneDailyMissionTitle } from '../lib/openRouterSingle'
+import { checkAndUpdateStreak } from '../lib/streak'
 import {
   awardXP,
   MAX_LEVEL,
@@ -53,6 +61,16 @@ function formatTodayHeading(d: Date): string {
     month: 'long',
     day: 'numeric',
   })
+}
+
+function streakHeaderStyle(streak: number): CSSProperties {
+  if (streak <= 6) return { color: '#ffffff' }
+  if (streak <= 13) return { color: '#FF6B35' }
+  if (streak <= 20) return { color: '#EF9F27' }
+  return {
+    color: '#534AB7',
+    textShadow: '0 0 12px rgba(83, 74, 183, 0.55)',
+  }
 }
 
 type GoalEmbed = { title: string; category: string | null }
@@ -375,7 +393,15 @@ export function Today() {
   const awardQueueRef = useRef<AwardXpResult[]>([])
   const pumpBusyRef = useRef(false)
 
-  const { toast: xpToast, enqueueXpToast, onXpToastHide } = useXpToastQueue()
+  const {
+    toast: xpToast,
+    enqueueXpToast,
+    enqueueStreakToast,
+    onXpToastHide,
+  } = useXpToastQueue()
+
+  const [streakCurrent, setStreakCurrent] = useState(0)
+  const [, setStreakLongest] = useState(0)
 
   const applyFlatXp = useCallback((result: AwardXpResult) => {
     const nextRank =
@@ -479,6 +505,8 @@ export function Today() {
       setLoading(false)
       setXpProfileLoading(false)
       setXpProfile(null)
+      setStreakCurrent(0)
+      setStreakLongest(0)
       setLoadError(userError?.message ?? 'Not signed in')
       setUserId(null)
       return
@@ -509,7 +537,9 @@ export function Today() {
         .order('created_at', { ascending: true }),
       supabase
         .from('users')
-        .select('total_xp, level, weekly_xp, rank')
+        .select(
+          'total_xp, level, weekly_xp, rank, current_streak, longest_streak',
+        )
         .eq('id', user.id)
         .maybeSingle(),
     ])
@@ -525,6 +555,8 @@ export function Today() {
         weekly_xp: 0,
         rank: 'Recruit',
       })
+      setStreakCurrent(0)
+      setStreakLongest(0)
     } else if (userXpRes.data) {
       const d = userXpRes.data as Record<string, unknown>
       setXpProfile({
@@ -540,6 +572,16 @@ export function Today() {
             : 0,
         rank: normalizeRank(d.rank),
       })
+      const cs =
+        typeof d.current_streak === 'number' && !Number.isNaN(d.current_streak)
+          ? Math.max(0, Math.floor(d.current_streak))
+          : 0
+      const ls =
+        typeof d.longest_streak === 'number' && !Number.isNaN(d.longest_streak)
+          ? Math.max(0, Math.floor(d.longest_streak))
+          : 0
+      setStreakCurrent(cs)
+      setStreakLongest(ls)
     } else {
       setXpProfile({
         total_xp: 0,
@@ -547,7 +589,18 @@ export function Today() {
         weekly_xp: 0,
         rank: 'Recruit',
       })
+      setStreakCurrent(0)
+      setStreakLongest(0)
     }
+
+    void checkAndUpdateStreak(user.id, 'mount')
+      .then((r) => {
+        setStreakCurrent(r.currentStreak)
+        setStreakLongest(r.longestStreak)
+      })
+      .catch((err) => {
+        console.error('checkAndUpdateStreak (mount) failed:', err)
+      })
 
     if (goalsRes.error) {
       setLoadError(goalsRes.error.message)
@@ -587,8 +640,8 @@ export function Today() {
   const total = missions.length
   const allDone = total > 0 && doneCount === total
 
-  // Day 29 — habits: when habit completion ships, award XP here, e.g.
-  // const r = await awardXP(userId, 15, 'habit_complete'); enqueueXpAward(r); enqueueXpToast(15)
+  // Day 29 — habits: when habit completion ships, award XP + streak, e.g.
+  // await checkAndUpdateStreak(userId, 'activity'); setStreak…; await awardXP(userId, 15, 'habit_complete'); enqueueXpAward(r); enqueueXpToast(15)
 
   async function handleCompleteMission(missionId: string) {
     if (!userId) return
@@ -653,6 +706,20 @@ export function Today() {
         const uid = user?.id
         if (!uid) return
 
+        const streakResult = await checkAndUpdateStreak(uid, 'activity')
+        setStreakCurrent(streakResult.currentStreak)
+        setStreakLongest(streakResult.longestStreak)
+        if (
+          streakResult.streakIncremented &&
+          streakResult.currentStreak > 0 &&
+          streakResult.currentStreak % 7 === 0
+        ) {
+          enqueueStreakToast(
+            `🔥 ${streakResult.currentStreak} day streak! Keep going.`,
+            '#FF6B35',
+          )
+        }
+
         const missionAward = await awardXP(uid, 25, 'mission_complete')
         enqueueXpAward(missionAward)
         enqueueXpToast(25)
@@ -666,7 +733,7 @@ export function Today() {
           }
         }
       } catch (xpErr) {
-        console.error('XP award failed (mission / full clear):', xpErr)
+        console.error('Streak / XP award failed (mission / full clear):', xpErr)
       }
     })()
   }
@@ -839,13 +906,26 @@ export function Today() {
         />
       ) : null}
       {xpToast ? (
-        <XPToast
-          key={xpToast.key}
-          amount={xpToast.amount}
-          visible
-          onHide={onXpToastHide}
-          topPaddingClass="pt-[max(7.25rem,calc(env(safe-area-inset-top)+6.25rem))]"
-        />
+        xpToast.payload.kind === 'xp' ? (
+          <XPToast
+            key={xpToast.key}
+            variant="xp"
+            amount={xpToast.payload.amount}
+            visible
+            onHide={onXpToastHide}
+            topPaddingClass="pt-[max(7.25rem,calc(env(safe-area-inset-top)+6.25rem))]"
+          />
+        ) : (
+          <XPToast
+            key={xpToast.key}
+            variant="streak"
+            message={xpToast.payload.message}
+            accentColor={xpToast.payload.accentColor}
+            visible
+            onHide={onXpToastHide}
+            topPaddingClass="pt-[max(7.25rem,calc(env(safe-area-inset-top)+6.25rem))]"
+          />
+        )
       ) : null}
       <div
         className={[
@@ -868,22 +948,34 @@ export function Today() {
       </div>
 
       <header className="shrink-0 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] transition-opacity duration-300">
-        <h1 className="text-2xl font-bold tracking-tight text-white">
-          {headingDate}
-        </h1>
-        {loading ? (
-          <div className="mt-2 h-4 w-40 rounded bg-[#1e1e22] mission-skeleton-shell" />
-        ) : loadError ? null : total > 0 ? (
-          allDone ? (
-            <p className="mt-1 text-sm font-semibold text-emerald-400">
-              All done today!
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-bold tracking-tight text-white">
+              {headingDate}
+            </h1>
+            {loading ? (
+              <div className="mt-2 h-4 w-40 rounded bg-[#1e1e22] mission-skeleton-shell" />
+            ) : loadError ? null : total > 0 ? (
+              allDone ? (
+                <p className="mt-1 text-sm font-semibold text-emerald-400">
+                  All done today!
+                </p>
+              ) : (
+                <p className="mt-1 text-sm font-medium text-zinc-500">
+                  {doneCount} / {total} missions done today
+                </p>
+              )
+            ) : null}
+          </div>
+          {streakCurrent > 0 ? (
+            <p
+              className="shrink-0 pt-0.5 text-base font-bold tabular-nums"
+              style={streakHeaderStyle(streakCurrent)}
+            >
+              🔥 {streakCurrent} day streak
             </p>
-          ) : (
-            <p className="mt-1 text-sm font-medium text-zinc-500">
-              {doneCount} / {total} missions done today
-            </p>
-          )
-        ) : null}
+          ) : null}
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
