@@ -3,6 +3,7 @@ import { RankShield } from '../components/RankShield'
 import {
   calculateRank,
   checkAndResetWeeklyXp,
+  formatXpLogReason,
   getWeeklyRankBandProgress,
   rankColor,
 } from '../lib/xp'
@@ -21,6 +22,43 @@ type UserStats = {
   level: number
   current_streak: number
   longest_streak: number
+}
+
+type XpLogEntry = {
+  id: string
+  amount: number
+  reason: string
+  created_at: string
+}
+
+function formatRelativeXpTime(iso: string): string {
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  const now = Date.now()
+  const diffMs = Math.max(0, now - t)
+  const sec = Math.floor(diffMs / 1000)
+  if (sec < 45) return 'Just now'
+  const min = Math.floor(sec / 60)
+  if (min < 60) {
+    return `${min} minute${min === 1 ? '' : 's'} ago`
+  }
+  const hr = Math.floor(min / 60)
+  if (hr < 24) {
+    return `${hr} hour${hr === 1 ? '' : 's'} ago`
+  }
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const startOfYesterday = new Date(startOfToday)
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1)
+  if (t >= startOfYesterday.getTime() && t < startOfToday.getTime()) {
+    return 'Yesterday'
+  }
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000))
+  if (days < 7) return `${days} days ago`
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 function parseUserStats(d: Record<string, unknown>): UserStats {
@@ -57,6 +95,7 @@ export function Profile() {
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [stats, setStats] = useState<UserStats | null>(null)
+  const [xpLogs, setXpLogs] = useState<XpLogEntry[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -69,6 +108,7 @@ export function Profile() {
     if (userError || !user) {
       setLoading(false)
       setStats(null)
+      setXpLogs([])
       setError(userError?.message ?? 'Not signed in')
       return
     }
@@ -79,15 +119,44 @@ export function Profile() {
       console.error('checkAndResetWeeklyXp (Profile) failed:', e)
     }
 
-    const { data, error: qErr } = await supabase
-      .from('users')
-      .select(
-        'quest_progression, weekly_xp, rank, total_xp, level, current_streak, longest_streak',
-      )
-      .eq('id', user.id)
-      .maybeSingle()
+    const [{ data, error: qErr }, logsRes] = await Promise.all([
+      supabase
+        .from('users')
+        .select(
+          'quest_progression, weekly_xp, rank, total_xp, level, current_streak, longest_streak',
+        )
+        .eq('id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('xp_logs')
+        .select('id, amount, reason, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ])
 
     setLoading(false)
+
+    if (logsRes.error) {
+      console.error('xp_logs load failed:', logsRes.error)
+      setXpLogs([])
+    } else {
+      const rows = (logsRes.data ?? []) as Record<string, unknown>[]
+      setXpLogs(
+        rows
+          .map((r) => ({
+            id: typeof r.id === 'string' ? r.id : '',
+            amount:
+              typeof r.amount === 'number' && !Number.isNaN(r.amount)
+                ? Math.trunc(r.amount)
+                : 0,
+            reason: typeof r.reason === 'string' ? r.reason : '',
+            created_at:
+              typeof r.created_at === 'string' ? r.created_at : '',
+          }))
+          .filter((r) => r.id !== '' && r.created_at !== ''),
+      )
+    }
 
     if (qErr) {
       setError(qErr.message)
@@ -354,6 +423,55 @@ export function Profile() {
                     Saving…
                   </p>
                 ) : null}
+              </section>
+
+              <section
+                className="border-t border-zinc-800/60 pt-8"
+                aria-labelledby="profile-xp-log-heading"
+              >
+                <h2
+                  id="profile-xp-log-heading"
+                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
+                >
+                  Recent XP Activity
+                </h2>
+                {xpLogs.length === 0 ? (
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-zinc-500">
+                    No XP earned yet — complete missions to get started
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {xpLogs.map((row) => {
+                      const pos = row.amount > 0
+                      const amtLabel = pos
+                        ? `+${row.amount} XP`
+                        : `${row.amount} XP`
+                      return (
+                        <li
+                          key={row.id}
+                          className="flex flex-col gap-0.5 rounded-lg border border-zinc-800/50 bg-app-surface/40 px-3 py-2.5 ring-1 ring-zinc-800/20"
+                        >
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span
+                              className={[
+                                'text-sm font-bold tabular-nums',
+                                pos ? 'text-emerald-500' : 'text-red-400',
+                              ].join(' ')}
+                            >
+                              {amtLabel}
+                            </span>
+                            <span className="shrink-0 text-[11px] font-medium text-zinc-600">
+                              {formatRelativeXpTime(row.created_at)}
+                            </span>
+                          </div>
+                          <p className="text-xs font-medium text-zinc-500">
+                            {formatXpLogReason(row.reason)}
+                          </p>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </section>
             </>
           ) : null}

@@ -12,7 +12,7 @@ import {
   weeklyQuestBatchRanges,
 } from '../lib/goalProgress'
 import { generateOneWeeklyQuestTitle } from '../lib/openRouterSingle'
-import { awardXP } from '../lib/xp'
+import { awardXP, localWeekStartEndIso } from '../lib/xp'
 import { supabase } from '../supabase'
 
 const QUEST_PURPLE = '#534AB7'
@@ -868,9 +868,10 @@ export function GoalDetail() {
         : null,
     )
 
+    const questCompletedAtIso = new Date().toISOString()
     const { error: uErr } = await supabase
       .from('weekly_quests')
-      .update({ completed: true })
+      .update({ completed: true, completed_at: questCompletedAtIso })
       .eq('id', quest.id)
       .eq('user_id', userId)
       .eq('goal_id', goalId)
@@ -903,7 +904,7 @@ export function GoalDetail() {
     if (gErr) {
       const { error: revErr } = await supabase
         .from('weekly_quests')
-        .update({ completed: false })
+        .update({ completed: false, completed_at: null })
         .eq('id', quest.id)
         .eq('user_id', userId)
         .eq('goal_id', goalId)
@@ -944,9 +945,47 @@ export function GoalDetail() {
           return
         }
 
-        console.log('Awarding quest XP...')
+        // Logs have no goal_id; compare user-wide weekly_quest_complete rows to
+        // user-wide quests completed this week (completed_at set on mark complete).
+        const { startIso, endIso } = localWeekStartEndIso()
+        const [logsRes, questsRes] = await Promise.all([
+          supabase
+            .from('xp_logs')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('reason', 'weekly_quest_complete')
+            .gte('created_at', startIso)
+            .lte('created_at', endIso),
+          supabase
+            .from('weekly_quests')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('completed', true)
+            .not('completed_at', 'is', null)
+            .gte('completed_at', startIso)
+            .lte('completed_at', endIso),
+        ])
+        const logCount = logsRes.error ? null : (logsRes.count ?? 0)
+        const completedWeekCount = questsRes.error
+          ? null
+          : (questsRes.count ?? 0)
+        if (logsRes.error || questsRes.error) {
+          console.error(
+            'weekly quest XP guard query failed:',
+            logsRes.error,
+            questsRes.error,
+          )
+        }
+        if (
+          logCount !== null &&
+          completedWeekCount !== null &&
+          logCount >= completedWeekCount
+        ) {
+          console.warn('[XP] Duplicate weekly quest XP prevented')
+          return
+        }
+
         await awardXP(user.id, 150, 'weekly_quest_complete')
-        console.log('Quest XP awarded, showing toast')
         enqueueXpToast(150)
       } catch (xpErr) {
         console.error('XP award failed (weekly quest):', xpErr)

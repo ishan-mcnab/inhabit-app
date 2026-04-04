@@ -24,6 +24,7 @@ import {
   calculateRank,
   checkAndResetWeeklyXp,
   getWeeklyRankBandProgress,
+  localDayStartEndIso,
   MAX_LEVEL,
   rankColor,
   xpPercentToNextLevel,
@@ -39,24 +40,25 @@ function sleep(ms: number): Promise<void> {
 
 /** True if `full_clear_bonus` was already logged for this user on the *local* calendar day. */
 async function wasFullClearBonusAwardedToday(userId: string): Promise<boolean> {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
-  const end = new Date()
-  end.setHours(23, 59, 59, 999)
-  // setHours uses the device timezone; toISOString() maps those instants to UTC for timestamptz queries.
-  const { data, error } = await supabase
+  const { startIso, endIso } = localDayStartEndIso()
+  const { count, error } = await supabase
     .from('xp_logs')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('reason', 'full_clear_bonus')
-    .gte('created_at', start.toISOString())
-    .lte('created_at', end.toISOString())
-    .limit(1)
+    .gte('created_at', startIso)
+    .lte('created_at', endIso)
   if (error) {
     console.error('full_clear_bonus xp_logs check failed:', error)
     return true
   }
-  return (data?.length ?? 0) > 0
+  const n = count ?? 0
+  if (n > 1) {
+    console.warn(
+      '[XP] Multiple full_clear_bonus rows for today — data may need cleanup',
+    )
+  }
+  return n > 0
 }
 
 function formatLocalDate(d: Date): string {
@@ -64,6 +66,39 @@ function formatLocalDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
+}
+
+async function countMissionCompleteXpLogsToday(userId: string): Promise<number | null> {
+  const { startIso, endIso } = localDayStartEndIso()
+  const { count, error } = await supabase
+    .from('xp_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('reason', 'mission_complete')
+    .gte('created_at', startIso)
+    .lte('created_at', endIso)
+  if (error) {
+    console.error('mission_complete xp_logs count failed:', error)
+    return null
+  }
+  return count ?? 0
+}
+
+async function countCompletedMissionsDueToday(
+  userId: string,
+  dueDateYmd: string,
+): Promise<number | null> {
+  const { count, error } = await supabase
+    .from('daily_missions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('due_date', dueDateYmd)
+    .eq('completed', true)
+  if (error) {
+    console.error('daily_missions completed count failed:', error)
+    return null
+  }
+  return count ?? 0
 }
 
 function formatTodayHeading(d: Date): string {
@@ -918,9 +953,21 @@ export function Today() {
           setStreakMilestoneOpen(true)
         }
 
-        const missionAward = await awardXP(uid, 25, 'mission_complete')
-        enqueueXpAward(missionAward)
-        enqueueXpToast(25)
+        const [missionXpLogs, completedToday] = await Promise.all([
+          countMissionCompleteXpLogsToday(uid),
+          countCompletedMissionsDueToday(uid, todayStr),
+        ])
+        const skipMissionXp =
+          missionXpLogs !== null &&
+          completedToday !== null &&
+          missionXpLogs >= completedToday
+        if (skipMissionXp) {
+          console.warn('[XP] Duplicate mission XP prevented')
+        } else {
+          const missionAward = await awardXP(uid, 25, 'mission_complete')
+          enqueueXpAward(missionAward)
+          enqueueXpToast(25)
+        }
 
         if (allCompleteNow) {
           const already = await wasFullClearBonusAwardedToday(uid)

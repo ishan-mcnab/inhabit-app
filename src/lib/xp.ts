@@ -199,6 +199,50 @@ export function getMostRecentMondayYmd(): string {
   return formatLocalYmd(mon)
 }
 
+/**
+ * Local calendar day bounds as ISO strings for timestamptz range queries.
+ * `setHours` uses the device timezone; `toISOString` maps to UTC for PostgREST.
+ */
+export function localDayStartEndIso(date: Date = new Date()): {
+  startIso: string
+  endIso: string
+} {
+  const start = new Date(date)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(date)
+  end.setHours(23, 59, 59, 999)
+  return { startIso: start.toISOString(), endIso: end.toISOString() }
+}
+
+/** Monday 00:00:00 — Sunday 23:59:59.999 in local time, as ISO strings. */
+export function localWeekStartEndIso(date: Date = new Date()): {
+  startIso: string
+  endIso: string
+} {
+  const day = date.getDay()
+  const daysFromMonday = (day + 6) % 7
+  const monday = new Date(date)
+  monday.setDate(date.getDate() - daysFromMonday)
+  monday.setHours(0, 0, 0, 0)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
+  return { startIso: monday.toISOString(), endIso: sunday.toISOString() }
+}
+
+const XP_LOG_REASON_LABELS: Record<string, string> = {
+  mission_complete: 'Mission completed',
+  full_clear_bonus: 'Full clear bonus',
+  weekly_quest_complete: 'Weekly quest',
+  grace_pass_used: 'Grace pass used',
+  streak_milestone: 'Streak milestone',
+  weekly_reflection: 'Weekly reflection',
+}
+
+export function formatXpLogReason(reason: string): string {
+  return XP_LOG_REASON_LABELS[reason] ?? reason.replace(/_/g, ' ')
+}
+
 function parseUserDate(raw: unknown): string | null {
   if (raw == null) return null
   if (typeof raw === 'string') {
@@ -353,6 +397,8 @@ export async function awardXP(
     throw new Error(`awardXP: failed to update user XP — ${updateErr.message}`)
   }
 
+  // xp_logs.reason (app): mission_complete, full_clear_bonus, weekly_quest_complete,
+  // grace_pass_used, streak_milestone; weekly_reflection reserved for future use.
   const { error: logErr } = await supabase.from('xp_logs').insert({
     user_id: userId,
     amount,
@@ -361,6 +407,16 @@ export async function awardXP(
 
   if (logErr) {
     throw new Error(`awardXP: failed to write xp_logs — ${logErr.message}`)
+  }
+
+  if (
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem('inhabit_debug') === 'true'
+  ) {
+    const sign = amount >= 0 ? '+' : ''
+    console.log(
+      `[XP] ${sign}${amount} for ${reason} → total: ${newTotalXp}, level: ${newLevel}, rank: ${newRank}`,
+    )
   }
 
   return {
