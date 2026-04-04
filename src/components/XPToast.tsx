@@ -8,6 +8,11 @@ type Props = {
   amount: number
   visible: boolean
   onHide: () => void
+  /**
+   * Tailwind padding-top classes for the fixed wrapper.
+   * Use on screens with a tall header (e.g. Today level card) so the pill clears content below the status bar.
+   */
+  topPaddingClass?: string
 }
 
 type Phase = 'gone' | 'enter' | 'shown' | 'leave'
@@ -15,7 +20,12 @@ type Phase = 'gone' | 'enter' | 'shown' | 'leave'
 /**
  * Pill toast near top: slide down + fade in, hold 1.5s, fade out, then onHide().
  */
-export function XPToast({ amount, visible, onHide }: Props) {
+export function XPToast({
+  amount,
+  visible,
+  onHide,
+  topPaddingClass = 'pt-[max(0.75rem,env(safe-area-inset-top))]',
+}: Props) {
   const [phase, setPhase] = useState<Phase>('enter')
 
   useEffect(() => {
@@ -54,7 +64,10 @@ export function XPToast({ amount, visible, onHide }: Props) {
 
   return (
     <div
-      className="pointer-events-none fixed left-0 right-0 z-[200] flex justify-center px-4 pt-[max(0.75rem,env(safe-area-inset-top))]"
+      className={[
+        'pointer-events-none fixed left-0 right-0 z-[200] flex justify-center px-4',
+        topPaddingClass,
+      ].join(' ')}
       role="status"
       aria-live="polite"
     >

@@ -5,7 +5,7 @@ const LEVEL_THRESHOLDS_1_TO_10 = [
   0, 500, 1100, 1800, 2700, 3800, 5100, 6600, 8300, 10200,
 ] as const
 
-const MAX_LEVEL = 50
+export const MAX_LEVEL = 50
 
 function minXpForLevel(level: number): number {
   if (level <= 1) return 0
@@ -31,6 +31,12 @@ export function calculateLevel(totalXp: number): number {
 export function xpForNextLevel(currentLevel: number): number {
   if (currentLevel >= MAX_LEVEL) return Infinity
   return minXpForLevel(currentLevel + 1)
+}
+
+/** XP required to complete the current level segment (denominator for "n / m XP"). */
+export function xpSpanInCurrentLevel(level: number): number {
+  if (level >= MAX_LEVEL) return 1
+  return minXpForLevel(level + 1) - minXpForLevel(level)
 }
 
 export function xpProgressInCurrentLevel(totalXp: number): number {

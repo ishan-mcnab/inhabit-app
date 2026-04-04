@@ -5,8 +5,20 @@ import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import { runFullClearConfetti } from '../lib/fullClearConfetti'
 import { generateOneDailyMissionTitle } from '../lib/openRouterSingle'
-import { awardXP } from '../lib/xp'
+import {
+  awardXP,
+  MAX_LEVEL,
+  rankColor,
+  xpPercentToNextLevel,
+  xpProgressInCurrentLevel,
+  xpSpanInCurrentLevel,
+  type AwardXpResult,
+} from '../lib/xp'
 import { supabase } from '../supabase'
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
 
 async function wasFullClearBonusAwardedToday(userId: string): Promise<boolean> {
   const start = new Date()
@@ -129,6 +141,173 @@ function StateCard({ children }: { children: React.ReactNode }) {
   )
 }
 
+const LEVEL_CARD_BG = '#141418'
+const BAR_TRACK = '#2A2A2E'
+const BAR_FILL = '#534AB7'
+const LEVEL_UP_PURPLE = '#534AB7'
+
+/** Rank pill background: rank color at ~22% opacity (15% was easy to lose on #141418). */
+function rankBadgeBackground(hex: string): string {
+  if (hex.length === 7 && hex.startsWith('#')) {
+    const r = Number.parseInt(hex.slice(1, 3), 16)
+    const g = Number.parseInt(hex.slice(3, 5), 16)
+    const b = Number.parseInt(hex.slice(5, 7), 16)
+    if ([r, g, b].every((n) => !Number.isNaN(n))) {
+      return `rgba(${r},${g},${b},0.22)`
+    }
+  }
+  return 'rgba(136, 135, 128, 0.22)'
+}
+
+function rankBadgeBorderRgba(hex: string, alpha: number): string {
+  if (hex.length === 7 && hex.startsWith('#')) {
+    const r = Number.parseInt(hex.slice(1, 3), 16)
+    const g = Number.parseInt(hex.slice(3, 5), 16)
+    const b = Number.parseInt(hex.slice(5, 7), 16)
+    if ([r, g, b].every((n) => !Number.isNaN(n))) {
+      return `rgba(${r},${g},${b},${alpha})`
+    }
+  }
+  return `rgba(136, 135, 128, ${alpha})`
+}
+
+/**
+ * `true` = bright red pill / white text (verify DOM + stacking). Set `false` for production.
+ * No parent uses overflow:hidden on this card; only the progress track clips the bar fill.
+ */
+const DEBUG_RANK_BADGE_STYLES = false
+
+function LevelProgressSkeleton() {
+  return (
+    <div className="mission-skeleton-shell mx-4 mt-[max(0.5rem,env(safe-area-inset-top))] animate-pulse rounded-2xl border border-zinc-800/80 p-4">
+      <div className="flex items-center gap-3">
+        <div className="h-8 w-14 shrink-0 rounded-md bg-black/22" />
+        <div className="h-2 min-w-0 flex-1 rounded-full bg-black/22" />
+        <div className="h-4 w-[4.5rem] shrink-0 rounded-md bg-black/22" />
+      </div>
+      <div className="mt-3 flex justify-start">
+        <div className="h-5 w-20 rounded-full bg-black/22" />
+      </div>
+    </div>
+  )
+}
+
+type XpProfileRow = {
+  total_xp: number
+  level: number
+  weekly_xp: number
+  rank: string
+}
+
+function normalizeRank(rankInput: unknown): string {
+  if (typeof rankInput === 'string' && rankInput.trim().length > 0) {
+    return rankInput.trim()
+  }
+  return 'Recruit'
+}
+
+function LevelProgressCard({
+  profile,
+  rank: rankProp,
+  barOverridePct,
+  barTransition,
+  barFlash,
+  levelUpBannerLevel,
+}: {
+  profile: XpProfileRow
+  /** Explicit rank label (should match `profile.rank`; passed for clarity and debugging). */
+  rank: string
+  barOverridePct: number | null
+  barTransition: string
+  barFlash: boolean
+  levelUpBannerLevel: number | null
+}) {
+  const { total_xp: total, level } = profile
+  const rank = normalizeRank(rankProp ?? profile.rank)
+
+  const rc = rankColor(rank)
+  const fillPct =
+    level >= MAX_LEVEL
+      ? 100
+      : barOverridePct !== null
+        ? barOverridePct
+        : xpPercentToNextLevel(total)
+  const progIn = xpProgressInCurrentLevel(total)
+  const span = xpSpanInCurrentLevel(level)
+  const xpRight =
+    level >= MAX_LEVEL
+      ? `${total.toLocaleString()} XP`
+      : `${progIn} / ${span} XP`
+
+  return (
+    <div className="shrink-0 px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <div
+        className="rounded-2xl border border-zinc-800/80 px-3 py-3 shadow-sm ring-1 ring-zinc-800/30"
+        style={{ backgroundColor: LEVEL_CARD_BG }}
+      >
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="shrink-0 text-base font-bold tabular-nums text-white sm:text-lg">
+            LVL {level}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div
+              className="h-2.5 w-full overflow-hidden rounded-full"
+              style={{ backgroundColor: BAR_TRACK }}
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${fillPct}%`,
+                  backgroundColor: barFlash ? '#ffffff' : BAR_FILL,
+                  transition: barFlash
+                    ? 'background-color 0.18s ease'
+                    : `${barTransition}, background-color 0.18s ease`,
+                }}
+              />
+            </div>
+          </div>
+          <span className="max-w-[5.5rem] shrink-0 text-right text-[10px] font-semibold leading-tight text-zinc-500 sm:max-w-none sm:text-xs">
+            {xpRight}
+          </span>
+        </div>
+        <div className="mt-2 flex justify-start">
+          <span
+            className={[
+              'inline-flex max-w-full items-center rounded-full font-medium leading-tight',
+              DEBUG_RANK_BADGE_STYLES ? '' : 'px-2.5 py-0.5 text-[12px]',
+            ].join(' ')}
+            style={
+              DEBUG_RANK_BADGE_STYLES
+                ? {
+                    backgroundColor: '#ff0000',
+                    color: '#ffffff',
+                    padding: '8px 16px',
+                    fontSize: 14,
+                  }
+                : {
+                    color: rc,
+                    backgroundColor: rankBadgeBackground(rc),
+                    border: `1px solid ${rankBadgeBorderRgba(rc, 0.4)}`,
+                  }
+            }
+          >
+            {rank}
+          </span>
+        </div>
+        {levelUpBannerLevel !== null ? (
+          <div
+            className="-mx-3 mt-2.5 w-[calc(100%+1.5rem)] max-w-none py-2.5 text-center text-sm font-bold text-white"
+            style={{ backgroundColor: LEVEL_UP_PURPLE }}
+            role="status"
+          >
+            LEVEL UP! You reached Level {levelUpBannerLevel}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function revealBanner(
   setOpen: (v: boolean) => void,
   setExpanded: (v: boolean) => void,
@@ -180,14 +359,116 @@ export function Today() {
     () => new Set(),
   )
 
+  const [xpProfile, setXpProfile] = useState<XpProfileRow | null>(null)
+  const [xpProfileLoading, setXpProfileLoading] = useState(true)
+  const [barOverridePct, setBarOverridePct] = useState<number | null>(null)
+  const [barTransition, setBarTransition] = useState(
+    'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+  )
+  const [barFlash, setBarFlash] = useState(false)
+  const [levelUpBannerLevel, setLevelUpBannerLevel] = useState<number | null>(
+    null,
+  )
+
   const deferBannerForConfettiRef = useRef(false)
   const confettiCancelRef = useRef<(() => void) | null>(null)
+  const awardQueueRef = useRef<AwardXpResult[]>([])
+  const pumpBusyRef = useRef(false)
 
   const { toast: xpToast, enqueueXpToast, onXpToastHide } = useXpToastQueue()
+
+  const applyFlatXp = useCallback((result: AwardXpResult) => {
+    const nextRank =
+      typeof result.newRank === 'string' && result.newRank.trim()
+        ? result.newRank.trim()
+        : 'Recruit'
+    const p: XpProfileRow = {
+      total_xp: result.newTotalXp,
+      level: result.newLevel,
+      weekly_xp: result.newWeeklyXp,
+      rank: nextRank,
+    }
+    setXpProfile(p)
+  }, [])
+
+  const runLevelUpSequence = useCallback(async (result: AwardXpResult) => {
+    setBarOverridePct(100)
+    setBarTransition('width 0.3s cubic-bezier(0.4, 0, 0.2, 1)')
+    await sleep(320)
+    setBarFlash(true)
+    await sleep(200)
+    setBarFlash(false)
+
+    const nextRank =
+      typeof result.newRank === 'string' && result.newRank.trim()
+        ? result.newRank.trim()
+        : 'Recruit'
+    const p: XpProfileRow = {
+      total_xp: result.newTotalXp,
+      level: result.newLevel,
+      weekly_xp: result.newWeeklyXp,
+      rank: nextRank,
+    }
+    setXpProfile(p)
+
+    setBarOverridePct(0)
+    setBarTransition('none')
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve())
+      })
+    })
+
+    const endPct =
+      result.newLevel >= MAX_LEVEL
+        ? 100
+        : xpPercentToNextLevel(result.newTotalXp)
+    setBarOverridePct(endPct)
+    setBarTransition('width 0.5s cubic-bezier(0.4, 0, 0.2, 1)')
+    await sleep(520)
+    setBarOverridePct(null)
+    setBarTransition('width 0.6s cubic-bezier(0.4, 0, 0.2, 1)')
+
+    setLevelUpBannerLevel(result.newLevel)
+    await sleep(2000)
+    setLevelUpBannerLevel(null)
+  }, [])
+
+  const pumpAwardQueue = useCallback(async () => {
+    if (pumpBusyRef.current) return
+    pumpBusyRef.current = true
+    try {
+      while (awardQueueRef.current.length > 0) {
+        const r = awardQueueRef.current.shift()!
+        if (r.leveledUp) {
+          await runLevelUpSequence(r)
+        } else {
+          applyFlatXp(r)
+          if (awardQueueRef.current.length > 0) {
+            await sleep(600)
+          }
+        }
+      }
+    } finally {
+      pumpBusyRef.current = false
+      if (awardQueueRef.current.length > 0) {
+        void pumpAwardQueue()
+      }
+    }
+  }, [applyFlatXp, runLevelUpSequence])
+
+  const enqueueXpAward = useCallback(
+    (result: AwardXpResult) => {
+      awardQueueRef.current.push(result)
+      void pumpAwardQueue()
+    },
+    [pumpAwardQueue],
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
+    setXpProfileLoading(true)
 
     const {
       data: { user },
@@ -196,6 +477,8 @@ export function Today() {
 
     if (userError || !user) {
       setLoading(false)
+      setXpProfileLoading(false)
+      setXpProfile(null)
       setLoadError(userError?.message ?? 'Not signed in')
       setUserId(null)
       return
@@ -203,7 +486,7 @@ export function Today() {
 
     setUserId(user.id)
 
-    const [goalsRes, missionsRes] = await Promise.all([
+    const [goalsRes, missionsRes, userXpRes] = await Promise.all([
       supabase
         .from('goals')
         .select('id', { count: 'exact', head: true })
@@ -224,9 +507,47 @@ export function Today() {
         .eq('user_id', user.id)
         .eq('due_date', todayStr)
         .order('created_at', { ascending: true }),
+      supabase
+        .from('users')
+        .select('total_xp, level, weekly_xp, rank')
+        .eq('id', user.id)
+        .maybeSingle(),
     ])
 
     setLoading(false)
+    setXpProfileLoading(false)
+
+    if (userXpRes.error) {
+      console.error('Failed to load XP profile:', userXpRes.error)
+      setXpProfile({
+        total_xp: 0,
+        level: 1,
+        weekly_xp: 0,
+        rank: 'Recruit',
+      })
+    } else if (userXpRes.data) {
+      const d = userXpRes.data as Record<string, unknown>
+      setXpProfile({
+        total_xp:
+          typeof d.total_xp === 'number' && !Number.isNaN(d.total_xp)
+            ? d.total_xp
+            : 0,
+        level:
+          typeof d.level === 'number' && !Number.isNaN(d.level) ? d.level : 1,
+        weekly_xp:
+          typeof d.weekly_xp === 'number' && !Number.isNaN(d.weekly_xp)
+            ? d.weekly_xp
+            : 0,
+        rank: normalizeRank(d.rank),
+      })
+    } else {
+      setXpProfile({
+        total_xp: 0,
+        level: 1,
+        weekly_xp: 0,
+        rank: 'Recruit',
+      })
+    }
 
     if (goalsRes.error) {
       setLoadError(goalsRes.error.message)
@@ -267,7 +588,7 @@ export function Today() {
   const allDone = total > 0 && doneCount === total
 
   // Day 29 — habits: when habit completion ships, award XP here, e.g.
-  // await awardXP(userId, 15, 'habit_complete'); enqueueXpToast(15)
+  // const r = await awardXP(userId, 15, 'habit_complete'); enqueueXpAward(r); enqueueXpToast(15)
 
   async function handleCompleteMission(missionId: string) {
     if (!userId) return
@@ -332,13 +653,15 @@ export function Today() {
         const uid = user?.id
         if (!uid) return
 
-        await awardXP(uid, 25, 'mission_complete')
+        const missionAward = await awardXP(uid, 25, 'mission_complete')
+        enqueueXpAward(missionAward)
         enqueueXpToast(25)
 
         if (allCompleteNow) {
           const already = await wasFullClearBonusAwardedToday(uid)
           if (!already) {
-            await awardXP(uid, 50, 'full_clear_bonus')
+            const bonusAward = await awardXP(uid, 50, 'full_clear_bonus')
+            enqueueXpAward(bonusAward)
             enqueueXpToast(50)
           }
         }
@@ -346,8 +669,6 @@ export function Today() {
         console.error('XP award failed (mission / full clear):', xpErr)
       }
     })()
-
-    void load()
   }
 
   function closeMissionMenu() {
@@ -506,12 +827,24 @@ export function Today() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
+      {userId && xpProfileLoading ? <LevelProgressSkeleton /> : null}
+      {userId && xpProfile && !xpProfileLoading ? (
+        <LevelProgressCard
+          profile={xpProfile}
+          rank={xpProfile.rank}
+          barOverridePct={barOverridePct}
+          barTransition={barTransition}
+          barFlash={barFlash}
+          levelUpBannerLevel={levelUpBannerLevel}
+        />
+      ) : null}
       {xpToast ? (
         <XPToast
           key={xpToast.key}
           amount={xpToast.amount}
           visible
           onHide={onXpToastHide}
+          topPaddingClass="pt-[max(7.25rem,calc(env(safe-area-inset-top)+6.25rem))]"
         />
       ) : null}
       <div
