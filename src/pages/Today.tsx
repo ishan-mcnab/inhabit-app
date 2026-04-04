@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { Link } from 'react-router-dom'
 import { GracePassModal } from '../components/GracePassModal'
+import { StreakMilestoneModal } from '../components/StreakMilestoneModal'
 import { XPToast } from '../components/XPToast'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { useXpToastQueue } from '../hooks/useXpToastQueue'
@@ -36,11 +37,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+/** True if `full_clear_bonus` was already logged for this user on the *local* calendar day. */
 async function wasFullClearBonusAwardedToday(userId: string): Promise<boolean> {
   const start = new Date()
   start.setHours(0, 0, 0, 0)
   const end = new Date()
   end.setHours(23, 59, 59, 999)
+  // setHours uses the device timezone; toISOString() maps those instants to UTC for timestamptz queries.
   const { data, error } = await supabase
     .from('xp_logs')
     .select('id')
@@ -521,6 +524,13 @@ export function Today() {
   const [gracePassesRemaining, setGracePassesRemaining] = useState(0)
   const [gracePassSubmitting, setGracePassSubmitting] = useState(false)
 
+  const [streakMilestoneOpen, setStreakMilestoneOpen] = useState(false)
+  const [streakMilestoneCount, setStreakMilestoneCount] = useState(0)
+
+  const handleStreakMilestoneClose = useCallback(() => {
+    setStreakMilestoneOpen(false)
+  }, [])
+
   const applyFlatXp = useCallback((result: AwardXpResult) => {
     const nextRank =
       typeof result.newRank === 'string' && result.newRank.trim()
@@ -677,6 +687,7 @@ export function Today() {
     setXpProfileLoading(false)
 
     let streakBeforeMount = 0
+    let streakForDebug = 0
     let graceRem = 0
 
     if (userXpRes.error) {
@@ -714,6 +725,7 @@ export function Today() {
           ? Math.max(0, Math.floor(d.longest_streak))
           : 0
       streakBeforeMount = cs
+      streakForDebug = cs
       graceRem =
         typeof d.grace_passes_remaining === 'number' &&
         !Number.isNaN(d.grace_passes_remaining)
@@ -739,6 +751,7 @@ export function Today() {
         const mountResult = await checkAndUpdateStreak(user.id, 'mount')
         setStreakCurrent(mountResult.currentStreak)
         setStreakLongest(mountResult.longestStreak)
+        streakForDebug = mountResult.currentStreak
 
         if (mountResult.streakReset && streakBeforeMount > 0) {
           const key = `inhabit_grace_prompt_${user.id}_${todayStr}`
@@ -751,6 +764,31 @@ export function Today() {
       } catch (err) {
         console.error('checkAndUpdateStreak (mount) failed:', err)
       }
+    }
+
+    if (
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('inhabit_debug') === 'true' &&
+      userXpRes.data &&
+      !userXpRes.error
+    ) {
+      const dbg = userXpRes.data as Record<string, unknown>
+      const total =
+        typeof dbg.total_xp === 'number' && !Number.isNaN(dbg.total_xp)
+          ? dbg.total_xp
+          : 0
+      const weekly =
+        typeof dbg.weekly_xp === 'number' && !Number.isNaN(dbg.weekly_xp)
+          ? dbg.weekly_xp
+          : 0
+      const level =
+        typeof dbg.level === 'number' && !Number.isNaN(dbg.level)
+          ? dbg.level
+          : 1
+      const rank = normalizeRank(dbg.rank)
+      console.log(
+        `[InHabit] XP Summary — Total: ${total} | Weekly: ${weekly} | Level: ${level} | Rank: ${rank} | Streak: ${streakForDebug} days`,
+      )
     }
 
     if (goalsRes.error) {
@@ -857,18 +895,27 @@ export function Today() {
         const uid = user?.id
         if (!uid) return
 
+        // currentStreak / streakIncremented / streakReset come from checkAndUpdateStreak’s
+        // return value (DB already updated for activity context) — not from React state.
         const streakResult = await checkAndUpdateStreak(uid, 'activity')
+        const { currentStreak, streakIncremented } = streakResult
+
         setStreakCurrent(streakResult.currentStreak)
         setStreakLongest(streakResult.longestStreak)
+
         if (
-          streakResult.streakIncremented &&
-          streakResult.currentStreak > 0 &&
-          streakResult.currentStreak % 7 === 0
+          streakIncremented &&
+          currentStreak > 0 &&
+          currentStreak % 7 === 0
         ) {
-          enqueueStreakToast(
-            `🔥 ${streakResult.currentStreak} day streak! Keep going.`,
-            '#FF6B35',
+          const milestoneAward = await awardXP(
+            uid,
+            100,
+            'streak_milestone',
           )
+          enqueueXpAward(milestoneAward)
+          setStreakMilestoneCount(currentStreak)
+          setStreakMilestoneOpen(true)
         }
 
         const missionAward = await awardXP(uid, 25, 'mission_complete')
@@ -883,6 +930,9 @@ export function Today() {
             enqueueXpToast(50)
           }
         }
+
+        // TODO Day 31: Award +75 XP with reason 'weekly_reflection'
+        // after reflection is submitted successfully
       } catch (xpErr) {
         console.error('Streak / XP award failed (mission / full clear):', xpErr)
       }
@@ -1105,6 +1155,12 @@ export function Today() {
         useInProgress={gracePassSubmitting}
         onUseGracePass={handleGraceUse}
         onDismiss={handleGraceDismiss}
+      />
+      {/* Always mounted; StreakMilestoneModal returns null when visible is false — not wrapped in any parent condition. */}
+      <StreakMilestoneModal
+        visible={streakMilestoneOpen}
+        streakCount={streakMilestoneCount}
+        onClose={handleStreakMilestoneClose}
       />
       <div
         className={[
