@@ -20,6 +20,9 @@ import {
 import { checkAndUpdateStreak } from '../lib/streak'
 import {
   awardXP,
+  calculateRank,
+  checkAndResetWeeklyXp,
+  getWeeklyRankBandProgress,
   MAX_LEVEL,
   rankColor,
   xpPercentToNextLevel,
@@ -229,26 +232,47 @@ function normalizeRank(rankInput: unknown): string {
   return 'Recruit'
 }
 
+const RANK_INFO_TIERS: { rank: string; minXp: number; emoji: string }[] = [
+  { rank: 'Recruit', minXp: 0, emoji: '🔘' },
+  { rank: 'Soldier', minXp: 300, emoji: '🟢' },
+  { rank: 'Warrior', minXp: 600, emoji: '🔵' },
+  { rank: 'Elite', minXp: 1000, emoji: '🟡' },
+  { rank: 'Legend', minXp: 1500, emoji: '🟣' },
+]
+
 function LevelProgressCard({
   profile,
-  rank: rankProp,
   barOverridePct,
   barTransition,
   barFlash,
   levelUpBannerLevel,
 }: {
   profile: XpProfileRow
-  /** Explicit rank label (should match `profile.rank`; passed for clarity and debugging). */
-  rank: string
   barOverridePct: number | null
   barTransition: string
   barFlash: boolean
   levelUpBannerLevel: number | null
 }) {
-  const { total_xp: total, level } = profile
-  const rank = normalizeRank(rankProp ?? profile.rank)
+  const { total_xp: total, level, weekly_xp: profileWeeklyXp } = profile
+  const weeklyXpVal = Math.max(0, Math.floor(profileWeeklyXp))
+  const effectiveRank = calculateRank(weeklyXpVal)
+  const weeklyBand = getWeeklyRankBandProgress(weeklyXpVal)
+  const [rankInfoOpen, setRankInfoOpen] = useState(false)
+  const rankPopoverRef = useRef<HTMLDivElement>(null)
 
-  const rc = rankColor(rank)
+  useEffect(() => {
+    if (!rankInfoOpen) return
+    const onDown = (e: MouseEvent) => {
+      const el = rankPopoverRef.current
+      if (el && !el.contains(e.target as Node)) {
+        setRankInfoOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [rankInfoOpen])
+
+  const rc = rankColor(effectiveRank)
   const fillPct =
     level >= MAX_LEVEL
       ? 100
@@ -293,10 +317,11 @@ function LevelProgressCard({
             {xpRight}
           </span>
         </div>
-        <div className="mt-2 flex justify-start">
-          <span
+        <div className="relative mt-2 flex justify-start" ref={rankPopoverRef}>
+          <button
+            type="button"
             className={[
-              'inline-flex max-w-full items-center rounded-full font-medium leading-tight',
+              'inline-flex max-w-full cursor-pointer items-center rounded-full font-medium leading-tight transition-opacity active:opacity-80',
               DEBUG_RANK_BADGE_STYLES ? '' : 'px-2.5 py-0.5 text-[12px]',
             ].join(' ')}
             style={
@@ -313,9 +338,92 @@ function LevelProgressCard({
                     border: `1px solid ${rankBadgeBorderRgba(rc, 0.4)}`,
                   }
             }
+            aria-expanded={rankInfoOpen}
+            aria-haspopup="dialog"
+            aria-label={`Rank: ${effectiveRank}. Show rank info`}
+            onClick={() => setRankInfoOpen((o) => !o)}
           >
-            {rank}
-          </span>
+            {effectiveRank}
+          </button>
+          {rankInfoOpen ? (
+            <div
+              className="absolute left-0 top-full z-50 mt-2 w-[min(100vw-2rem,18rem)] rounded-xl border border-zinc-800/80 p-3 shadow-xl ring-1 ring-zinc-800/40"
+              style={{ backgroundColor: LEVEL_CARD_BG }}
+              role="dialog"
+              aria-label="Weekly rank tiers"
+            >
+              <p className="text-xs font-medium leading-snug text-zinc-400">
+                Rank resets every Monday. Earn XP this week to climb the ranks.
+              </p>
+              <ul className="mt-3 space-y-2 text-xs">
+                {RANK_INFO_TIERS.map((t) => {
+                  const tierColor = rankColor(t.rank)
+                  const current = t.rank === effectiveRank
+                  return (
+                    <li
+                      key={t.rank}
+                      className={[
+                        'flex items-baseline gap-2',
+                        current ? 'font-bold' : 'font-medium text-zinc-500',
+                      ].join(' ')}
+                      style={current ? { color: tierColor } : undefined}
+                    >
+                      <span aria-hidden>{t.emoji}</span>
+                      <span>
+                        {t.rank} — {t.minXp.toLocaleString()} XP
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="mt-3 border-t border-zinc-800/80 pt-3">
+                {weeklyBand.kind === 'legend' ? (
+                  <>
+                    <p className="text-[11px] font-medium leading-snug text-zinc-500">
+                      Maximum rank achieved —{' '}
+                      {weeklyXpVal.toLocaleString()} XP this week
+                    </p>
+                    <div
+                      className="mt-2 h-[4px] w-full overflow-hidden rounded-full"
+                      style={{ backgroundColor: BAR_TRACK }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: '100%',
+                          backgroundColor: rc,
+                        }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] font-medium leading-snug text-zinc-500">
+                      {weeklyBand.progressInBand.toLocaleString()} /{' '}
+                      {weeklyBand.bandSize.toLocaleString()} XP toward{' '}
+                      <span
+                        style={{ color: rankColor(weeklyBand.nextRank) }}
+                      >
+                        {weeklyBand.nextRank}
+                      </span>
+                    </p>
+                    <div
+                      className="mt-2 h-[4px] w-full overflow-hidden rounded-full"
+                      style={{ backgroundColor: BAR_TRACK }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-[width] duration-300 ease-out"
+                        style={{
+                          width: `${weeklyBand.percent}%`,
+                          backgroundColor: rc,
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
         {levelUpBannerLevel !== null ? (
           <div
@@ -528,6 +636,12 @@ export function Today() {
     setUserId(user.id)
 
     await ensureMondayGraceReset(user.id)
+
+    try {
+      await checkAndResetWeeklyXp(user.id)
+    } catch (weeklyErr) {
+      console.error('checkAndResetWeeklyXp failed:', weeklyErr)
+    }
 
     const [goalsRes, missionsRes, userXpRes] = await Promise.all([
       supabase
@@ -956,7 +1070,6 @@ export function Today() {
       {userId && xpProfile && !xpProfileLoading ? (
         <LevelProgressCard
           profile={xpProfile}
-          rank={xpProfile.rank}
           barOverridePct={barOverridePct}
           barTransition={barTransition}
           barFlash={barFlash}
