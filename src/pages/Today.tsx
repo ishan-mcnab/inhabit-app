@@ -26,7 +26,9 @@ import {
   getWeeklyRankBandProgress,
   localDayStartEndIso,
   MAX_LEVEL,
+  nextRankNameFromWeeklyXp,
   rankColor,
+  weeklyXpRemainingToNextRank,
   xpPercentToNextLevel,
   xpProgressInCurrentLevel,
   xpSpanInCurrentLevel,
@@ -324,6 +326,13 @@ function LevelProgressCard({
       ? `${total.toLocaleString()} XP`
       : `${progIn} / ${span} XP`
 
+  const weeklyRankMilestoneHint = useMemo(() => {
+    const need = weeklyXpRemainingToNextRank(weeklyXpVal)
+    const nextName = nextRankNameFromWeeklyXp(weeklyXpVal)
+    if (need === null || nextName === null || need <= 0) return null
+    return `${need.toLocaleString()} more XP to reach ${nextName}`
+  }, [weeklyXpVal])
+
   return (
     <div className="shrink-0 px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
       <div
@@ -355,11 +364,14 @@ function LevelProgressCard({
             {xpRight}
           </span>
         </div>
-        <div className="relative mt-2 flex justify-start" ref={rankPopoverRef}>
+        <div
+          className="relative mt-2 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
+          ref={rankPopoverRef}
+        >
           <button
             type="button"
             className={[
-              'inline-flex max-w-full cursor-pointer items-center rounded-full font-medium leading-tight transition-opacity active:opacity-80',
+              'inline-flex max-w-full shrink-0 cursor-pointer items-center rounded-full font-medium leading-tight transition-opacity active:opacity-80',
               DEBUG_RANK_BADGE_STYLES ? '' : 'px-2.5 py-0.5 text-[12px]',
             ].join(' ')}
             style={
@@ -383,6 +395,19 @@ function LevelProgressCard({
           >
             {effectiveRank}
           </button>
+          {weeklyRankMilestoneHint ? (
+            <>
+              <span
+                className="shrink-0 text-[11px] font-medium text-zinc-500"
+                aria-hidden
+              >
+                ·
+              </span>
+              <span className="min-w-0 text-[11px] font-medium leading-snug text-zinc-500">
+                {weeklyRankMilestoneHint}
+              </span>
+            </>
+          ) : null}
           {rankInfoOpen ? (
             <div
               className="absolute left-0 top-full z-50 mt-2 w-[min(100vw-2rem,18rem)] rounded-xl border border-zinc-800/80 p-3 shadow-xl ring-1 ring-zinc-800/40"
