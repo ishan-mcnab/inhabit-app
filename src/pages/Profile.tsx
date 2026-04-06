@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RankShield } from '../components/RankShield'
+import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
+import { streakTierTextStyle } from '../lib/streakTierStyle'
 import {
   calculateRank,
   checkAndResetWeeklyXp,
@@ -29,6 +31,13 @@ type XpLogEntry = {
   amount: number
   reason: string
   created_at: string
+}
+
+type HabitStreakRow = {
+  id: string
+  title: string
+  category: string | null
+  current_streak: number
 }
 
 function formatRelativeXpTime(iso: string): string {
@@ -96,6 +105,7 @@ export function Profile() {
   const [savedFlash, setSavedFlash] = useState(false)
   const [stats, setStats] = useState<UserStats | null>(null)
   const [xpLogs, setXpLogs] = useState<XpLogEntry[]>([])
+  const [habitStreaks, setHabitStreaks] = useState<HabitStreakRow[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -109,6 +119,7 @@ export function Profile() {
       setLoading(false)
       setStats(null)
       setXpLogs([])
+      setHabitStreaks([])
       setError(userError?.message ?? 'Not signed in')
       return
     }
@@ -119,7 +130,7 @@ export function Profile() {
       console.error('checkAndResetWeeklyXp (Profile) failed:', e)
     }
 
-    const [{ data, error: qErr }, logsRes] = await Promise.all([
+    const [{ data, error: qErr }, logsRes, habitsRes] = await Promise.all([
       supabase
         .from('users')
         .select(
@@ -133,9 +144,33 @@ export function Profile() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(10),
+      supabase
+        .from('habits')
+        .select('id,title,category,current_streak')
+        .eq('user_id', user.id),
     ])
 
     setLoading(false)
+
+    if (habitsRes.error) {
+      console.error('habits load (profile) failed:', habitsRes.error)
+      setHabitStreaks([])
+    } else {
+      const rows = (habitsRes.data ?? []) as Record<string, unknown>[]
+      const parsed: HabitStreakRow[] = rows
+        .map((r) => ({
+          id: typeof r.id === 'string' ? r.id : '',
+          title: typeof r.title === 'string' ? r.title : '',
+          category: typeof r.category === 'string' ? r.category : null,
+          current_streak:
+            typeof r.current_streak === 'number' && !Number.isNaN(r.current_streak)
+              ? Math.max(0, Math.floor(r.current_streak))
+              : 0,
+        }))
+        .filter((r) => r.id !== '' && r.title !== '' && r.current_streak > 0)
+        .sort((a, b) => b.current_streak - a.current_streak)
+      setHabitStreaks(parsed)
+    }
 
     if (logsRes.error) {
       console.error('xp_logs load failed:', logsRes.error)
@@ -331,6 +366,45 @@ export function Profile() {
                     </div>
                   ))}
                 </div>
+              </section>
+
+              <section aria-labelledby="profile-habit-streaks-heading">
+                <h2
+                  id="profile-habit-streaks-heading"
+                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
+                >
+                  Habit Streaks
+                </h2>
+                {habitStreaks.length === 0 ? (
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-zinc-500">
+                    No habits yet — add habits on the Today tab
+                  </p>
+                ) : (
+                  <ul className="mt-4 space-y-2">
+                    {habitStreaks.map((h) => {
+                      const cat = getGoalCategoryDisplay(h.category)
+                      return (
+                        <li
+                          key={h.id}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-app-surface px-4 py-3 ring-1 ring-zinc-800/25"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-white">
+                              <span aria-hidden>{cat.emoji} </span>
+                              {h.title}
+                            </p>
+                          </div>
+                          <p
+                            className="shrink-0 text-sm font-bold tabular-nums"
+                            style={streakTierTextStyle(h.current_streak)}
+                          >
+                            🔥 {h.current_streak}
+                          </p>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </section>
 
               <section aria-labelledby="profile-prefs-heading">

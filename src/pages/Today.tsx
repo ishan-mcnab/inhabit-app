@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from 'react'
 import { Link } from 'react-router-dom'
 import { GracePassModal } from '../components/GracePassModal'
@@ -14,6 +13,7 @@ import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import { runFullClearConfetti } from '../lib/fullClearConfetti'
 import { updateHabitStreak } from '../lib/habitStreak'
+import { streakTierTextStyle } from '../lib/streakTierStyle'
 import { generateOneDailyMissionTitle } from '../lib/openRouterSingle'
 import {
   ensureMondayGraceReset,
@@ -112,16 +112,6 @@ function formatTodayHeading(d: Date): string {
   })
 }
 
-function streakHeaderStyle(streak: number): CSSProperties {
-  if (streak <= 6) return { color: '#ffffff' }
-  if (streak <= 13) return { color: '#FF6B35' }
-  if (streak <= 20) return { color: '#EF9F27' }
-  return {
-    color: '#534AB7',
-    textShadow: '0 0 12px rgba(83, 74, 183, 0.55)',
-  }
-}
-
 type GoalEmbed = { title: string; category: string | null }
 
 type MissionRow = {
@@ -177,6 +167,8 @@ type HabitRow = {
 type TodayHabit = HabitRow & {
   completedToday: boolean
 }
+
+type HabitMenuPhase = 'main' | 'frequency' | 'time'
 
 const SKELETON_STRIPE = '#52525b'
 
@@ -597,6 +589,30 @@ export function Today() {
   const [habitsLoading, setHabitsLoading] = useState(true)
   const [habits, setHabits] = useState<TodayHabit[]>([])
   const [habitCompletingIds, setHabitCompletingIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [pressingHabitId, setPressingHabitId] = useState<string | null>(null)
+  const [habitCheckboxRippleId, setHabitCheckboxRippleId] = useState<
+    string | null
+  >(null)
+
+  const [habitMenuOpenId, setHabitMenuOpenId] = useState<string | null>(null)
+  const [habitMenuAnchor, setHabitMenuAnchor] = useState<{
+    id: string
+    left: number
+    top: number
+    openUp: boolean
+  } | null>(null)
+  const [habitMenuPhase, setHabitMenuPhase] = useState<HabitMenuPhase>('main')
+
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null)
+  const [habitTitleDraft, setHabitTitleDraft] = useState('')
+  const [savingHabitId, setSavingHabitId] = useState<string | null>(null)
+  const [habitActionError, setHabitActionError] = useState<string | null>(null)
+  const [confirmDeleteHabit, setConfirmDeleteHabit] = useState<TodayHabit | null>(
+    null,
+  )
+  const [removingHabitIds, setRemovingHabitIds] = useState<Set<string>>(
     () => new Set(),
   )
 
@@ -1068,11 +1084,18 @@ export function Today() {
     })()
   }
 
-  const visibleHabits = useMemo(() => {
-    const day = new Date().getDay() // 0 Sun .. 6 Sat
+  const sortedVisibleHabits = useMemo(() => {
+    const day = new Date().getDay()
     const weekend = day === 0 || day === 6
-    if (!weekend) return habits
-    return habits.filter((h) => (h.frequency ?? 'daily') !== 'weekdays')
+    const base = weekend
+      ? habits.filter((h) => (h.frequency ?? 'daily') !== 'weekdays')
+      : habits
+    return [...base].sort((a, b) => {
+      if (a.completedToday !== b.completedToday) {
+        return a.completedToday ? 1 : -1
+      }
+      return 0
+    })
   }, [habits])
 
   async function handleCompleteHabit(habitId: string) {
@@ -1119,6 +1142,11 @@ export function Today() {
       })
       if (insErr) throw new Error(insErr.message)
 
+      setHabitCheckboxRippleId(habitId)
+      window.setTimeout(() => {
+        setHabitCheckboxRippleId((prev) => (prev === habitId ? null : prev))
+      }, 650)
+
       const streakOut = await updateHabitStreak(habitId, userId)
       setHabits((prev) =>
         prev.map((x) =>
@@ -1151,6 +1179,140 @@ export function Today() {
         next.delete(habitId)
         return next
       })
+    }
+  }
+
+  function closeHabitMenu() {
+    setHabitMenuOpenId(null)
+    setHabitMenuAnchor(null)
+    setHabitMenuPhase('main')
+  }
+
+  function beginEditHabit(h: TodayHabit) {
+    closeHabitMenu()
+    setHabitActionError(null)
+    setEditingHabitId(h.id)
+    setHabitTitleDraft(h.title ?? '')
+  }
+
+  function cancelEditHabit() {
+    setEditingHabitId(null)
+    setHabitTitleDraft('')
+  }
+
+  async function saveHabitTitle(habitId: string) {
+    if (!userId) return
+    const next = habitTitleDraft.trim()
+    if (!next) {
+      setHabitActionError('Habit name cannot be empty')
+      return
+    }
+    setSavingHabitId(habitId)
+    setHabitActionError(null)
+    const prev = habits
+    setHabits((hs) =>
+      hs.map((h) => (h.id === habitId ? { ...h, title: next } : h)),
+    )
+    const { error } = await supabase
+      .from('habits')
+      .update({ title: next })
+      .eq('id', habitId)
+      .eq('user_id', userId)
+    setSavingHabitId(null)
+    if (error) {
+      setHabits(prev)
+      setHabitActionError(error.message)
+      return
+    }
+    setEditingHabitId(null)
+    setHabitTitleDraft('')
+  }
+
+  async function persistHabitFrequency(
+    habitId: string,
+    frequency: 'daily' | 'weekdays',
+  ) {
+    if (!userId) return
+    const prev = habits
+    setHabits((hs) =>
+      hs.map((h) => (h.id === habitId ? { ...h, frequency } : h)),
+    )
+    const { error } = await supabase
+      .from('habits')
+      .update({ frequency })
+      .eq('id', habitId)
+      .eq('user_id', userId)
+    if (error) {
+      setHabits(prev)
+      setHabitActionError(error.message)
+      return
+    }
+    closeHabitMenu()
+  }
+
+  async function persistHabitTimeOfDay(
+    habitId: string,
+    time_of_day: 'morning' | 'afternoon' | 'evening',
+  ) {
+    if (!userId) return
+    const prev = habits
+    setHabits((hs) =>
+      hs.map((h) => (h.id === habitId ? { ...h, time_of_day } : h)),
+    )
+    const { error } = await supabase
+      .from('habits')
+      .update({ time_of_day })
+      .eq('id', habitId)
+      .eq('user_id', userId)
+    if (error) {
+      setHabits(prev)
+      setHabitActionError(error.message)
+      return
+    }
+    closeHabitMenu()
+  }
+
+  async function removeHabitConfirmed(h: TodayHabit) {
+    if (!userId) return
+    setConfirmDeleteHabit(null)
+    setHabitActionError(null)
+    setRemovingHabitIds((s) => {
+      const n = new Set(s)
+      n.add(h.id)
+      return n
+    })
+    try {
+      const { error: logErr } = await supabase
+        .from('habit_logs')
+        .delete()
+        .eq('habit_id', h.id)
+        .eq('user_id', userId)
+      if (logErr) throw logErr
+      const { error: habErr } = await supabase
+        .from('habits')
+        .delete()
+        .eq('id', h.id)
+        .eq('user_id', userId)
+      if (habErr) throw habErr
+      window.setTimeout(() => {
+        setHabits((prev) => prev.filter((x) => x.id !== h.id))
+        setRemovingHabitIds((prev) => {
+          const n = new Set(prev)
+          n.delete(h.id)
+          return n
+        })
+      }, 280)
+    } catch (e) {
+      console.error('Delete habit failed:', e)
+      setRemovingHabitIds((prev) => {
+        const n = new Set(prev)
+        n.delete(h.id)
+        return n
+      })
+      setHabitActionError(
+        e instanceof Error ? e.message : 'Could not delete habit',
+      )
+      void load()
     }
   }
 
@@ -1327,7 +1489,8 @@ export function Today() {
 
   const handleGraceDismiss = useCallback(() => {
     setGraceModalOpen(false)
-  }, [])
+    enqueueStreakToast('Streak reset. Start fresh today.', '#888780')
+  }, [enqueueStreakToast])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
@@ -1420,7 +1583,7 @@ export function Today() {
           {streakCurrent > 0 ? (
             <p
               className="shrink-0 pt-0.5 text-base font-bold tabular-nums"
-              style={streakHeaderStyle(streakCurrent)}
+              style={streakTierTextStyle(streakCurrent)}
             >
               🔥 {streakCurrent} day streak
             </p>
@@ -1723,15 +1886,20 @@ export function Today() {
                         </div>
                       ))}
                     </div>
-                  ) : visibleHabits.length === 0 ? (
+                  ) : sortedVisibleHabits.length === 0 ? (
                     <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4">
                       <p className="text-sm font-medium text-zinc-500">
                         No habits yet
                       </p>
                     </div>
                   ) : (
-                    <div className="mt-4 space-y-3">
-                      {visibleHabits.map((h) => {
+                    <div className="mt-4 flex flex-col gap-3">
+                      {habitActionError ? (
+                        <p className="text-center text-sm font-medium text-red-400">
+                          {habitActionError}
+                        </p>
+                      ) : null}
+                      {sortedVisibleHabits.map((h) => {
                         const accent = getMissionBoardAccent(h.category)
                         const done = h.completedToday
                         const time =
@@ -1741,12 +1909,22 @@ export function Today() {
                               ? 'Evening'
                               : 'Morning'
                         const disabled = done || habitCompletingIds.has(h.id)
+                        const isEditing = editingHabitId === h.id
+                        const streakN = Math.max(0, h.current_streak)
+                        const streakStyle =
+                          streakN > 0 ? streakTierTextStyle(streakN) : null
+                        const isPressing = pressingHabitId === h.id
+                        const isRemoving = removingHabitIds.has(h.id)
                         return (
                           <div
                             key={h.id}
                             className={[
-                              'relative flex items-stretch gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm',
+                              'relative flex transform-gpu items-stretch gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm will-change-transform',
                               done ? 'opacity-55' : 'opacity-100',
+                              isPressing
+                                ? 'scale-[0.97] transition-none'
+                                : 'scale-100 transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                              isRemoving ? 'opacity-0' : '',
                             ].join(' ')}
                           >
                             <div
@@ -1756,39 +1934,168 @@ export function Today() {
                             />
                             <div className="flex min-w-0 flex-1 items-center gap-3">
                               <div className="min-w-0 flex-1">
-                                <p
-                                  className={[
-                                    'truncate text-base font-bold text-white',
-                                    done ? 'line-through' : '',
-                                  ].join(' ')}
-                                >
-                                  {h.title}
-                                </p>
-                                <p className="mt-1 text-xs font-medium text-zinc-500">
-                                  {time} · 🔥 {Math.max(0, h.current_streak)} days
-                                </p>
+                                {isEditing ? (
+                                  <div>
+                                    <label
+                                      htmlFor={`habit-edit-${h.id}`}
+                                      className="sr-only"
+                                    >
+                                      Habit name
+                                    </label>
+                                    <input
+                                      id={`habit-edit-${h.id}`}
+                                      type="text"
+                                      value={habitTitleDraft}
+                                      onChange={(e) =>
+                                        setHabitTitleDraft(e.target.value)
+                                      }
+                                      disabled={savingHabitId === h.id}
+                                      className="w-full rounded-xl border border-zinc-800 bg-app-surface px-3 py-2.5 text-sm font-bold text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 disabled:opacity-50"
+                                    />
+                                    <div className="mt-2 flex items-center gap-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => void saveHabitTitle(h.id)}
+                                        disabled={savingHabitId === h.id}
+                                        className="rounded-xl bg-white px-4 py-2 text-xs font-bold text-app-bg disabled:opacity-50"
+                                      >
+                                        {savingHabitId === h.id
+                                          ? 'Saving…'
+                                          : 'Save'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={cancelEditHabit}
+                                        disabled={savingHabitId === h.id}
+                                        className="text-xs font-semibold text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline disabled:opacity-50"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p
+                                      className={[
+                                        'truncate text-base font-bold text-white',
+                                        done ? 'line-through' : '',
+                                      ].join(' ')}
+                                    >
+                                      {h.title}
+                                    </p>
+                                    <p className="mt-1 text-xs font-medium text-zinc-500">
+                                      {time}
+                                    </p>
+                                    {(h.frequency ?? 'daily') === 'weekdays' ? (
+                                      <p className="mt-0.5 text-[11px] font-medium text-zinc-600">
+                                        Weekdays
+                                      </p>
+                                    ) : null}
+                                    {streakN > 0 && streakStyle ? (
+                                      <p
+                                        className="mt-1.5 text-sm font-bold tabular-nums"
+                                        style={streakStyle}
+                                      >
+                                        🔥 {streakN}
+                                      </p>
+                                    ) : null}
+                                  </>
+                                )}
                               </div>
-                              <button
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => {
-                                  requestAnimationFrame(() => {
-                                    void handleCompleteHabit(h.id)
-                                  })
-                                }}
-                                aria-label={
-                                  done ? 'Completed' : `Complete habit: ${h.title}`
-                                }
-                                className={[
-                                  'flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center rounded-full border-2',
-                                  done
-                                    ? 'border-emerald-500 bg-emerald-500'
-                                    : 'border-zinc-500 bg-transparent hover:border-zinc-400',
-                                  disabled ? 'opacity-70' : '',
-                                ].join(' ')}
-                              >
-                                {done ? <CheckIcon /> : null}
-                              </button>
+
+                              {!isEditing ? (
+                                <div className="flex shrink-0 items-center gap-1">
+                                  <button
+                                    type="button"
+                                    data-habit-menu
+                                    aria-label="Habit options"
+                                    aria-expanded={habitMenuOpenId === h.id}
+                                    onClick={(e) => {
+                                      const nextOpen = habitMenuOpenId !== h.id
+                                      if (!nextOpen) {
+                                        closeHabitMenu()
+                                        return
+                                      }
+                                      setHabitMenuPhase('main')
+                                      const rect = (
+                                        e.currentTarget as HTMLButtonElement
+                                      ).getBoundingClientRect()
+                                      const menuW = 224
+                                      const menuH = 260
+                                      const spaceBelow =
+                                        window.innerHeight - rect.bottom
+                                      const spaceAbove = rect.top
+                                      const openUp =
+                                        spaceBelow < menuH + 12 &&
+                                        spaceAbove > spaceBelow
+                                      const left = Math.max(
+                                        8,
+                                        Math.min(
+                                          window.innerWidth - menuW - 8,
+                                          rect.right - menuW,
+                                        ),
+                                      )
+                                      const top = openUp
+                                        ? Math.max(8, rect.top - menuH - 8)
+                                        : rect.bottom + 8
+                                      setHabitMenuOpenId(h.id)
+                                      setHabitMenuAnchor({
+                                        id: h.id,
+                                        left,
+                                        top,
+                                        openUp,
+                                      })
+                                    }}
+                                    className="flex h-11 w-9 min-h-[44px] min-w-[36px] items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200"
+                                  >
+                                    <span
+                                      className="text-xl leading-none"
+                                      aria-hidden
+                                    >
+                                      ⋯
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={disabled}
+                                    onPointerDown={() => {
+                                      if (done || disabled) return
+                                      setPressingHabitId(h.id)
+                                      window.setTimeout(() => {
+                                        setPressingHabitId((prev) =>
+                                          prev === h.id ? null : prev,
+                                        )
+                                      }, 100)
+                                    }}
+                                    onClick={() => {
+                                      requestAnimationFrame(() => {
+                                        void handleCompleteHabit(h.id)
+                                      })
+                                    }}
+                                    aria-label={
+                                      done
+                                        ? 'Completed'
+                                        : `Complete habit: ${h.title}`
+                                    }
+                                    className={[
+                                      'relative flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center overflow-hidden rounded-full border-2',
+                                      done
+                                        ? 'border-emerald-500 bg-emerald-500'
+                                        : 'border-zinc-500 bg-transparent hover:border-zinc-400',
+                                      disabled ? 'opacity-70' : '',
+                                      done ? '' : 'cursor-pointer',
+                                    ].join(' ')}
+                                  >
+                                    {habitCheckboxRippleId === h.id ? (
+                                      <span
+                                        className="habit-checkbox-ripple pointer-events-none absolute left-1/2 top-1/2 h-11 w-11 rounded-full bg-emerald-400/40"
+                                        aria-hidden
+                                      />
+                                    ) : null}
+                                    {done ? <CheckIcon /> : null}
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                           </div>
                         )
@@ -1889,6 +2196,169 @@ export function Today() {
                 className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800/40 px-4 py-3.5 text-sm font-bold text-zinc-300"
               >
                 Keep
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {habitMenuOpenId ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-[1001]"
+          aria-label="Close habit menu"
+          onClick={closeHabitMenu}
+        />
+      ) : null}
+
+      {habitMenuAnchor && habitMenuOpenId === habitMenuAnchor.id ? (
+        <div
+          className="fixed z-[1002] w-56 overflow-hidden rounded-xl border border-zinc-800 bg-app-bg shadow-2xl"
+          style={{ left: habitMenuAnchor.left, top: habitMenuAnchor.top }}
+          role="menu"
+        >
+          {habitMenuPhase === 'main' ? (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  const hh = habits.find((x) => x.id === habitMenuAnchor.id)
+                  if (hh) beginEditHabit(hh)
+                }}
+                className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
+              >
+                Edit habit name
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => setHabitMenuPhase('frequency')}
+                className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
+              >
+                Change frequency
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => setHabitMenuPhase('time')}
+                className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
+              >
+                Change time of day
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  const hh = habits.find((x) => x.id === habitMenuAnchor.id)
+                  closeHabitMenu()
+                  if (hh) setConfirmDeleteHabit(hh)
+                }}
+                className="w-full px-4 py-3 text-left text-sm font-semibold text-red-300 hover:bg-zinc-900/60"
+              >
+                Delete habit
+              </button>
+            </>
+          ) : null}
+
+          {habitMenuPhase === 'frequency' ? (
+            <div className="border-t border-zinc-800/80 py-1">
+              <button
+                type="button"
+                onClick={() => setHabitMenuPhase('main')}
+                className="w-full px-4 py-2.5 text-left text-xs font-semibold text-zinc-500 hover:bg-zinc-900/60"
+              >
+                ← Back
+              </button>
+              <p className="px-4 pb-1 pt-0.5 text-[11px] font-medium text-zinc-600">
+                Frequency
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  void persistHabitFrequency(habitMenuAnchor.id, 'daily')
+                }
+                className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
+              >
+                Every day
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void persistHabitFrequency(habitMenuAnchor.id, 'weekdays')
+                }
+                className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
+              >
+                Weekdays only
+              </button>
+            </div>
+          ) : null}
+
+          {habitMenuPhase === 'time' ? (
+            <div className="border-t border-zinc-800/80 py-1">
+              <button
+                type="button"
+                onClick={() => setHabitMenuPhase('main')}
+                className="w-full px-4 py-2.5 text-left text-xs font-semibold text-zinc-500 hover:bg-zinc-900/60"
+              >
+                ← Back
+              </button>
+              <p className="px-4 pb-1 pt-0.5 text-[11px] font-medium text-zinc-600">
+                Time of day
+              </p>
+              {(
+                [
+                  ['morning', 'Morning'],
+                  ['afternoon', 'Afternoon'],
+                  ['evening', 'Evening'],
+                ] as const
+              ).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() =>
+                    void persistHabitTimeOfDay(habitMenuAnchor.id, val)
+                  }
+                  className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {confirmDeleteHabit ? (
+        <div className="fixed inset-0 z-[1003] flex items-center justify-center px-5">
+          <button
+            type="button"
+            className="absolute inset-0"
+            style={{ backgroundColor: 'rgba(13,13,15,0.8)' }}
+            aria-label="Close delete habit confirmation"
+            onClick={() => setConfirmDeleteHabit(null)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-800/80 bg-app-bg p-5 shadow-2xl">
+            <p className="text-base font-bold text-white">
+              Delete {confirmDeleteHabit.title}?
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+              This will remove this habit and all its history.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void removeHabitConfirmed(confirmDeleteHabit)}
+                className="flex-1 rounded-xl bg-red-500 px-4 py-3.5 text-sm font-bold text-white"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteHabit(null)}
+                className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800/40 px-4 py-3.5 text-sm font-bold text-zinc-300"
+              >
+                Keep it
               </button>
             </div>
           </div>

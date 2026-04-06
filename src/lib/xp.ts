@@ -398,7 +398,7 @@ export async function awardXP(
   }
 
   // xp_logs.reason (app): mission_complete, full_clear_bonus, weekly_quest_complete,
-  // grace_pass_used, streak_milestone; weekly_reflection reserved for future use.
+  // grace_pass_used, streak_milestone, habit_complete; weekly_reflection reserved.
   const { error: logErr } = await supabase.from('xp_logs').insert({
     user_id: userId,
     amount,
