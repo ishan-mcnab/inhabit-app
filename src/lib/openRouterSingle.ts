@@ -128,3 +128,67 @@ export async function generateOneWeeklyQuestTitle(params: {
   return quest.trim()
 }
 
+async function openRouterPlainSentence(prompt: string): Promise<string> {
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
+  if (!apiKey || typeof apiKey !== 'string') {
+    throw new Error('Missing VITE_OPENROUTER_API_KEY in environment')
+  }
+
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'http://localhost:5173',
+      'X-Title': 'InHabit App',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  const data: unknown = await res.json().catch(() => null)
+  if (!res.ok) {
+    const errBody =
+      data && typeof data === 'object' && 'error' in data
+        ? JSON.stringify((data as { error: unknown }).error)
+        : JSON.stringify(data)
+    throw new Error(`OpenRouter returned ${res.status} — ${errBody}`)
+  }
+
+  const choices =
+    data && typeof data === 'object' && 'choices' in data
+      ? (data as { choices: unknown }).choices
+      : undefined
+  if (!Array.isArray(choices) || choices.length === 0) {
+    throw new Error('OpenRouter returned no choices')
+  }
+
+  const first = choices[0] as { message?: { content?: string } }
+  const content = first?.message?.content
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new Error('OpenRouter returned empty message content')
+  }
+
+  return content
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** One-sentence “why this quest” for UI (Claude Haiku via OpenRouter). */
+export async function explainWeeklyQuestWhy(params: {
+  questTitle: string
+  goalTitle: string
+}): Promise<string> {
+  const qt = params.questTitle.replace(/'/g, "'")
+  const gt = params.goalTitle.replace(/'/g, "'")
+  const prompt =
+    `In one sentence, explain why '${qt}' is an important milestone for someone working toward '${gt}'. ` +
+    'Be specific and motivating. Max 20 words. Reply with only that sentence, no quotation marks.'
+
+  return openRouterPlainSentence(prompt)
+}
+

@@ -10,6 +10,11 @@ import {
   calculateTotalWeeks,
 } from '../lib/goalProgress'
 import { suggestGoals, type SuggestedGoal } from '../lib/suggestGoals'
+import {
+  pickActiveQuest,
+  type PickableQuest,
+  type QuestProgressionMode,
+} from '../lib/weeklyQuestPick'
 import { supabase } from '../supabase'
 
 type GoalRow = {
@@ -97,6 +102,9 @@ export function Goals() {
   >('idle')
   const [suggestError, setSuggestError] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<SuggestedGoal[]>([])
+  const [questPreviewByGoalId, setQuestPreviewByGoalId] = useState<
+    Record<string, string>
+  >({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -113,7 +121,7 @@ export function Goals() {
       return
     }
 
-    const [activeRes, completedRes, habitsRes] = await Promise.all([
+    const [activeRes, completedRes, habitsRes, prefsRes] = await Promise.all([
       supabase
         .from('goals')
         .select('id,title,category,target_date,progress_percent,created_at')
@@ -133,6 +141,11 @@ export function Goals() {
         .select('title')
         .eq('user_id', user.id)
         .eq('category', 'fitness_consistency'),
+      supabase
+        .from('users')
+        .select('quest_progression')
+        .eq('id', user.id)
+        .maybeSingle(),
     ])
 
     setLoading(false)
@@ -141,10 +154,56 @@ export function Goals() {
       setError(activeRes.error.message)
       setGoals([])
       setCompletedGoals([])
+      setQuestPreviewByGoalId({})
       return
     }
 
-    setGoals((activeRes.data ?? []) as GoalRow[])
+    const goalsList = (activeRes.data ?? []) as GoalRow[]
+    setGoals(goalsList)
+
+    const questMode: QuestProgressionMode =
+      prefsRes.data?.quest_progression === 'completion'
+        ? 'completion'
+        : 'weekly'
+
+    const goalIds = goalsList.map((g) => g.id)
+    const nextPreviews: Record<string, string> = {}
+    if (goalIds.length > 0) {
+      const wqRes = await supabase
+        .from('weekly_quests')
+        .select('id,goal_id,title,week_number,completed')
+        .eq('user_id', user.id)
+        .in('goal_id', goalIds)
+
+      if (!wqRes.error && wqRes.data) {
+        const byGoal: Record<string, PickableQuest[]> = {}
+        for (const r of wqRes.data) {
+          const gid = String(r.goal_id ?? '')
+          if (!gid) continue
+          if (!byGoal[gid]) byGoal[gid] = []
+          byGoal[gid].push({
+            id: String(r.id ?? ''),
+            week_number:
+              typeof r.week_number === 'number' && !Number.isNaN(r.week_number)
+                ? r.week_number
+                : 0,
+            completed: Boolean(r.completed),
+            title: typeof r.title === 'string' ? r.title : '',
+          })
+        }
+        for (const g of goalsList) {
+          const list = byGoal[g.id] ?? []
+          const currentW = g.created_at
+            ? calculateCurrentWeekFromGoalStart(g.created_at)
+            : 1
+          const active = pickActiveQuest(list, currentW, questMode)
+          if (active && !active.completed) {
+            nextPreviews[g.id] = active.title
+          }
+        }
+      }
+    }
+    setQuestPreviewByGoalId(nextPreviews)
 
     if (completedRes.error) {
       setCompletedGoals([])
@@ -406,6 +465,14 @@ export function Goals() {
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
+                            {questPreviewByGoalId[goal.id] ? (
+                              <p
+                                className="mt-2 truncate text-xs text-zinc-500"
+                                title={questPreviewByGoalId[goal.id]}
+                              >
+                                This week: {questPreviewByGoalId[goal.id]}
+                              </p>
+                            ) : null}
                             <p className="mt-2 text-xs font-medium text-zinc-500">
                               Week {currentW} of {totalW} · {pct}% complete
                             </p>

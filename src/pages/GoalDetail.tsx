@@ -11,12 +11,30 @@ import {
   calculateTotalWeeks,
   weeklyQuestBatchRanges,
 } from '../lib/goalProgress'
-import { generateOneWeeklyQuestTitle } from '../lib/openRouterSingle'
+import {
+  explainWeeklyQuestWhy,
+  generateOneWeeklyQuestTitle,
+} from '../lib/openRouterSingle'
 import { awardXP, localWeekStartEndIso } from '../lib/xp'
+import {
+  formatUnlocksLabel,
+  isQuestLockedForMode,
+  pickActiveQuest,
+  type PickableQuest,
+  type QuestProgressionMode,
+} from '../lib/weeklyQuestPick'
 import { supabase } from '../supabase'
 
 const QUEST_PURPLE = '#534AB7'
 const OVERLAY_BG = 'rgba(13,13,15,0.8)'
+
+const QUEST_COMPLETE_MESSAGES = [
+  'Quest complete. One step closer.',
+  "That's how it's done. Keep pushing.",
+  'Another week, another win.',
+  'Progress is proof. Keep going.',
+  'You said you would. You did.',
+] as const
 
 const DURATION_PRESET_DAYS: Record<'1m' | '3m' | '6m' | '1y', number> = {
   '1m': 30,
@@ -62,12 +80,9 @@ type GoalRow = {
   created_at: string
 }
 
-type WeeklyQuestRow = {
-  id: string
+type WeeklyQuestRow = PickableQuest & {
   goal_id: string
-  title: string
-  week_number: number
-  completed: boolean
+  completed_at: string | null
 }
 
 function formatDueDate(isoDate: string | null): string {
@@ -88,68 +103,16 @@ function clampPercent(n: number): number {
   return Math.min(100, Math.max(0, n))
 }
 
-type QuestProgressionMode = 'weekly' | 'completion'
-
-function isQuestLockedForMode(
-  q: WeeklyQuestRow,
-  sortedQuests: WeeklyQuestRow[],
-  mode: QuestProgressionMode,
-  currentWeekFromStart: number,
-): boolean {
-  if (mode === 'weekly') {
-    return q.week_number > currentWeekFromStart
-  }
-  if (q.week_number <= 1) return false
-  const prev = sortedQuests.find((x) => x.week_number === q.week_number - 1)
-  return !prev?.completed
-}
-
-function formatUnlocksLabel(goalCreatedAt: string, weekNumber: number): string {
-  const base = new Date(goalCreatedAt)
-  const unlock = new Date(base)
-  unlock.setDate(unlock.getDate() + (weekNumber - 1) * 7)
-  const part = unlock.toLocaleDateString('en-US', {
+function formatQuestCompletedLine(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const part = d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
+    year: 'numeric',
   })
-  return `Unlocks ${part}`
-}
-
-function pickActiveQuest(
-  quests: WeeklyQuestRow[],
-  currentWeek: number,
-  mode: QuestProgressionMode,
-): WeeklyQuestRow | null {
-  if (quests.length === 0) return null
-  const sorted = [...quests].sort((a, b) => a.week_number - b.week_number)
-
-  const locked = (q: WeeklyQuestRow) =>
-    isQuestLockedForMode(q, sorted, mode, currentWeek)
-
-  // Completion mode: hero quest is always the first incomplete, unlocked quest
-  if (mode === 'completion') {
-    const unlocked = sorted.filter((q) => !locked(q))
-    if (unlocked.length === 0) return null
-    const firstIncomplete = unlocked.find((q) => !q.completed)
-    return firstIncomplete ?? unlocked[unlocked.length - 1]
-  }
-
-  // Weekly mode: prefer the quest for the current calendar week if it's
-  // unlocked and not yet completed. Otherwise fall back to the next
-  // incomplete, unlocked quest.
-  const byCal = sorted.find((q) => q.week_number === currentWeek)
-  if (byCal && !locked(byCal) && !byCal.completed) {
-    return byCal
-  }
-
-  const unlocked = sorted.filter((q) => !locked(q))
-  if (unlocked.length === 0) return null
-
-  const firstIncomplete = unlocked.find((q) => !q.completed)
-  if (firstIncomplete) return firstIncomplete
-
-  // If everything unlocked is completed, surface the last one as a summary.
-  return unlocked[unlocked.length - 1]
+  return `Completed ${part}`
 }
 
 function DetailSkeleton() {
@@ -261,6 +224,27 @@ export function GoalDetail() {
   const [regeneratingQuestId, setRegeneratingQuestId] = useState<string | null>(
     null,
   )
+  const [regenerateErrorByQuestId, setRegenerateErrorByQuestId] = useState<
+    Record<string, string>
+  >({})
+  const [titleSlideNonceByQuestId, setTitleSlideNonceByQuestId] = useState<
+    Record<string, number>
+  >({})
+
+  const [whyExpandedByQuestId, setWhyExpandedByQuestId] = useState<
+    Record<string, boolean>
+  >({})
+  const [whyTextByQuestId, setWhyTextByQuestId] = useState<Record<string, string>>(
+    {},
+  )
+  const [whyLoadingQuestId, setWhyLoadingQuestId] = useState<string | null>(null)
+
+  const [greenFlashOverlay, setGreenFlashOverlay] = useState<{
+    key: number
+  } | null>(null)
+  const [celebrateMessage, setCelebrateMessage] = useState<string | null>(null)
+  const [celebrateMessageFadeOut, setCelebrateMessageFadeOut] = useState(false)
+  const celebrateTimersRef = useRef<ReturnType<typeof window.setTimeout>[]>([])
 
   const batchGenInFlight = useRef(false)
 
@@ -301,7 +285,7 @@ export function GoalDetail() {
         .maybeSingle(),
       supabase
         .from('weekly_quests')
-        .select('id,goal_id,title,week_number,completed')
+        .select('id,goal_id,title,week_number,completed,completed_at')
         .eq('goal_id', goalId)
         .eq('user_id', user.id)
         .order('week_number', { ascending: true }),
@@ -344,7 +328,21 @@ export function GoalDetail() {
       return
     }
 
-    setQuests((questsRes.data ?? []) as WeeklyQuestRow[])
+    const rawQuests = (questsRes.data ?? []) as Record<string, unknown>[]
+    setQuests(
+      rawQuests.map((r) => ({
+        id: String(r.id ?? ''),
+        goal_id: String(r.goal_id ?? ''),
+        title: typeof r.title === 'string' ? r.title : '',
+        week_number:
+          typeof r.week_number === 'number' && !Number.isNaN(r.week_number)
+            ? r.week_number
+            : 0,
+        completed: Boolean(r.completed),
+        completed_at:
+          typeof r.completed_at === 'string' ? r.completed_at : null,
+      })) as WeeklyQuestRow[],
+    )
     setError(null)
   }, [goalId])
 
@@ -782,10 +780,14 @@ export function GoalDetail() {
     goal?.status === 'completed' ||
     (totalWeeks > 0 && completedQuestCount >= totalWeeks)
 
-  const currentQuest = useMemo(
-    () => pickActiveQuest(quests, currentWeekFromStart, questProgression),
-    [quests, currentWeekFromStart, questProgression],
-  )
+  const currentQuest = useMemo((): WeeklyQuestRow | null => {
+    const picked = pickActiveQuest(
+      quests,
+      currentWeekFromStart,
+      questProgression,
+    )
+    return (picked ?? null) as WeeklyQuestRow | null
+  }, [quests, currentWeekFromStart, questProgression])
 
   const progressAccent = getMissionBoardAccent(goal?.category)
   const barColor = isGoalComplete ? '#22c55e' : progressAccent
@@ -797,6 +799,44 @@ export function GoalDetail() {
     const span = Math.max(totalWeeks, maxQuestWeek, 1)
     return weeklyQuestBatchRanges(span)
   }, [totalWeeks, maxQuestWeek])
+
+  const heroBatchDots = useMemo(() => {
+    if (!currentQuest) return null
+    const wn = currentQuest.week_number
+    const batch = batchDisplayRanges.find(
+      (r) => wn >= r.start && wn <= r.end,
+    )
+    if (!batch) return null
+    const inBatch = sortedQuests.filter(
+      (q) => q.week_number >= batch.start && q.week_number <= batch.end,
+    )
+    const total = inBatch.length
+    const done = inBatch.filter((q) => q.completed).length
+    return { done, total, batch }
+  }, [currentQuest, sortedQuests, batchDisplayRanges])
+
+  const heroNextProgressPercent = useMemo(() => {
+    if (!currentQuest || !goal) return null
+    const locked = isQuestLockedForMode(
+      currentQuest,
+      sortedQuests,
+      questProgression,
+      currentWeekFromStart,
+    )
+    if (currentQuest.completed || locked) return null
+    const totalW =
+      goal.target_date != null && goal.target_date !== ''
+        ? calculateTotalWeeks(goal.target_date)
+        : Math.max(1, sortedQuests.length)
+    return calculateProgressPercent(completedQuestCount + 1, totalW)
+  }, [
+    currentQuest,
+    goal,
+    sortedQuests,
+    questProgression,
+    currentWeekFromStart,
+    completedQuestCount,
+  ])
 
   useEffect(() => {
     if (loading || !goal || !userId || !goalId) return
@@ -841,8 +881,11 @@ export function GoalDetail() {
     const prevQuests = quests
     const prevGoal = goal
 
+    const questCompletedAtIso = new Date().toISOString()
     const nextQuests = quests.map((q) =>
-      q.id === quest.id ? { ...q, completed: true } : q,
+      q.id === quest.id
+        ? { ...q, completed: true, completed_at: questCompletedAtIso }
+        : q,
     )
     const doneCount = nextQuests.filter((q) => q.completed).length
     const totalW =
@@ -868,7 +911,6 @@ export function GoalDetail() {
         : null,
     )
 
-    const questCompletedAtIso = new Date().toISOString()
     const { error: uErr } = await supabase
       .from('weekly_quests')
       .update({ completed: true, completed_at: questCompletedAtIso })
@@ -923,8 +965,25 @@ export function GoalDetail() {
     setSuccessFlashId(quest.id)
     window.setTimeout(() => setSuccessFlashId(null), 1200)
 
+    for (const t of celebrateTimersRef.current) window.clearTimeout(t)
+    celebrateTimersRef.current = []
+    setGreenFlashOverlay({ key: Date.now() })
+    setCelebrateMessageFadeOut(false)
+    setCelebrateMessage(
+      QUEST_COMPLETE_MESSAGES[
+        Math.floor(Math.random() * QUEST_COMPLETE_MESSAGES.length)
+      ],
+    )
+    const tFade = window.setTimeout(() => setCelebrateMessageFadeOut(true), 3000)
+    const tClear = window.setTimeout(() => {
+      setCelebrateMessage(null)
+      setCelebrateMessageFadeOut(false)
+    }, 3600)
+    celebrateTimersRef.current.push(tFade, tClear)
+
     void (async () => {
       try {
+        await new Promise((r) => window.setTimeout(r, 350))
         const {
           data: { user },
           error: authErr,
@@ -1053,7 +1112,11 @@ export function GoalDetail() {
     if (!goal || !userId || !goalId) return
     closeQuestMenu()
     setRegeneratingQuestId(q.id)
-    setError(null)
+    setRegenerateErrorByQuestId((prev) => {
+      const next = { ...prev }
+      delete next[q.id]
+      return next
+    })
     try {
       const nextTitle = await generateOneWeeklyQuestTitle({
         goalTitle: goal.title,
@@ -1072,10 +1135,38 @@ export function GoalDetail() {
       if (uErr) throw new Error(uErr.message)
 
       setQuests((prev) => prev.map((x) => (x.id === q.id ? { ...x, title: nextTitle } : x)))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not regenerate quest')
+      setTitleSlideNonceByQuestId((prev) => ({
+        ...prev,
+        [q.id]: (prev[q.id] ?? 0) + 1,
+      }))
+    } catch {
+      setRegenerateErrorByQuestId((prev) => ({ ...prev, [q.id]: 'failed' }))
     } finally {
       setRegeneratingQuestId(null)
+    }
+  }
+
+  async function handleToggleWhy(q: PickableQuest) {
+    if (!goal) return
+    const opening = !whyExpandedByQuestId[q.id]
+    setWhyExpandedByQuestId((prev) => ({ ...prev, [q.id]: !prev[q.id] }))
+    if (!opening) return
+    if (whyTextByQuestId[q.id]) return
+    if (whyLoadingQuestId === q.id) return
+    setWhyLoadingQuestId(q.id)
+    try {
+      const text = await explainWeeklyQuestWhy({
+        questTitle: q.title,
+        goalTitle: goal.title,
+      })
+      setWhyTextByQuestId((prev) => ({ ...prev, [q.id]: text }))
+    } catch {
+      setWhyTextByQuestId((prev) => ({
+        ...prev,
+        [q.id]: "We couldn't load an explanation. Try again later.",
+      }))
+    } finally {
+      setWhyLoadingQuestId((cur) => (cur === q.id ? null : cur))
     }
   }
 
@@ -1100,6 +1191,14 @@ export function GoalDetail() {
             onHide={onXpToastHide}
           />
         )
+      ) : null}
+      {greenFlashOverlay ? (
+        <div
+          key={greenFlashOverlay.key}
+          className="quest-completion-overlay-animate pointer-events-none fixed inset-0 z-[100] bg-emerald-500"
+          onAnimationEnd={() => setGreenFlashOverlay(null)}
+          aria-hidden
+        />
       ) : null}
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800/60 px-2 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <Link
@@ -1564,63 +1663,154 @@ export function GoalDetail() {
                   questProgression,
                   currentWeekFromStart,
                 )
+                const whyOpen = !!whyExpandedByQuestId[currentQuest.id]
+                const heroRegen = regeneratingQuestId === currentQuest.id
+                const heroSlide =
+                  (titleSlideNonceByQuestId[currentQuest.id] ?? 0) > 0
                 return (
-                  <div
-                    className={[
-                      'mt-3 flex flex-col gap-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-md ring-1 ring-zinc-800/40 transition-[transform,box-shadow] duration-300 sm:flex-row sm:items-center sm:justify-between',
-                      currentQuest.completed ? 'opacity-60' : '',
-                      questLocked ? 'opacity-40' : '',
-                      successFlashId === currentQuest.id
-                        ? 'scale-[1.02] shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-500/50'
-                        : '',
-                    ].join(' ')}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={[
-                          'text-lg font-bold text-white',
-                          currentQuest.completed ? 'line-through' : '',
-                        ].join(' ')}
-                      >
-                        {currentQuest.title}
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-zinc-500">
-                        Week {currentQuest.week_number} of {totalWeeks}
-                      </p>
-                      {questLocked ? (
-                        <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-zinc-500">
-                          <LockIcon className="h-4 w-4 shrink-0" />
-                          {questProgression === 'weekly'
-                            ? formatUnlocksLabel(
-                                goal.created_at,
-                                currentQuest.week_number,
-                              )
-                            : 'Complete the previous quest to unlock'}
+                  <>
+                    <div
+                      className={[
+                        'mt-3 flex flex-col gap-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-md ring-1 ring-zinc-800/40 transition-[transform,box-shadow,background-color] duration-300 sm:flex-row sm:items-start sm:justify-between',
+                        currentQuest.completed ? 'opacity-60' : '',
+                        questLocked ? 'opacity-40' : '',
+                        successFlashId === currentQuest.id
+                          ? 'scale-[1.02] bg-emerald-500/15 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-500/50'
+                          : '',
+                      ].join(' ')}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+                          Week {currentQuest.week_number} of {totalWeeks}
                         </p>
-                      ) : null}
-                    </div>
-                    <div className="shrink-0 sm:pl-2">
-                      {currentQuest.completed ? (
-                        <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-bold text-emerald-400 ring-1 ring-emerald-500/40">
-                          Completed
-                        </span>
-                      ) : questLocked ? null : (
+                        {heroBatchDots && heroBatchDots.total > 0 ? (
+                          <div
+                            className="mt-2 flex flex-wrap items-center gap-1.5"
+                            aria-label={`${heroBatchDots.done} of ${heroBatchDots.total} quests complete in the current batch`}
+                          >
+                            {Array.from(
+                              { length: heroBatchDots.total },
+                              (_, i) => (
+                                <span
+                                  key={i}
+                                  className={
+                                    i < heroBatchDots.done
+                                      ? 'text-emerald-400'
+                                      : 'text-zinc-600'
+                                  }
+                                  aria-hidden
+                                >
+                                  {i < heroBatchDots.done ? '●' : '○'}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        ) : null}
+                        {heroRegen ? (
+                          <>
+                            <div className="mission-skeleton-shell mt-3 h-7 w-[min(100%,20rem)] animate-pulse rounded-lg bg-[#1e1e22]" />
+                            <p className="mt-2 text-sm italic text-zinc-500">
+                              Finding a better quest…
+                            </p>
+                          </>
+                        ) : (
+                          <p
+                            key={`${currentQuest.id}-${titleSlideNonceByQuestId[currentQuest.id] ?? 0}`}
+                            className={[
+                              'mt-3 text-lg font-bold text-white',
+                              heroSlide ? 'quest-title-slide-in' : '',
+                              currentQuest.completed ? 'line-through' : '',
+                            ].join(' ')}
+                          >
+                            {currentQuest.title}
+                          </p>
+                        )}
+                        {heroNextProgressPercent != null ? (
+                          <p className="mt-1 text-sm text-zinc-500">
+                            Complete this to advance your goal to{' '}
+                            {heroNextProgressPercent}%
+                          </p>
+                        ) : null}
+                        {questLocked ? (
+                          <p className="mt-3 flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm font-semibold text-amber-100/90">
+                            <LockIcon className="h-4 w-4 shrink-0 text-amber-400/90" />
+                            <span>
+                              {questProgression === 'weekly'
+                                ? formatUnlocksLabel(
+                                    goal.created_at,
+                                    currentQuest.week_number,
+                                  )
+                                : 'Complete the previous quest to unlock'}
+                            </span>
+                          </p>
+                        ) : null}
                         <button
                           type="button"
-                          disabled={!!markingId}
-                          onClick={() =>
-                            void handleMarkQuestComplete(currentQuest)
-                          }
-                          className="w-full rounded-xl px-5 py-3 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                          style={{ backgroundColor: QUEST_PURPLE }}
+                          onClick={() => void handleToggleWhy(currentQuest)}
+                          className="mt-3 flex w-full max-w-md items-center gap-1.5 rounded-lg py-1 text-left text-xs font-semibold text-zinc-400 transition-colors hover:text-zinc-200"
+                          aria-expanded={whyOpen}
                         >
-                          {markingId === currentQuest.id
-                            ? 'Saving…'
-                            : 'Mark Complete'}
+                          <svg
+                            className={[
+                              'h-4 w-4 shrink-0 text-zinc-500 transition-transform',
+                              whyOpen ? 'rotate-90' : '',
+                            ].join(' ')}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            aria-hidden
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                          Why this quest?
                         </button>
-                      )}
+                        {whyOpen ? (
+                          <p className="mt-1 max-w-lg text-sm leading-relaxed text-zinc-400">
+                            {whyLoadingQuestId === currentQuest.id
+                              ? '…'
+                              : (whyTextByQuestId[currentQuest.id] ?? '')}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 sm:pl-2">
+                        {currentQuest.completed ? (
+                          <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-bold text-emerald-400 ring-1 ring-emerald-500/40">
+                            Completed
+                          </span>
+                        ) : questLocked ? null : (
+                          <button
+                            type="button"
+                            disabled={!!markingId}
+                            onClick={() =>
+                              void handleMarkQuestComplete(currentQuest)
+                            }
+                            className="w-full rounded-xl px-5 py-3 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                            style={{ backgroundColor: QUEST_PURPLE }}
+                          >
+                            {markingId === currentQuest.id
+                              ? 'Saving…'
+                              : 'Mark Complete'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                    {celebrateMessage ? (
+                      <p
+                        className={[
+                          'mt-3 text-center text-sm font-semibold text-emerald-300 transition-opacity duration-500 ease-out',
+                          celebrateMessageFadeOut ? 'opacity-0' : 'opacity-100',
+                        ].join(' ')}
+                        role="status"
+                      >
+                        {celebrateMessage}
+                      </p>
+                    ) : null}
+                  </>
                 )
               })()
             ) : error && quests.length === 0 ? (
@@ -1653,6 +1843,12 @@ export function GoalDetail() {
                 </span>
               ) : null}
             </div>
+            {quests.length > 0 ? (
+              <p className="mt-2 text-xs text-zinc-500">
+                {completedQuestCount} of {quests.length} quests complete ·{' '}
+                {pct}% of goal done
+              </p>
+            ) : null}
 
             {batchDisplayRanges.map((range) => {
               const inBatch = quests.filter(
@@ -1679,13 +1875,19 @@ export function GoalDetail() {
                       const isEditing = editingQuestId === q.id
                       const savingThis = savingQuestId === q.id
                       const regeneratingThis = regeneratingQuestId === q.id
+                      const rowSlide =
+                        (titleSlideNonceByQuestId[q.id] ?? 0) > 0
+                      const regenFailed = regenerateErrorByQuestId[q.id]
+                      const completedLine = formatQuestCompletedLine(
+                        q.completed_at,
+                      )
                       return (
                         <li
                           key={q.id}
                           className={[
                             'relative flex items-start gap-3 rounded-xl border bg-app-surface px-4 py-3 transition-opacity',
                             questLocked
-                              ? 'border-zinc-800/80 opacity-40'
+                              ? 'border-amber-500/20 bg-zinc-900/40 opacity-90'
                               : q.completed
                                 ? 'border-zinc-800/60 opacity-50'
                                 : 'border-zinc-800/80',
@@ -1748,25 +1950,56 @@ export function GoalDetail() {
                                   </button>
                                 </div>
                               </div>
+                            ) : regeneratingThis ? (
+                              <>
+                                <div className="mission-skeleton-shell mt-0.5 h-4 w-[min(100%,18rem)] animate-pulse rounded-md bg-[#1e1e22]" />
+                                <p className="mt-1.5 text-xs italic text-zinc-500">
+                                  Finding a better quest…
+                                </p>
+                              </>
                             ) : (
                               <p
+                                key={`${q.id}-${titleSlideNonceByQuestId[q.id] ?? 0}`}
                                 className={[
                                   'mt-0.5 text-sm font-semibold text-zinc-200',
+                                  rowSlide ? 'quest-title-slide-in' : '',
                                   q.completed ? 'line-through' : '',
                                 ].join(' ')}
                               >
-                                {regeneratingThis ? 'Regenerating…' : q.title}
+                                {q.title}
                               </p>
                             )}
-                            {questLocked ? (
-                              <p className="mt-1.5 text-xs font-semibold text-zinc-500">
-                                {questProgression === 'weekly'
-                                  ? formatUnlocksLabel(
-                                      goal.created_at,
-                                      q.week_number,
-                                    )
-                                  : 'Complete the previous quest to unlock'}
+                            {q.completed && completedLine ? (
+                              <p className="mt-1 text-xs text-zinc-500">
+                                {completedLine}
                               </p>
+                            ) : null}
+                            {questLocked ? (
+                              <p className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-2 text-xs font-semibold text-amber-100/90">
+                                <LockIcon className="h-3.5 w-3.5 shrink-0 text-amber-400/90" />
+                                <span>
+                                  {questProgression === 'weekly'
+                                    ? formatUnlocksLabel(
+                                        goal.created_at,
+                                        q.week_number,
+                                      )
+                                    : 'Complete the previous quest to unlock'}
+                                </span>
+                              </p>
+                            ) : null}
+                            {regenFailed ? (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-red-400">
+                                  Couldn&apos;t generate a new quest — try again
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => void regenerateQuest(q)}
+                                  className="text-xs font-bold text-app-accent underline-offset-2 hover:underline"
+                                >
+                                  Retry
+                                </button>
+                              </div>
                             ) : null}
                           </div>
 
