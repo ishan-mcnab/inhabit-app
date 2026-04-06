@@ -13,6 +13,7 @@ import { XPToast } from '../components/XPToast'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import { runFullClearConfetti } from '../lib/fullClearConfetti'
+import { updateHabitStreak } from '../lib/habitStreak'
 import { generateOneDailyMissionTitle } from '../lib/openRouterSingle'
 import {
   ensureMondayGraceReset,
@@ -161,6 +162,20 @@ function mapRowToMission(row: MissionRow): TodayMission {
     goalTitle: g?.title ?? 'Goal',
     category: g?.category ?? null,
   }
+}
+
+type HabitRow = {
+  id: string
+  title: string
+  category: string | null
+  frequency: string | null
+  time_of_day: string | null
+  current_streak: number
+  last_completed: string | null
+}
+
+type TodayHabit = HabitRow & {
+  completedToday: boolean
 }
 
 const SKELETON_STRIPE = '#52525b'
@@ -579,6 +594,12 @@ export function Today() {
   const [streakCurrent, setStreakCurrent] = useState(0)
   const [, setStreakLongest] = useState(0)
 
+  const [habitsLoading, setHabitsLoading] = useState(true)
+  const [habits, setHabits] = useState<TodayHabit[]>([])
+  const [habitCompletingIds, setHabitCompletingIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+
   const [graceModalOpen, setGraceModalOpen] = useState(false)
   const [graceStreakBeforeMiss, setGraceStreakBeforeMiss] = useState(0)
   const [gracePassesRemaining, setGracePassesRemaining] = useState(0)
@@ -683,6 +704,7 @@ export function Today() {
     setLoading(true)
     setLoadError(null)
     setXpProfileLoading(true)
+    setHabitsLoading(true)
 
     const {
       data: { user },
@@ -692,6 +714,7 @@ export function Today() {
     if (userError || !user) {
       setLoading(false)
       setXpProfileLoading(false)
+      setHabitsLoading(false)
       setXpProfile(null)
       setStreakCurrent(0)
       setStreakLongest(0)
@@ -700,6 +723,7 @@ export function Today() {
       setGracePassesRemaining(0)
       setLoadError(userError?.message ?? 'Not signed in')
       setUserId(null)
+      setHabits([])
       return
     }
 
@@ -713,7 +737,10 @@ export function Today() {
       console.error('checkAndResetWeeklyXp failed:', weeklyErr)
     }
 
-    const [goalsRes, missionsRes, userXpRes] = await Promise.all([
+    const { startIso, endIso } = localDayStartEndIso()
+
+    const [goalsRes, missionsRes, userXpRes, habitsRes, habitLogsRes] =
+      await Promise.all([
       supabase
         .from('goals')
         .select('id', { count: 'exact', head: true })
@@ -741,10 +768,24 @@ export function Today() {
         )
         .eq('id', user.id)
         .maybeSingle(),
+      supabase
+        .from('habits')
+        .select(
+          'id,title,category,frequency,time_of_day,current_streak,last_completed,created_at',
+        )
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('habit_logs')
+        .select('habit_id')
+        .eq('user_id', user.id)
+        .gte('completed_at', startIso)
+        .lte('completed_at', endIso),
     ])
 
     setLoading(false)
     setXpProfileLoading(false)
+    setHabitsLoading(false)
 
     let streakBeforeMount = 0
     let streakForDebug = 0
@@ -866,6 +907,22 @@ export function Today() {
     const rows = (missionsRes.data ?? []) as unknown as MissionRow[]
     const list = rows.map(mapRowToMission)
     setMissions(list)
+
+    if (habitsRes.error) {
+      console.error('Failed to load habits:', habitsRes.error)
+      setHabits([])
+    } else {
+      const doneIds = new Set<string>(
+        ((habitLogsRes.data ?? []) as unknown as Record<string, unknown>[])
+          .map((r) => (typeof r.habit_id === 'string' ? r.habit_id : null))
+          .filter((x): x is string => !!x),
+      )
+      const hs = ((habitsRes.data ?? []) as unknown as HabitRow[]).map((h) => ({
+        ...h,
+        completedToday: doneIds.has(h.id),
+      }))
+      setHabits(hs)
+    }
   }, [todayStr])
 
   useEffect(() => {
@@ -1009,6 +1066,92 @@ export function Today() {
         console.error('Streak / XP award failed (mission / full clear):', xpErr)
       }
     })()
+  }
+
+  const visibleHabits = useMemo(() => {
+    const day = new Date().getDay() // 0 Sun .. 6 Sat
+    const weekend = day === 0 || day === 6
+    if (!weekend) return habits
+    return habits.filter((h) => (h.frequency ?? 'daily') !== 'weekdays')
+  }, [habits])
+
+  async function handleCompleteHabit(habitId: string) {
+    if (!userId) return
+    if (habitCompletingIds.has(habitId)) return
+
+    const h = habits.find((x) => x.id === habitId)
+    if (!h || h.completedToday) return
+
+    setHabitCompletingIds((prev) => {
+      const next = new Set(prev)
+      next.add(habitId)
+      return next
+    })
+
+    const { startIso, endIso } = localDayStartEndIso()
+
+    try {
+      const { data: exists, error: exErr } = await supabase
+        .from('habit_logs')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('habit_id', habitId)
+        .gte('completed_at', startIso)
+        .lte('completed_at', endIso)
+        .limit(1)
+
+      if (exErr) throw new Error(exErr.message)
+      if ((exists?.length ?? 0) > 0) {
+        setHabits((prev) =>
+          prev.map((x) => (x.id === habitId ? { ...x, completedToday: true } : x)),
+        )
+        return
+      }
+
+      setHabits((prev) =>
+        prev.map((x) => (x.id === habitId ? { ...x, completedToday: true } : x)),
+      )
+
+      const { error: insErr } = await supabase.from('habit_logs').insert({
+        habit_id: habitId,
+        user_id: userId,
+        completed_at: new Date().toISOString(),
+      })
+      if (insErr) throw new Error(insErr.message)
+
+      const streakOut = await updateHabitStreak(habitId, userId)
+      setHabits((prev) =>
+        prev.map((x) =>
+          x.id === habitId
+            ? {
+                ...x,
+                current_streak: streakOut.newStreak,
+                last_completed: todayStr,
+                completedToday: true,
+              }
+            : x,
+        ),
+      )
+
+      const habitAward = await awardXP(userId, 15, 'habit_complete')
+      enqueueXpAward(habitAward)
+      enqueueXpToast(15)
+
+      const streakResult = await checkAndUpdateStreak(userId, 'activity')
+      setStreakCurrent(streakResult.currentStreak)
+      setStreakLongest(streakResult.longestStreak)
+    } catch (e) {
+      console.error('Habit completion failed:', e)
+      setHabits((prev) =>
+        prev.map((x) => (x.id === habitId ? { ...x, completedToday: false } : x)),
+      )
+    } finally {
+      setHabitCompletingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(habitId)
+        return next
+      })
+    }
   }
 
   function closeMissionMenu() {
@@ -1537,6 +1680,132 @@ export function Today() {
                 </div>
               )
             })}
+
+            {userId ? (
+              <>
+                <div className="my-6 h-px bg-zinc-800/60" aria-hidden />
+                <section aria-labelledby="today-habits-heading">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2
+                      id="today-habits-heading"
+                      className="text-sm font-bold uppercase tracking-wider text-zinc-500"
+                    >
+                      Habits
+                    </h2>
+                    <Link
+                      to="/habits/new"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/40 text-lg font-bold text-white transition-colors hover:bg-zinc-900/60"
+                      aria-label="Add habit"
+                    >
+                      +
+                    </Link>
+                  </div>
+
+                  {habitsLoading ? (
+                    <div className="mt-4 space-y-3">
+                      {[0, 1].map((i) => (
+                        <div
+                          key={i}
+                          className="mission-skeleton-shell flex min-h-[82px] items-stretch gap-3 rounded-2xl border border-zinc-800/80 p-4 shadow-sm"
+                        >
+                          <div
+                            className="w-1 shrink-0 self-stretch rounded-full"
+                            style={{ backgroundColor: SKELETON_STRIPE }}
+                            aria-hidden
+                          />
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            <div className="min-w-0 flex-1 space-y-2.5">
+                              <div className="h-5 w-[70%] max-w-sm rounded-md bg-black/22" />
+                              <div className="h-3.5 w-[45%] max-w-[12rem] rounded-md bg-black/22" />
+                            </div>
+                            <div className="h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 rounded-full border border-zinc-700/50 bg-black/15" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : visibleHabits.length === 0 ? (
+                    <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4">
+                      <p className="text-sm font-medium text-zinc-500">
+                        No habits yet
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {visibleHabits.map((h) => {
+                        const accent = getMissionBoardAccent(h.category)
+                        const done = h.completedToday
+                        const time =
+                          h.time_of_day === 'afternoon'
+                            ? 'Afternoon'
+                            : h.time_of_day === 'evening'
+                              ? 'Evening'
+                              : 'Morning'
+                        const disabled = done || habitCompletingIds.has(h.id)
+                        return (
+                          <div
+                            key={h.id}
+                            className={[
+                              'relative flex items-stretch gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm',
+                              done ? 'opacity-55' : 'opacity-100',
+                            ].join(' ')}
+                          >
+                            <div
+                              className="w-1 shrink-0 self-stretch rounded-full"
+                              style={{ backgroundColor: accent }}
+                              aria-hidden
+                            />
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className={[
+                                    'truncate text-base font-bold text-white',
+                                    done ? 'line-through' : '',
+                                  ].join(' ')}
+                                >
+                                  {h.title}
+                                </p>
+                                <p className="mt-1 text-xs font-medium text-zinc-500">
+                                  {time} · 🔥 {Math.max(0, h.current_streak)} days
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => {
+                                  requestAnimationFrame(() => {
+                                    void handleCompleteHabit(h.id)
+                                  })
+                                }}
+                                aria-label={
+                                  done ? 'Completed' : `Complete habit: ${h.title}`
+                                }
+                                className={[
+                                  'flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center rounded-full border-2',
+                                  done
+                                    ? 'border-emerald-500 bg-emerald-500'
+                                    : 'border-zinc-500 bg-transparent hover:border-zinc-400',
+                                  disabled ? 'opacity-70' : '',
+                                ].join(' ')}
+                              >
+                                {done ? <CheckIcon /> : null}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <Link
+                    to="/habits/new"
+                    className="mt-4 block w-full rounded-2xl py-3.5 text-center text-sm font-bold text-white transition-opacity active:opacity-90"
+                    style={{ backgroundColor: '#534AB7' }}
+                  >
+                    Add Habit
+                  </Link>
+                </section>
+              </>
+            ) : null}
           </div>
         )}
       </div>

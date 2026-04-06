@@ -6,6 +6,7 @@ import { RequireGuest } from './components/RequireGuest'
 import { RequireOnboarded } from './components/RequireOnboarded'
 import { TabPlaceholder } from './components/TabPlaceholder'
 import { CreateGoal } from './pages/CreateGoal'
+import { CreateHabit } from './pages/CreateHabit'
 import { GoalDetail } from './pages/GoalDetail'
 import { Goals } from './pages/Goals'
 import { Login } from './pages/Login'
@@ -53,6 +54,7 @@ function App() {
             <Route path="goals" element={<Goals />} />
             <Route path="goals/new" element={<CreateGoal />} />
             <Route path="goals/:goalId" element={<GoalDetail />} />
+            <Route path="habits/new" element={<CreateHabit />} />
             <Route
               path="progress"
               element={<TabPlaceholder title="Progress" />}
