@@ -178,6 +178,80 @@ async function openRouterPlainSentence(prompt: string): Promise<string> {
     .trim()
 }
 
+async function openRouterChat(
+  messages: { role: 'system' | 'user'; content: string }[],
+): Promise<string> {
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
+  if (!apiKey || typeof apiKey !== 'string') {
+    throw new Error('Missing VITE_OPENROUTER_API_KEY in environment')
+  }
+
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'http://localhost:5173',
+      'X-Title': 'InHabit App',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages,
+    }),
+  })
+
+  const data: unknown = await res.json().catch(() => null)
+  if (!res.ok) {
+    const errBody =
+      data && typeof data === 'object' && 'error' in data
+        ? JSON.stringify((data as { error: unknown }).error)
+        : JSON.stringify(data)
+    throw new Error(`OpenRouter returned ${res.status} — ${errBody}`)
+  }
+
+  const choices =
+    data && typeof data === 'object' && 'choices' in data
+      ? (data as { choices: unknown }).choices
+      : undefined
+  if (!Array.isArray(choices) || choices.length === 0) {
+    throw new Error('OpenRouter returned no choices')
+  }
+
+  const first = choices[0] as { message?: { content?: string } }
+  const content = first?.message?.content
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new Error('OpenRouter returned empty message content')
+  }
+
+  return content
+    .trim()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export async function weeklyReflectionCoachInsight(params: {
+  statsLine: string
+  winAnswer: string
+  missAnswer: string
+  improveAnswer: string
+}): Promise<string> {
+  const system =
+    'You are a direct, no-BS discipline coach for young men. Give sharp, specific feedback based on their week. Never be generic. Never say "great job" or "keep it up". Reference their actual answers. Be direct and occasionally challenging. Maximum 2 sentences.'
+
+  const user =
+    `Weekly stats: ${params.statsLine}\n\n` +
+    'Their reflection:\n' +
+    `Biggest win: ${params.winAnswer}\n` +
+    `What they failed at: ${params.missAnswer}\n` +
+    `What they'll change: ${params.improveAnswer}\n\n` +
+    'Give them your honest 2-sentence coaching insight.'
+
+  return openRouterChat([
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ])
+}
+
 /** One-sentence “why this quest” for UI (Claude Haiku via OpenRouter). */
 export async function explainWeeklyQuestWhy(params: {
   questTitle: string

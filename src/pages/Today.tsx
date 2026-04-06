@@ -6,6 +6,11 @@ import {
   useState,
 } from 'react'
 import { Link } from 'react-router-dom'
+import {
+  getLocalISOWeek,
+  getLocalISOWeekYear,
+  previousIsoWeek,
+} from '../lib/isoWeek'
 import { GracePassModal } from '../components/GracePassModal'
 import { StreakMilestoneModal } from '../components/StreakMilestoneModal'
 import { XPToast } from '../components/XPToast'
@@ -587,6 +592,9 @@ export function Today() {
   const [, setStreakLongest] = useState(0)
 
   const [habitsLoading, setHabitsLoading] = useState(true)
+  const [reflectionNudge, setReflectionNudge] = useState<
+    'none' | 'sunday' | 'missed'
+  >('none')
   const [habits, setHabits] = useState<TodayHabit[]>([])
   const [habitCompletingIds, setHabitCompletingIds] = useState<Set<string>>(
     () => new Set(),
@@ -721,6 +729,7 @@ export function Today() {
     setLoadError(null)
     setXpProfileLoading(true)
     setHabitsLoading(true)
+    setReflectionNudge('none')
 
     const {
       data: { user },
@@ -938,6 +947,36 @@ export function Today() {
         completedToday: doneIds.has(h.id),
       }))
       setHabits(hs)
+    }
+
+    const now = new Date()
+    const cw = getLocalISOWeek(now)
+    const cy = getLocalISOWeekYear(now)
+    const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
+    const [curRes, prevRes] = await Promise.all([
+      supabase
+        .from('reflections')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('iso_week_year', cy)
+        .eq('week_number', cw)
+        .maybeSingle(),
+      supabase
+        .from('reflections')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('iso_week_year', py)
+        .eq('week_number', pw)
+        .maybeSingle(),
+    ])
+    if (curRes.error || prevRes.error) {
+      setReflectionNudge('none')
+    } else if (now.getDay() === 0 && !curRes.data) {
+      setReflectionNudge('sunday')
+    } else if (now.getDay() !== 0 && !prevRes.data) {
+      setReflectionNudge('missed')
+    } else {
+      setReflectionNudge('none')
     }
   }, [todayStr])
 
@@ -1592,6 +1631,35 @@ export function Today() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
+        {!loading && !loadError && reflectionNudge === 'sunday' ? (
+          <div
+            className="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-3.5"
+            style={{ backgroundColor: '#534AB7' }}
+          >
+            <span className="text-sm font-bold text-white">
+              📝 Weekly reflection ready
+            </span>
+            <Link
+              to="/reflection"
+              className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-bold text-white ring-1 ring-white/25 transition-colors hover:bg-white/25"
+            >
+              Start →
+            </Link>
+          </div>
+        ) : null}
+        {!loading && !loadError && reflectionNudge === 'missed' ? (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-zinc-900/50 px-4 py-3">
+            <span className="text-sm font-medium text-zinc-500">
+              You missed last week&apos;s reflection
+            </span>
+            <Link
+              to="/reflection"
+              className="shrink-0 text-sm font-bold text-zinc-300 underline-offset-2 hover:text-white hover:underline"
+            >
+              Reflect now →
+            </Link>
+          </div>
+        ) : null}
         {loadError ? (
           <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
             <StateCard>

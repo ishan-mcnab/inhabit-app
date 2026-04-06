@@ -4,7 +4,6 @@ import { Layout } from './components/Layout'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireGuest } from './components/RequireGuest'
 import { RequireOnboarded } from './components/RequireOnboarded'
-import { TabPlaceholder } from './components/TabPlaceholder'
 import { CreateGoal } from './pages/CreateGoal'
 import { CreateHabit } from './pages/CreateHabit'
 import { GoalDetail } from './pages/GoalDetail'
@@ -12,6 +11,8 @@ import { Goals } from './pages/Goals'
 import { Login } from './pages/Login'
 import { Onboarding } from './pages/Onboarding'
 import { Profile } from './pages/Profile'
+import { Progress } from './pages/Progress'
+import { WeeklyReflection } from './pages/WeeklyReflection'
 import { SignUp } from './pages/SignUp'
 import { Today } from './pages/Today'
 import { supabase } from './supabase'
@@ -55,10 +56,8 @@ function App() {
             <Route path="goals/new" element={<CreateGoal />} />
             <Route path="goals/:goalId" element={<GoalDetail />} />
             <Route path="habits/new" element={<CreateHabit />} />
-            <Route
-              path="progress"
-              element={<TabPlaceholder title="Progress" />}
-            />
+            <Route path="reflection" element={<WeeklyReflection />} />
+            <Route path="progress" element={<Progress />} />
             <Route path="profile" element={<Profile />} />
             <Route path="*" element={<Navigate to="/today" replace />} />
           </Route>
