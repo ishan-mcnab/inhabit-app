@@ -7,6 +7,7 @@ import {
   getLocalISOWeek,
   getLocalISOWeekYear,
   localWeekMondaySundayYmd,
+  previousIsoWeek,
 } from '../lib/isoWeek'
 import { weeklyReflectionCoachInsight } from '../lib/openRouterSingle'
 import { awardXP, localWeekStartEndIso } from '../lib/xp'
@@ -36,6 +37,12 @@ type ReflectionRow = {
   ai_insight: string | null
   xp_earned: number
   mission_completion_rate: number | null
+}
+
+type ReflectionUserContext = {
+  goalCategories: string[]
+  goalContext: Record<string, any>
+  displayName: string
 }
 
 function AutoGrowTextarea({
@@ -159,7 +166,13 @@ function CompletionView({
 }
 
 export function WeeklyReflection() {
-  const { toast: xpToast, enqueueXpToast, onXpToastHide } = useXpToastQueue()
+  const navigate = useNavigate()
+  const {
+    toast: xpToast,
+    enqueueXpToast,
+    enqueueStreakToast,
+    onXpToastHide,
+  } = useXpToastQueue()
 
   const [phase, setPhase] = useState<
     'loading' | 'form' | 'submitting' | 'complete' | 'already' | 'error'
@@ -168,11 +181,13 @@ export function WeeklyReflection() {
   const [weekStats, setWeekStats] = useState<WeekStats | null>(null)
   const [existingReflection, setExistingReflection] =
     useState<ReflectionRow | null>(null)
+  const [userCtx, setUserCtx] = useState<ReflectionUserContext | null>(null)
 
   const [win, setWin] = useState('')
   const [miss, setMiss] = useState('')
   const [improve, setImprove] = useState('')
   const [completeInsight, setCompleteInsight] = useState('')
+  const [completeWeeklyXp, setCompleteWeeklyXp] = useState<number | null>(null)
 
   const [weekLabel, setWeekLabel] = useState(() =>
     formatWeekOfRangeLabel(new Date()),
@@ -259,7 +274,7 @@ export function WeeklyReflection() {
         .lte('completed_at', endIso),
       supabase
         .from('users')
-        .select('weekly_xp, current_streak')
+        .select('weekly_xp, current_streak, display_name, goal_categories, goal_context')
         .eq('id', user.id)
         .maybeSingle(),
     ])
@@ -282,6 +297,26 @@ export function WeeklyReflection() {
       missionsTotal <= 0
         ? 0
         : Math.min(100, Math.round((missionsCompleted / missionsTotal) * 100))
+
+    const displayName =
+      typeof (userRes.data as any)?.display_name === 'string'
+        ? ((userRes.data as any).display_name as string)
+        : ''
+    const goalCategories = Array.isArray((userRes.data as any)?.goal_categories)
+      ? (((userRes.data as any).goal_categories as unknown[]).filter(
+          (x) => typeof x === 'string',
+        ) as string[])
+      : []
+    const goalContextRaw = (userRes.data as any)?.goal_context
+    const goalContext =
+      goalContextRaw && typeof goalContextRaw === 'object' && !Array.isArray(goalContextRaw)
+        ? (goalContextRaw as Record<string, any>)
+        : {}
+    setUserCtx({
+      displayName: displayName?.trim() || '—',
+      goalCategories,
+      goalContext,
+    })
 
     setWeekStats({
       missionsCompleted,
@@ -308,9 +343,6 @@ export function WeeklyReflection() {
     if (authErr || !user) return
 
     const stats = weekStats
-    const statsLine = stats
-      ? `${stats.missionsCompleted} of ${stats.missionsTotal} missions completed (${stats.completionRate}% completion rate), ${stats.streak} day streak, ${stats.weeklyXp} XP earned this week.`
-      : 'Stats unavailable.'
 
     setPhase('submitting')
 
@@ -340,8 +372,10 @@ export function WeeklyReflection() {
 
     const reflectionId = inserted.id as string
 
+    let newWeeklyXpAfter = 0
     try {
-      await awardXP(user.id, 75, 'weekly_reflection')
+      const xpRes = await awardXP(user.id, 75, 'weekly_reflection')
+      newWeeklyXpAfter = xpRes.newWeeklyXp
       enqueueXpToast(75)
     } catch (e) {
       await supabase.from('reflections').delete().eq('id', reflectionId)
@@ -350,14 +384,61 @@ export function WeeklyReflection() {
       return
     }
 
+    // Reflection streak bonus: 3 consecutive ISO weeks
+    try {
+      const { data: last3, error: rErr } = await supabase
+        .from('reflections')
+        .select('week_number, iso_week_year')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(3)
+      if (!rErr && Array.isArray(last3) && last3.length === 3) {
+        const a = last3[0] as any
+        const b = last3[1] as any
+        const c = last3[2] as any
+        const w0 = typeof a.week_number === 'number' ? a.week_number : null
+        const y0 = typeof a.iso_week_year === 'number' ? a.iso_week_year : null
+        const w1 = typeof b.week_number === 'number' ? b.week_number : null
+        const y1 = typeof b.iso_week_year === 'number' ? b.iso_week_year : null
+        const w2 = typeof c.week_number === 'number' ? c.week_number : null
+        const y2 = typeof c.iso_week_year === 'number' ? c.iso_week_year : null
+        if (w0 && y0 && w1 && y1 && w2 && y2) {
+          const p1 = previousIsoWeek(w0, y0)
+          const p2 = previousIsoWeek(p1.week, p1.isoYear)
+          const consecutive =
+            w1 === p1.week &&
+            y1 === p1.isoYear &&
+            w2 === p2.week &&
+            y2 === p2.isoYear
+          if (consecutive) {
+            const bonus = await awardXP(user.id, 50, 'reflection_streak')
+            newWeeklyXpAfter = bonus.newWeeklyXp
+            enqueueStreakToast('3-week reflection streak! +50 XP', REFLECTION_PURPLE)
+          }
+        }
+      }
+    } catch {
+      // bonus is optional; ignore
+    }
+
     let insight = ''
     try {
-      insight = await weeklyReflectionCoachInsight({
-        statsLine,
-        winAnswer: win.trim(),
-        missAnswer: miss.trim(),
-        improveAnswer: improve.trim(),
-      })
+      insight = await weeklyReflectionCoachInsight(
+        {
+          completedMissions: stats?.missionsCompleted ?? 0,
+          totalMissions: stats?.missionsTotal ?? 0,
+          completionRate: stats?.completionRate ?? 0,
+          streak: stats?.streak ?? 0,
+          weeklyXp: newWeeklyXpAfter,
+          habitsCompleted: stats?.habitsCompleted ?? 0,
+        },
+        {
+          win: win.trim(),
+          miss: miss.trim(),
+          improve: improve.trim(),
+        },
+        userCtx ?? undefined,
+      )
     } catch {
       insight =
         'We could not generate a coaching note right now. Your reflection is saved — check back later or try again next week.'
@@ -374,6 +455,7 @@ export function WeeklyReflection() {
     }
 
     setCompleteInsight(insight)
+    setCompleteWeeklyXp(newWeeklyXpAfter)
     setPhase('complete')
   }
 
@@ -566,11 +648,98 @@ export function WeeklyReflection() {
 
       {phase === 'complete' ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <CompletionView
-            insight={completeInsight}
-            showFreshXp
-            showComeBack={false}
-          />
+          <div className="mx-auto flex max-w-lg flex-col px-4 pb-12 pt-8">
+            <div className="flex flex-col items-center">
+              <svg
+                width="92"
+                height="92"
+                viewBox="0 0 92 92"
+                className="overflow-visible"
+                aria-hidden
+              >
+                <circle
+                  cx="46"
+                  cy="46"
+                  r="36"
+                  fill="none"
+                  stroke="rgba(34,197,94,0.25)"
+                  strokeWidth="6"
+                />
+                <circle
+                  cx="46"
+                  cy="46"
+                  r="36"
+                  fill="none"
+                  stroke="rgb(34,197,94)"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  className="reflection-circle-draw"
+                />
+                <path
+                  d="M30 47.5 L41 58.5 L62 36"
+                  fill="none"
+                  stroke="rgb(34,197,94)"
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="reflection-check-draw"
+                />
+              </svg>
+
+              <p className="mt-6 text-2xl font-bold text-white">
+                Week {isoRef.current.week} complete
+              </p>
+              <p className="mt-2 text-sm font-semibold text-amber-400">
+                {completeWeeklyXp != null
+                  ? `${completeWeeklyXp} XP earned this week`
+                  : 'XP updated'}
+              </p>
+            </div>
+
+            {weekStats ? (
+              <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs font-semibold text-zinc-400">
+                <span className="rounded-full border border-zinc-800/80 bg-zinc-900/40 px-3 py-1">
+                  {weekStats.completionRate}% missions
+                </span>
+                <span className="rounded-full border border-zinc-800/80 bg-zinc-900/40 px-3 py-1">
+                  {weekStats.habitsCompleted} habits
+                </span>
+                <span className="rounded-full border border-zinc-800/80 bg-zinc-900/40 px-3 py-1">
+                  {weekStats.streak} day streak
+                </span>
+              </div>
+            ) : null}
+
+            <div
+              className="mt-8 rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-4 pl-5"
+              style={{ borderLeftWidth: 4, borderLeftColor: REFLECTION_PURPLE }}
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+                Your coach says:
+              </p>
+              <p className="mt-2 text-sm font-semibold leading-relaxed text-zinc-200">
+                {completeInsight}
+              </p>
+            </div>
+
+            <div className="mt-10 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/today')}
+                className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity active:opacity-90"
+                style={{ backgroundColor: REFLECTION_PURPLE }}
+              >
+                Back to Today
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/progress')}
+                className="w-full rounded-xl border border-zinc-800/80 bg-app-surface py-3.5 text-sm font-bold text-zinc-200 transition-colors hover:bg-zinc-900/60"
+              >
+                View Progress
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

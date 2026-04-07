@@ -85,3 +85,38 @@
   /* ~300ms at 0.5 opacity, then fade out */
   animation: quest-completion-overlay 0.6s ease-out forwards;
 }
+
+@keyframes reflection-circle-draw {
+  from {
+    stroke-dashoffset: 226;
+    opacity: 0.9;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes reflection-check-draw {
+  from {
+    stroke-dashoffset: 52;
+    opacity: 0;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.reflection-circle-draw {
+  stroke-dasharray: 226;
+  stroke-dashoffset: 226;
+  animation: reflection-circle-draw 0.6s ease-out forwards;
+}
+
+.reflection-check-draw {
+  stroke-dasharray: 52;
+  stroke-dashoffset: 52;
+  animation: reflection-check-draw 0.35s ease-out forwards;
+  animation-delay: 0.25s;
+}

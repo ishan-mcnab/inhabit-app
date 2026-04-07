@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom'
 import {
   getLocalISOWeek,
   getLocalISOWeekYear,
+  localWeekMondaySundayYmd,
   previousIsoWeek,
 } from '../lib/isoWeek'
 import { GracePassModal } from '../components/GracePassModal'
@@ -31,6 +32,7 @@ import {
   checkAndResetWeeklyXp,
   getWeeklyRankBandProgress,
   localDayStartEndIso,
+  localWeekStartEndIso,
   MAX_LEVEL,
   nextRankNameFromWeeklyXp,
   rankColor,
@@ -595,6 +597,10 @@ export function Today() {
   const [reflectionNudge, setReflectionNudge] = useState<
     'none' | 'sunday' | 'missed'
   >('none')
+  const [reflectionBannerName, setReflectionBannerName] = useState('—')
+  const [reflectionWeekMissionRate, setReflectionWeekMissionRate] = useState<
+    number | null
+  >(null)
   const [habits, setHabits] = useState<TodayHabit[]>([])
   const [habitCompletingIds, setHabitCompletingIds] = useState<Set<string>>(
     () => new Set(),
@@ -730,6 +736,8 @@ export function Today() {
     setXpProfileLoading(true)
     setHabitsLoading(true)
     setReflectionNudge('none')
+    setReflectionBannerName('—')
+    setReflectionWeekMissionRate(null)
 
     const {
       data: { user },
@@ -789,7 +797,7 @@ export function Today() {
       supabase
         .from('users')
         .select(
-          'total_xp, level, weekly_xp, rank, current_streak, longest_streak, grace_passes_remaining',
+          'total_xp, level, weekly_xp, rank, current_streak, longest_streak, grace_passes_remaining, display_name',
         )
         .eq('id', user.id)
         .maybeSingle(),
@@ -829,6 +837,8 @@ export function Today() {
       setGracePassesRemaining(0)
     } else if (userXpRes.data) {
       const d = userXpRes.data as Record<string, unknown>
+      const dn = typeof d.display_name === 'string' ? d.display_name.trim() : ''
+      setReflectionBannerName(dn || '—')
       setXpProfile({
         total_xp:
           typeof d.total_xp === 'number' && !Number.isNaN(d.total_xp)
@@ -861,6 +871,7 @@ export function Today() {
       setStreakLongest(ls)
       setGracePassesRemaining(graceRem)
     } else {
+      setReflectionBannerName('—')
       setXpProfile({
         total_xp: 0,
         level: 1,
@@ -953,6 +964,8 @@ export function Today() {
     const cw = getLocalISOWeek(now)
     const cy = getLocalISOWeekYear(now)
     const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
+    const { mon, sun } = localWeekMondaySundayYmd(now)
+    const { startIso: wStartIso, endIso: wEndIso } = localWeekStartEndIso(now)
     const [curRes, prevRes] = await Promise.all([
       supabase
         .from('reflections')
@@ -969,6 +982,30 @@ export function Today() {
         .eq('week_number', pw)
         .maybeSingle(),
     ])
+
+    const [weekTotalRes, weekDoneRes] = await Promise.all([
+      supabase
+        .from('daily_missions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('due_date', mon)
+        .lte('due_date', sun)
+        .not('due_date', 'is', null),
+      supabase
+        .from('daily_missions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('completed', true)
+        .gte('completed_at', wStartIso)
+        .lte('completed_at', wEndIso)
+        .not('completed_at', 'is', null),
+    ])
+    if (!weekTotalRes.error && !weekDoneRes.error) {
+      const tot = weekTotalRes.count ?? 0
+      const done = weekDoneRes.count ?? 0
+      const rate = tot <= 0 ? 0 : Math.min(100, Math.round((done / tot) * 100))
+      setReflectionWeekMissionRate(rate)
+    }
     if (curRes.error || prevRes.error) {
       setReflectionNudge('none')
     } else if (now.getDay() === 0 && !curRes.data) {
@@ -1636,9 +1673,15 @@ export function Today() {
             className="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-3.5"
             style={{ backgroundColor: '#534AB7' }}
           >
-            <span className="text-sm font-bold text-white">
-              📝 Weekly reflection ready
-            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-white">
+                📝 Time to reflect, {reflectionBannerName}
+              </p>
+              <p className="mt-0.5 text-xs font-medium text-white/80">
+                You completed {reflectionWeekMissionRate ?? 0}% of your missions
+                this week
+              </p>
+            </div>
             <Link
               to="/reflection"
               className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-bold text-white ring-1 ring-white/25 transition-colors hover:bg-white/25"
@@ -1648,13 +1691,18 @@ export function Today() {
           </div>
         ) : null}
         {!loading && !loadError && reflectionNudge === 'missed' ? (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-zinc-900/50 px-4 py-3">
-            <span className="text-sm font-medium text-zinc-500">
-              You missed last week&apos;s reflection
-            </span>
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-zinc-900/50 px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-zinc-300">
+                You skipped last week&apos;s reflection
+              </p>
+              <p className="mt-0.5 text-xs font-medium text-zinc-500">
+                Late reflections still count
+              </p>
+            </div>
             <Link
               to="/reflection"
-              className="shrink-0 text-sm font-bold text-zinc-300 underline-offset-2 hover:text-white hover:underline"
+              className="shrink-0 text-sm font-bold text-amber-200 underline-offset-2 hover:text-amber-100 hover:underline"
             >
               Reflect now →
             </Link>

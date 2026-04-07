@@ -229,22 +229,97 @@ async function openRouterChat(
     .trim()
 }
 
-export async function weeklyReflectionCoachInsight(params: {
-  statsLine: string
-  winAnswer: string
-  missAnswer: string
-  improveAnswer: string
-}): Promise<string> {
+export async function weeklyReflectionCoachInsight(
+  stats: {
+    completedMissions: number
+    totalMissions: number
+    completionRate: number
+    streak: number
+    weeklyXp: number
+    habitsCompleted: number
+  },
+  answers: {
+    win: string
+    miss: string
+    improve: string
+  },
+  userContext?: {
+    goalCategories: string[]
+    goalContext: Record<string, any>
+    displayName: string
+  },
+): Promise<string> {
   const system =
     'You are a direct, no-BS discipline coach for young men. Give sharp, specific feedback based on their week. Never be generic. Never say "great job" or "keep it up". Reference their actual answers. Be direct and occasionally challenging. Maximum 2 sentences.'
 
+  const naturalJoin = (xs: string[]): string => {
+    const parts = xs.map((s) => s.trim()).filter(Boolean)
+    if (parts.length === 0) return ''
+    if (parts.length === 1) return parts[0]
+    if (parts.length === 2) return `${parts[0]} and ${parts[1]}`
+    return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
+  }
+
+  const name = userContext?.displayName?.trim() || 'him'
+  const cats = userContext?.goalCategories?.filter(Boolean) ?? []
+  const catLine = cats.length
+    ? `Coaching a young man named ${name} who is focused on: ${naturalJoin(cats)}.`
+    : `Coaching a young man named ${name}.`
+
+  const answersText = {
+    win: answers.win.trim(),
+    miss: answers.miss.trim(),
+    improve: answers.improve.trim(),
+  }
+
+  const wantContext =
+    userContext?.goalContext &&
+    typeof userContext.goalContext === 'object' &&
+    !Array.isArray(userContext.goalContext)
+
+  const lcAll = `${answersText.win}\n${answersText.miss}\n${answersText.improve}`.toLowerCase()
+  const ctxLines: string[] = []
+  if (wantContext) {
+    const ctx = userContext!.goalContext as Record<string, any>
+    for (const k of Object.keys(ctx)) {
+      const v = ctx[k]
+      if (v == null) continue
+      const keyWords = k
+        .toLowerCase()
+        .split(/[_\s]+/)
+        .filter((w) => w.length >= 4)
+      if (keyWords.length > 0 && !keyWords.some((w) => lcAll.includes(w))) {
+        continue
+      }
+      let snippet = ''
+      if (typeof v === 'string') snippet = v
+      else {
+        try {
+          snippet = JSON.stringify(v)
+        } catch {
+          snippet = ''
+        }
+      }
+      snippet = snippet.replace(/\s+/g, ' ').trim()
+      if (!snippet) continue
+      ctxLines.push(`${k}: ${snippet}`)
+      if (ctxLines.length >= 2) break
+    }
+  }
+
   const user =
-    `Weekly stats: ${params.statsLine}\n\n` +
+    `${catLine}\n\n` +
+    'Their week:\n' +
+    `- Completed ${stats.completedMissions} of ${stats.totalMissions} missions (${stats.completionRate}% rate)\n` +
+    `- ${stats.streak} day streak\n` +
+    `- ${stats.weeklyXp} XP earned\n` +
+    `- ${stats.habitsCompleted} habits completed\n\n` +
     'Their reflection:\n' +
-    `Biggest win: ${params.winAnswer}\n` +
-    `What they failed at: ${params.missAnswer}\n` +
-    `What they'll change: ${params.improveAnswer}\n\n` +
-    'Give them your honest 2-sentence coaching insight.'
+    `Win: ${answersText.win}\n` +
+    `Failed at / avoided: ${answersText.miss}\n` +
+    `Will change: ${answersText.improve}\n\n` +
+    (ctxLines.length ? `Context: ${ctxLines.join(' / ')}\n\n` : '') +
+    'Give a direct, specific, challenging 2-sentence insight. Reference their name once. Never be generic.'
 
   return openRouterChat([
     { role: 'system', content: system },

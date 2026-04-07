@@ -237,6 +237,7 @@ const XP_LOG_REASON_LABELS: Record<string, string> = {
   grace_pass_used: 'Grace pass used',
   streak_milestone: 'Streak milestone',
   weekly_reflection: 'Weekly reflection',
+  reflection_streak: 'Reflection streak',
 }
 
 export function formatXpLogReason(reason: string): string {

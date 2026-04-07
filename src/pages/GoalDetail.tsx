@@ -15,6 +15,7 @@ import {
   explainWeeklyQuestWhy,
   generateOneWeeklyQuestTitle,
 } from '../lib/openRouterSingle'
+import { formatIsoWeekRangeLabel, getLocalISOWeekYear } from '../lib/isoWeek'
 import { awardXP, localWeekStartEndIso } from '../lib/xp'
 import {
   formatUnlocksLabel,
@@ -83,6 +84,14 @@ type GoalRow = {
 type WeeklyQuestRow = PickableQuest & {
   goal_id: string
   completed_at: string | null
+}
+
+type ReflectionLite = {
+  id: string
+  week_number: number
+  iso_week_year: number | null
+  ai_insight: string | null
+  created_at: string
 }
 
 function formatDueDate(isoDate: string | null): string {
@@ -245,6 +254,9 @@ export function GoalDetail() {
   const [celebrateMessage, setCelebrateMessage] = useState<string | null>(null)
   const [celebrateMessageFadeOut, setCelebrateMessageFadeOut] = useState(false)
   const celebrateTimersRef = useRef<ReturnType<typeof window.setTimeout>[]>([])
+  const [recentReflections, setRecentReflections] = useState<ReflectionLite[]>(
+    [],
+  )
 
   const batchGenInFlight = useRef(false)
 
@@ -274,7 +286,7 @@ export function GoalDetail() {
 
     setUserId(user.id)
 
-    const [goalRes, questsRes, userPrefsRes] = await Promise.all([
+    const [goalRes, questsRes, userPrefsRes, reflectionsRes] = await Promise.all([
       supabase
         .from('goals')
         .select(
@@ -294,6 +306,12 @@ export function GoalDetail() {
         .select('quest_progression')
         .eq('id', user.id)
         .maybeSingle(),
+      supabase
+        .from('reflections')
+        .select('id,week_number,iso_week_year,ai_insight,created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(2),
     ])
 
     setLoading(false)
@@ -326,6 +344,12 @@ export function GoalDetail() {
       setQuests([])
       setError(questsRes.error.message)
       return
+    }
+
+    if (!reflectionsRes.error) {
+      setRecentReflections((reflectionsRes.data ?? []) as ReflectionLite[])
+    } else {
+      setRecentReflections([])
     }
 
     const rawQuests = (questsRes.data ?? []) as Record<string, unknown>[]
@@ -2055,6 +2079,43 @@ export function GoalDetail() {
               <p className="mt-2 text-sm text-zinc-500">No quests listed.</p>
             ) : null}
           </section>
+
+          {recentReflections.some(
+            (r) => (r.ai_insight ?? '').trim().length > 0,
+          ) ? (
+            <section className="mt-12">
+              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
+                Recent Coaching
+              </h2>
+              <div className="mt-3 space-y-3">
+                {recentReflections
+                  .filter((r) => (r.ai_insight ?? '').trim().length > 0)
+                  .map((r) => {
+                    const y =
+                      r.iso_week_year ??
+                      getLocalISOWeekYear(new Date(r.created_at))
+                    const range = formatIsoWeekRangeLabel(y, r.week_number)
+                    return (
+                      <div
+                        key={r.id}
+                        className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-4 pl-5"
+                        style={{
+                          borderLeftWidth: 4,
+                          borderLeftColor: QUEST_PURPLE,
+                        }}
+                      >
+                        <p className="text-xs font-semibold text-zinc-500">
+                          Week of {range}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold leading-relaxed text-white">
+                          {r.ai_insight}
+                        </p>
+                      </div>
+                    )
+                  })}
+              </div>
+            </section>
+          ) : null}
         </div>
       ) : null}
     </div>
