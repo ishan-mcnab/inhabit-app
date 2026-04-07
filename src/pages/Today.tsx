@@ -30,6 +30,7 @@ import {
   awardXP,
   calculateRank,
   checkAndResetWeeklyXp,
+  getMostRecentMondayYmd,
   getWeeklyRankBandProgress,
   localDayStartEndIso,
   localWeekStartEndIso,
@@ -42,6 +43,7 @@ import {
   xpSpanInCurrentLevel,
   type AwardXpResult,
 } from '../lib/xp'
+import { checkAndRegenerateWeeklyMissions } from '../lib/weeklyMissionReset'
 import { supabase } from '../supabase'
 
 function sleep(ms: number): Promise<void> {
@@ -581,6 +583,7 @@ export function Today() {
 
   const deferBannerForConfettiRef = useRef(false)
   const confettiCancelRef = useRef<(() => void) | null>(null)
+  const newWeekBannerTimersRef = useRef<number[]>([])
   const awardQueueRef = useRef<AwardXpResult[]>([])
   const pumpBusyRef = useRef(false)
 
@@ -710,6 +713,13 @@ export function Today() {
   const [streakMilestoneOpen, setStreakMilestoneOpen] = useState(false)
   const [streakMilestoneCount, setStreakMilestoneCount] = useState(0)
 
+  const [missionRegenerating, setMissionRegenerating] = useState(false)
+  const [weeklyNewMissionsBannerPhase, setWeeklyNewMissionsBannerPhase] =
+    useState<'off' | 'visible' | 'fading'>('off')
+  const [newWeekMotivationPhase, setNewWeekMotivationPhase] = useState<
+    'off' | 'visible' | 'fading'
+  >('off')
+
   const handleStreakMilestoneClose = useCallback(() => {
     setStreakMilestoneOpen(false)
   }, [])
@@ -800,6 +810,33 @@ export function Today() {
       void pumpAwardQueue()
     },
     [pumpAwardQueue],
+  )
+
+  const reloadTodayMissions = useCallback(
+    async (uid: string) => {
+      const { data, error } = await supabase
+        .from('daily_missions')
+        .select(
+          `
+          id,
+          title,
+          completed,
+          completed_at,
+          goal_id,
+          goals ( title, category )
+        `,
+        )
+        .eq('user_id', uid)
+        .eq('due_date', todayStr)
+        .order('created_at', { ascending: true })
+      if (error) {
+        console.error('reloadTodayMissions failed:', error)
+        return
+      }
+      const rows = (data ?? []) as unknown as MissionRow[]
+      setMissions(rows.map(mapRowToMission))
+    },
+    [todayStr],
   )
 
   const load = useCallback(async () => {
@@ -1016,6 +1053,25 @@ export function Today() {
     const list = rows.map(mapRowToMission)
     setMissions(list)
 
+    void (async () => {
+      setMissionRegenerating(true)
+      try {
+        const result = await checkAndRegenerateWeeklyMissions(user.id)
+        if (result.regenerated && result.goalsUpdated > 0) {
+          setWeeklyNewMissionsBannerPhase('visible')
+          window.setTimeout(() => setWeeklyNewMissionsBannerPhase('fading'), 3000)
+          window.setTimeout(() => {
+            setWeeklyNewMissionsBannerPhase('off')
+            void reloadTodayMissions(user.id)
+          }, 3300)
+        }
+      } catch (e) {
+        console.error('checkAndRegenerateWeeklyMissions failed:', e)
+      } finally {
+        setMissionRegenerating(false)
+      }
+    })()
+
     if (habitsRes.error) {
       console.error('Failed to load habits:', habitsRes.error)
       setHabits([])
@@ -1086,11 +1142,57 @@ export function Today() {
     } else {
       setReflectionNudge('missed')
     }
-  }, [todayStr])
+  }, [todayStr, reloadTodayMissions])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  const dismissNewWeekMotivation = useCallback(() => {
+    for (const id of newWeekBannerTimersRef.current) {
+      window.clearTimeout(id)
+    }
+    newWeekBannerTimersRef.current = []
+    try {
+      localStorage.setItem(
+        `inhabit_new_week_banner_${getMostRecentMondayYmd()}`,
+        '1',
+      )
+    } catch {
+      /* ignore */
+    }
+    setNewWeekMotivationPhase('off')
+  }, [])
+
+  useEffect(() => {
+    if (loading || loadError || !userId) return
+    if (new Date().getDay() !== 1) return
+    const mon = getMostRecentMondayYmd()
+    const key = `inhabit_new_week_banner_${mon}`
+    try {
+      if (localStorage.getItem(key)) return
+    } catch {
+      return
+    }
+    setNewWeekMotivationPhase('visible')
+    newWeekBannerTimersRef.current = [
+      window.setTimeout(() => setNewWeekMotivationPhase('fading'), 4000),
+      window.setTimeout(() => {
+        try {
+          localStorage.setItem(key, '1')
+        } catch {
+          /* ignore */
+        }
+        setNewWeekMotivationPhase('off')
+      }, 4300),
+    ]
+    return () => {
+      for (const id of newWeekBannerTimersRef.current) {
+        window.clearTimeout(id)
+      }
+      newWeekBannerTimersRef.current = []
+    }
+  }, [loading, loadError, userId])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -1719,6 +1821,33 @@ export function Today() {
         </div>
       </div>
 
+      {newWeekMotivationPhase !== 'off' ? (
+        <div
+          className={[
+            'relative mx-4 mb-2 flex w-auto items-start gap-3 rounded-r-xl border border-zinc-800/60 py-3.5 pl-3.5 pr-10 transition-opacity duration-300',
+            newWeekMotivationPhase === 'fading' ? 'opacity-0' : 'opacity-100',
+          ].join(' ')}
+          style={{
+            backgroundColor: '#141418',
+            borderLeftWidth: 4,
+            borderLeftColor: '#534AB7',
+          }}
+          role="status"
+        >
+          <p className="min-w-0 flex-1 pl-0.5 text-sm font-semibold leading-snug text-white">
+            🗓️ New week. Fresh start. Let&apos;s go.
+          </p>
+          <button
+            type="button"
+            aria-label="Dismiss new week message"
+            onClick={dismissNewWeekMotivation}
+            className="absolute right-2 top-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+
       <header className="shrink-0 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] transition-opacity duration-300">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -1751,6 +1880,18 @@ export function Today() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
+        {weeklyNewMissionsBannerPhase !== 'off' ? (
+          <div
+            className={[
+              '-mx-4 mb-3 w-[calc(100%+2rem)] px-4 py-3 text-center text-sm font-bold text-white transition-opacity duration-300',
+              weeklyNewMissionsBannerPhase === 'fading' ? 'opacity-0' : 'opacity-100',
+            ].join(' ')}
+            style={{ backgroundColor: '#16a34a' }}
+            role="status"
+          >
+            🔄 New missions for this week are ready!
+          </div>
+        ) : null}
         {!loading && !loadError && reflectionNudge === 'sunday' ? (
           <div
             className="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-3.5"
@@ -1838,6 +1979,20 @@ export function Today() {
                 Create a Goal
               </Link>
             </StateCard>
+          </div>
+        ) : missionRegenerating ? (
+          <div className="mx-auto flex max-w-lg flex-col gap-0">
+            <MissionSkeleton />
+            <div
+              className="my-3 h-px shrink-0 bg-zinc-800/60"
+              aria-hidden
+            />
+            <MissionSkeleton />
+            <div
+              className="my-3 h-px shrink-0 bg-zinc-800/60"
+              aria-hidden
+            />
+            <MissionSkeleton />
           </div>
         ) : missions.length === 0 ? (
           <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
