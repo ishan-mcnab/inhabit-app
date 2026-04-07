@@ -7,6 +7,7 @@ import {
   getLocalISOWeek,
   getLocalISOWeekYear,
   localWeekMondaySundayYmd,
+  mondayOfIsoWeek,
   previousIsoWeek,
 } from '../lib/isoWeek'
 import { weeklyReflectionCoachInsight } from '../lib/openRouterSingle'
@@ -204,10 +205,10 @@ export function WeeklyReflection() {
     setLoadError(null)
 
     const now = new Date()
-    const isoWeek = getLocalISOWeek(now)
-    const isoYear = getLocalISOWeekYear(now)
-    isoRef.current = { week: isoWeek, year: isoYear }
-    setWeekLabel(formatWeekOfRangeLabel(now))
+    const dow = now.getDay()
+    const cw = getLocalISOWeek(now)
+    const cy = getLocalISOWeekYear(now)
+    const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
 
     const {
       data: { user },
@@ -219,31 +220,62 @@ export function WeeklyReflection() {
       return
     }
 
-    const { data: existing, error: exErr } = await supabase
-      .from('reflections')
-      .select(
-        'id,week_number,iso_week_year,win_answer,miss_answer,improve_answer,ai_insight,xp_earned,mission_completion_rate',
-      )
-      .eq('user_id', user.id)
-      .eq('iso_week_year', isoYear)
-      .eq('week_number', isoWeek)
-      .maybeSingle()
+    const [curRes, prevRes] = await Promise.all([
+      supabase
+        .from('reflections')
+        .select(
+          'id,week_number,iso_week_year,win_answer,miss_answer,improve_answer,ai_insight,xp_earned,mission_completion_rate',
+        )
+        .eq('user_id', user.id)
+        .eq('iso_week_year', cy)
+        .eq('week_number', cw)
+        .maybeSingle(),
+      supabase
+        .from('reflections')
+        .select(
+          'id,week_number,iso_week_year,win_answer,miss_answer,improve_answer,ai_insight,xp_earned,mission_completion_rate',
+        )
+        .eq('user_id', user.id)
+        .eq('iso_week_year', py)
+        .eq('week_number', pw)
+        .maybeSingle(),
+    ])
 
-    if (exErr) {
-      setLoadError(exErr.message)
+    if (curRes.error || prevRes.error) {
+      setLoadError(curRes.error?.message ?? prevRes.error?.message ?? 'Error')
       setPhase('error')
       return
     }
 
-    if (existing) {
-      const row = existing as ReflectionRow
-      setExistingReflection(row)
-      setPhase('already')
-      return
+    const existingCur = curRes.data as ReflectionRow | null
+    const existingPrev = prevRes.data as ReflectionRow | null
+
+    if (dow === 0) {
+      if (existingCur) {
+        setExistingReflection(existingCur)
+        setPhase('already')
+        setWeekLabel(formatWeekOfRangeLabel(now))
+        return
+      }
+      isoRef.current = { week: cw, year: cy }
+    } else {
+      if (existingCur) {
+        setExistingReflection(existingCur)
+        setPhase('already')
+        setWeekLabel(formatWeekOfRangeLabel(now))
+        return
+      }
+      if (!existingPrev) {
+        isoRef.current = { week: pw, year: py }
+      } else {
+        isoRef.current = { week: cw, year: cy }
+      }
     }
 
-    const { mon, sun } = localWeekMondaySundayYmd(now)
-    const { startIso, endIso } = localWeekStartEndIso(now)
+    const anchor = mondayOfIsoWeek(isoRef.current.year, isoRef.current.week)
+    setWeekLabel(formatWeekOfRangeLabel(anchor))
+    const { mon, sun } = localWeekMondaySundayYmd(anchor)
+    const { startIso, endIso } = localWeekStartEndIso(anchor)
 
     const [
       totalMRes,

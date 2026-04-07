@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import {
   getLocalISOWeek,
   getLocalISOWeekYear,
@@ -527,6 +527,7 @@ function revealBanner(
 }
 
 export function Today() {
+  const location = useLocation()
   const todayStr = useMemo(() => formatLocalDate(new Date()), [])
   const headingDate = useMemo(() => formatTodayHeading(new Date()), [])
 
@@ -601,6 +602,77 @@ export function Today() {
   const [reflectionWeekMissionRate, setReflectionWeekMissionRate] = useState<
     number | null
   >(null)
+
+  const refreshReflectionStatus = useCallback(async () => {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+    if (userError || !user) return
+
+    const now = new Date()
+    const cw = getLocalISOWeek(now)
+    const cy = getLocalISOWeekYear(now)
+    const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
+    const { mon, sun } = localWeekMondaySundayYmd(now)
+    const { startIso: wStartIso, endIso: wEndIso } = localWeekStartEndIso(now)
+
+    const [curRes, prevRes, weekTotalRes, weekDoneRes] = await Promise.all([
+      supabase
+        .from('reflections')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('iso_week_year', cy)
+        .eq('week_number', cw)
+        .maybeSingle(),
+      supabase
+        .from('reflections')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('iso_week_year', py)
+        .eq('week_number', pw)
+        .maybeSingle(),
+      supabase
+        .from('daily_missions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('due_date', mon)
+        .lte('due_date', sun)
+        .not('due_date', 'is', null),
+      supabase
+        .from('daily_missions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('completed', true)
+        .gte('completed_at', wStartIso)
+        .lte('completed_at', wEndIso)
+        .not('completed_at', 'is', null),
+    ])
+
+    if (!weekTotalRes.error && !weekDoneRes.error) {
+      const tot = weekTotalRes.count ?? 0
+      const done = weekDoneRes.count ?? 0
+      const rate = tot <= 0 ? 0 : Math.min(100, Math.round((done / tot) * 100))
+      setReflectionWeekMissionRate(rate)
+    }
+
+    if (curRes.error || prevRes.error) {
+      setReflectionNudge('none')
+      return
+    }
+
+    if (now.getDay() === 0) {
+      setReflectionNudge(!curRes.data ? 'sunday' : 'none')
+      return
+    }
+
+    if (prevRes.data || curRes.data) {
+      setReflectionNudge('none')
+      return
+    }
+
+    setReflectionNudge('missed')
+  }, [])
   const [habits, setHabits] = useState<TodayHabit[]>([])
   const [habitCompletingIds, setHabitCompletingIds] = useState<Set<string>>(
     () => new Set(),
@@ -966,7 +1038,7 @@ export function Today() {
     const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
     const { mon, sun } = localWeekMondaySundayYmd(now)
     const { startIso: wStartIso, endIso: wEndIso } = localWeekStartEndIso(now)
-    const [curRes, prevRes] = await Promise.all([
+    const [curRes, prevRes, weekTotalRes, weekDoneRes] = await Promise.all([
       supabase
         .from('reflections')
         .select('id')
@@ -981,9 +1053,6 @@ export function Today() {
         .eq('iso_week_year', py)
         .eq('week_number', pw)
         .maybeSingle(),
-    ])
-
-    const [weekTotalRes, weekDoneRes] = await Promise.all([
       supabase
         .from('daily_missions')
         .select('id', { count: 'exact', head: true })
@@ -1000,26 +1069,50 @@ export function Today() {
         .lte('completed_at', wEndIso)
         .not('completed_at', 'is', null),
     ])
+
     if (!weekTotalRes.error && !weekDoneRes.error) {
       const tot = weekTotalRes.count ?? 0
       const done = weekDoneRes.count ?? 0
       const rate = tot <= 0 ? 0 : Math.min(100, Math.round((done / tot) * 100))
       setReflectionWeekMissionRate(rate)
     }
+
     if (curRes.error || prevRes.error) {
       setReflectionNudge('none')
-    } else if (now.getDay() === 0 && !curRes.data) {
-      setReflectionNudge('sunday')
-    } else if (now.getDay() !== 0 && !prevRes.data) {
-      setReflectionNudge('missed')
-    } else {
+    } else if (now.getDay() === 0) {
+      setReflectionNudge(!curRes.data ? 'sunday' : 'none')
+    } else if (prevRes.data || curRes.data) {
       setReflectionNudge('none')
+    } else {
+      setReflectionNudge('missed')
     }
   }, [todayStr])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      void refreshReflectionStatus()
+    }
+    const onWindowFocus = () => {
+      void refreshReflectionStatus()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onWindowFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onWindowFocus)
+    }
+  }, [refreshReflectionStatus])
+
+  // In-app navigation back from /reflection does not always fire focus/visibility.
+  useEffect(() => {
+    if (location.pathname !== '/today') return
+    void refreshReflectionStatus()
+  }, [location.pathname, refreshReflectionStatus])
 
   useEffect(() => {
     if (loading || loadError) return
@@ -1443,12 +1536,6 @@ export function Today() {
   }
 
   async function regenerateMission(m: TodayMission) {
-    console.log(
-      'Regenerating mission:',
-      m.title,
-      'for goal:',
-      m.goalTitle,
-    )
     if (!userId) {
       console.error('Regenerating mission failed: missing userId')
       return
@@ -1489,7 +1576,6 @@ export function Today() {
         userContextText,
         avoidTitles,
       })
-      console.log('Generated new mission:', nextTitle)
 
       const { error: uErr } = await supabase
         .from('daily_missions')
@@ -1497,7 +1583,6 @@ export function Today() {
         .eq('id', m.id)
         .eq('user_id', userId)
       if (uErr) throw new Error(uErr.message)
-      console.log('Saved to Supabase')
 
       setMissions((prev) =>
         prev.map((x) => (x.id === m.id ? { ...x, title: nextTitle } : x)),
@@ -1513,7 +1598,6 @@ export function Today() {
   }
 
   async function removeMissionConfirmed(m: TodayMission) {
-    console.log('Deleting mission:', m.id)
     if (!userId) {
       console.error('Delete mission failed: missing userId')
       return
@@ -1530,7 +1614,6 @@ export function Today() {
       setMissionActionError(error.message)
       return
     }
-    console.log('Delete successful')
     setRemovingMissionIds((prev) => {
       const next = new Set(prev)
       next.add(m.id)
