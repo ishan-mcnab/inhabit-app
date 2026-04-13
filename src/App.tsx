@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { NotificationProvider } from './context/NotificationContext'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireGuest } from './components/RequireGuest'
 import { RequireOnboarded } from './components/RequireOnboarded'
@@ -49,7 +50,13 @@ function App() {
       <Route element={<RequireAuth />}>
         <Route path="onboarding" element={<Onboarding />} />
         <Route element={<RequireOnboarded />}>
-          <Route element={<Layout />}>
+          <Route
+            element={
+              <NotificationProvider>
+                <Layout />
+              </NotificationProvider>
+            }
+          >
             <Route index element={<Navigate to="/today" replace />} />
             <Route path="today" element={<Today />} />
             <Route path="goals" element={<Goals />} />

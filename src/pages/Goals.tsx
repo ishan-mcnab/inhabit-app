@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useNotifications } from '../context/NotificationContext'
 import {
   GOAL_PURPLE,
   getCategoryBorderColor,
@@ -9,6 +10,7 @@ import {
   calculateCurrentWeekFromGoalStart,
   calculateTotalWeeks,
 } from '../lib/goalProgress'
+import { localWeekMondaySundayYmd } from '../lib/isoWeek'
 import { suggestGoals, type SuggestedGoal } from '../lib/suggestGoals'
 import {
   pickActiveQuest,
@@ -83,6 +85,7 @@ function formatCompletedAt(iso: string | null): string {
 }
 
 export function Goals() {
+  const { setGoalsNeedingAttention } = useNotifications()
   const navigate = useNavigate()
   const location = useLocation()
   const [goals, setGoals] = useState<GoalRow[]>([])
@@ -117,6 +120,7 @@ export function Goals() {
 
     if (userError || !user) {
       setLoading(false)
+      setGoalsNeedingAttention(0)
       setError(userError?.message ?? 'Not signed in')
       return
     }
@@ -155,18 +159,44 @@ export function Goals() {
       setGoals([])
       setCompletedGoals([])
       setQuestPreviewByGoalId({})
+      setGoalsNeedingAttention(0)
       return
     }
 
     const goalsList = (activeRes.data ?? []) as GoalRow[]
     setGoals(goalsList)
 
+    const goalIds = goalsList.map((g) => g.id)
+    if (goalIds.length === 0) {
+      setGoalsNeedingAttention(0)
+    } else {
+      const { mon, sun } = localWeekMondaySundayYmd(new Date())
+      const dmRes = await supabase
+        .from('daily_missions')
+        .select('goal_id')
+        .eq('user_id', user.id)
+        .in('goal_id', goalIds)
+        .gte('due_date', mon)
+        .lte('due_date', sun)
+      if (dmRes.error) {
+        console.error('Goals: weekly missions check failed:', dmRes.error)
+        setGoalsNeedingAttention(0)
+      } else {
+        const withMissions = new Set(
+          (dmRes.data ?? [])
+            .map((r) => (typeof r.goal_id === 'string' ? r.goal_id : ''))
+            .filter(Boolean),
+        )
+        const need = goalsList.filter((g) => !withMissions.has(g.id)).length
+        setGoalsNeedingAttention(need)
+      }
+    }
+
     const questMode: QuestProgressionMode =
       prefsRes.data?.quest_progression === 'completion'
         ? 'completion'
         : 'weekly'
 
-    const goalIds = goalsList.map((g) => g.id)
     const nextPreviews: Record<string, string> = {}
     if (goalIds.length > 0) {
       const wqRes = await supabase
@@ -216,7 +246,7 @@ export function Goals() {
       if (row.title) titles.add(row.title)
     }
     setFitnessHabitTitles(titles)
-  }, [])
+  }, [setGoalsNeedingAttention])
 
   useEffect(() => {
     if (location.pathname !== '/goals') return

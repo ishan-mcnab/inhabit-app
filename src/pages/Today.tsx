@@ -15,6 +15,7 @@ import {
 import { GracePassModal } from '../components/GracePassModal'
 import { StreakMilestoneModal } from '../components/StreakMilestoneModal'
 import { XPToast } from '../components/XPToast'
+import { useNotifications } from '../context/NotificationContext'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import { runFullClearConfetti } from '../lib/fullClearConfetti'
@@ -44,10 +45,24 @@ import {
   type AwardXpResult,
 } from '../lib/xp'
 import { checkAndRegenerateWeeklyMissions } from '../lib/weeklyMissionReset'
+import { useNotificationPrefs } from '../hooks/useNotificationPrefs'
 import { supabase } from '../supabase'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+/** Calendar days since the start of the most recent local Sunday (used for missed-reflection copy). */
+function daysSinceLastLocalSundayStart(): number {
+  const x = new Date()
+  x.setHours(0, 0, 0, 0)
+  const dow = x.getDay()
+  const lastSun = new Date(x)
+  lastSun.setDate(x.getDate() - (dow === 0 ? 0 : dow))
+  return Math.max(
+    1,
+    Math.round((x.getTime() - lastSun.getTime()) / 86_400_000),
+  )
 }
 
 /** True if `full_clear_bonus` was already logged for this user on the *local* calendar day. */
@@ -530,8 +545,11 @@ function revealBanner(
 
 export function Today() {
   const location = useLocation()
+  const { setFromToday } = useNotifications()
+  const [notificationPrefs] = useNotificationPrefs()
   const todayStr = useMemo(() => formatLocalDate(new Date()), [])
   const headingDate = useMemo(() => formatTodayHeading(new Date()), [])
+  const [clockHour, setClockHour] = useState(() => new Date().getHours())
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -601,6 +619,7 @@ export function Today() {
   const [reflectionNudge, setReflectionNudge] = useState<
     'none' | 'sunday' | 'missed'
   >('none')
+  const [reflectionMissedDaysAgo, setReflectionMissedDaysAgo] = useState(1)
   const [reflectionBannerName, setReflectionBannerName] = useState('—')
   const [reflectionWeekMissionRate, setReflectionWeekMissionRate] = useState<
     number | null
@@ -675,6 +694,7 @@ export function Today() {
     }
 
     setReflectionNudge('missed')
+    setReflectionMissedDaysAgo(daysSinceLastLocalSundayStart())
   }, [])
   const [habits, setHabits] = useState<TodayHabit[]>([])
   const [habitCompletingIds, setHabitCompletingIds] = useState<Set<string>>(
@@ -1141,6 +1161,7 @@ export function Today() {
       setReflectionNudge('none')
     } else {
       setReflectionNudge('missed')
+      setReflectionMissedDaysAgo(daysSinceLastLocalSundayStart())
     }
   }, [todayStr, reloadTodayMissions])
 
@@ -1166,6 +1187,7 @@ export function Today() {
 
   useEffect(() => {
     if (loading || loadError || !userId) return
+    if (!notificationPrefs.newWeekBanner) return
     if (new Date().getDay() !== 1) return
     const mon = getMostRecentMondayYmd()
     const key = `inhabit_new_week_banner_${mon}`
@@ -1192,7 +1214,22 @@ export function Today() {
       }
       newWeekBannerTimersRef.current = []
     }
-  }, [loading, loadError, userId])
+  }, [loading, loadError, userId, notificationPrefs.newWeekBanner])
+
+  useEffect(() => {
+    const tick = () => setClockHour(new Date().getHours())
+    const id = window.setInterval(tick, 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    if (!userId || loading) return
+    const incomplete = missions.filter((m) => !m.completed).length
+    setFromToday({
+      incompleteMissionsCount: incomplete,
+      reflectionDue: reflectionNudge === 'sunday',
+    })
+  }, [userId, loading, missions, reflectionNudge, setFromToday])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -1753,6 +1790,173 @@ export function Today() {
     enqueueStreakToast('Streak reset. Start fresh today.', '#888780')
   }, [enqueueStreakToast])
 
+  const todayPriorityBanner = (() => {
+    if (loading || loadError) return null
+
+    const incompleteCount = missions.filter((m) => !m.completed).length
+    const completedTodayCount = missions.filter((m) => m.completed).length
+
+    const showStreak =
+      notificationPrefs.streakWarnings &&
+      streakCurrent > 3 &&
+      clockHour >= 20 &&
+      incompleteCount > 0 &&
+      completedTodayCount === 0 &&
+      hasGoals
+
+    if (showStreak) {
+      return (
+        <div
+          className="inhabit-banner-fade-in mb-3 flex items-center gap-3 rounded-xl border border-[#EF9F27]/35 px-4 py-3"
+          style={{
+            backgroundColor: 'rgba(239, 159, 39, 0.1)',
+            borderLeftWidth: 4,
+            borderLeftColor: '#EF9F27',
+          }}
+          role="status"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-white">
+              🔥 {streakCurrent} day streak at risk
+            </p>
+            <p className="mt-0.5 text-xs font-medium text-zinc-300">
+              Complete at least one mission to keep it alive
+            </p>
+          </div>
+          <p
+            className="shrink-0 text-3xl font-black tabular-nums leading-none text-[#EF9F27]"
+            aria-hidden
+          >
+            {streakCurrent}
+          </p>
+        </div>
+      )
+    }
+
+    const showUrgency =
+      notificationPrefs.urgencyBanners &&
+      hasGoals &&
+      incompleteCount > 0 &&
+      clockHour >= 18
+
+    if (showUrgency) {
+      const severe = clockHour >= 21
+      return (
+        <div
+          className="inhabit-banner-fade-in mb-3 w-full rounded-r-xl border border-zinc-800/60 px-3 py-2.5"
+          style={{
+            backgroundColor: '#141418',
+            borderLeftWidth: 4,
+            borderLeftColor: severe ? '#E24B4A' : '#FF6B35',
+          }}
+          role="status"
+        >
+          <p className="text-sm font-semibold leading-snug text-white">
+            {severe
+              ? `🚨 ${incompleteCount} mission${incompleteCount === 1 ? '' : 's'} left — midnight deadline approaching`
+              : `⚡ ${incompleteCount} mission${incompleteCount === 1 ? '' : 's'} left today — don't break the streak`}
+          </p>
+        </div>
+      )
+    }
+
+    if (reflectionNudge === 'sunday') {
+      const h = clockHour
+      const urgentEvening = h >= 15 && h < 21
+      const lastChance = h >= 21
+      const hoursLeft = Math.max(1, 24 - h)
+      let title: string
+      if (lastChance) {
+        title = `⏰ Last chance — reflection closes in ${hoursLeft} hour${hoursLeft === 1 ? '' : 's'}`
+      } else if (urgentEvening) {
+        title = '📝 Reflection closes at midnight — start now'
+      } else {
+        title = `📝 Time to reflect, ${reflectionBannerName} — anytime today works`
+      }
+      return (
+        <div
+          className={[
+            'inhabit-banner-fade-in mb-3 flex items-center justify-between gap-3 rounded-xl px-4 py-3.5',
+            lastChance ? 'border-l-4 border-[#E24B4A]' : '',
+          ].join(' ')}
+          style={{ backgroundColor: '#534AB7' }}
+          role="status"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-white">{title}</p>
+            <p className="mt-0.5 text-xs font-medium text-white/80">
+              You completed {reflectionWeekMissionRate ?? 0}% of your missions
+              this week
+            </p>
+          </div>
+          <Link
+            to="/reflection"
+            className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-bold text-white ring-1 ring-white/25 transition-colors hover:bg-white/25"
+          >
+            Start →
+          </Link>
+        </div>
+      )
+    }
+
+    if (reflectionNudge === 'missed') {
+      const d = reflectionMissedDaysAgo
+      const dayWord = d === 1 ? 'day' : 'days'
+      return (
+        <div
+          className="inhabit-banner-fade-in mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 border-l-4 border-l-amber-500 bg-zinc-900/50 px-4 py-3"
+          role="status"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-zinc-300">
+              You skipped last week&apos;s reflection
+            </p>
+            <p className="mt-0.5 text-xs font-medium text-zinc-500">
+              Reflection was due {d} {dayWord} ago — still counts
+            </p>
+          </div>
+          <Link
+            to="/reflection"
+            className="shrink-0 text-sm font-bold text-amber-200 underline-offset-2 hover:text-amber-100 hover:underline"
+          >
+            Reflect now →
+          </Link>
+        </div>
+      )
+    }
+
+    if (newWeekMotivationPhase !== 'off' && notificationPrefs.newWeekBanner) {
+      return (
+        <div
+          className={[
+            'inhabit-banner-fade-in relative mb-3 flex w-full items-start gap-3 rounded-r-xl border border-zinc-800/60 py-3.5 pl-3.5 pr-10 transition-opacity duration-300',
+            newWeekMotivationPhase === 'fading' ? 'opacity-0' : 'opacity-100',
+          ].join(' ')}
+          style={{
+            backgroundColor: '#141418',
+            borderLeftWidth: 4,
+            borderLeftColor: '#534AB7',
+          }}
+          role="status"
+        >
+          <p className="min-w-0 flex-1 pl-0.5 text-sm font-semibold leading-snug text-white">
+            🗓️ New week. Fresh start. Let&apos;s go.
+          </p>
+          <button
+            type="button"
+            aria-label="Dismiss new week message"
+            onClick={dismissNewWeekMotivation}
+            className="absolute right-2 top-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            ×
+          </button>
+        </div>
+      )
+    }
+
+    return null
+  })()
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       {userId && xpProfileLoading ? <LevelProgressSkeleton /> : null}
@@ -1821,33 +2025,6 @@ export function Today() {
         </div>
       </div>
 
-      {newWeekMotivationPhase !== 'off' ? (
-        <div
-          className={[
-            'relative mx-4 mb-2 flex w-auto items-start gap-3 rounded-r-xl border border-zinc-800/60 py-3.5 pl-3.5 pr-10 transition-opacity duration-300',
-            newWeekMotivationPhase === 'fading' ? 'opacity-0' : 'opacity-100',
-          ].join(' ')}
-          style={{
-            backgroundColor: '#141418',
-            borderLeftWidth: 4,
-            borderLeftColor: '#534AB7',
-          }}
-          role="status"
-        >
-          <p className="min-w-0 flex-1 pl-0.5 text-sm font-semibold leading-snug text-white">
-            🗓️ New week. Fresh start. Let&apos;s go.
-          </p>
-          <button
-            type="button"
-            aria-label="Dismiss new week message"
-            onClick={dismissNewWeekMotivation}
-            className="absolute right-2 top-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
-
       <header className="shrink-0 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] transition-opacity duration-300">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -1880,56 +2057,20 @@ export function Today() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
-        {weeklyNewMissionsBannerPhase !== 'off' ? (
+        {!loading && !loadError ? todayPriorityBanner : null}
+        {!loading &&
+        !loadError &&
+        weeklyNewMissionsBannerPhase !== 'off' &&
+        !todayPriorityBanner ? (
           <div
             className={[
-              '-mx-4 mb-3 w-[calc(100%+2rem)] px-4 py-3 text-center text-sm font-bold text-white transition-opacity duration-300',
+              'inhabit-banner-fade-in -mx-4 mb-3 w-[calc(100%+2rem)] px-4 py-3 text-center text-sm font-bold text-white transition-opacity duration-300',
               weeklyNewMissionsBannerPhase === 'fading' ? 'opacity-0' : 'opacity-100',
             ].join(' ')}
             style={{ backgroundColor: '#16a34a' }}
             role="status"
           >
             🔄 New missions for this week are ready!
-          </div>
-        ) : null}
-        {!loading && !loadError && reflectionNudge === 'sunday' ? (
-          <div
-            className="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-3.5"
-            style={{ backgroundColor: '#534AB7' }}
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-white">
-                📝 Time to reflect, {reflectionBannerName}
-              </p>
-              <p className="mt-0.5 text-xs font-medium text-white/80">
-                You completed {reflectionWeekMissionRate ?? 0}% of your missions
-                this week
-              </p>
-            </div>
-            <Link
-              to="/reflection"
-              className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-bold text-white ring-1 ring-white/25 transition-colors hover:bg-white/25"
-            >
-              Start →
-            </Link>
-          </div>
-        ) : null}
-        {!loading && !loadError && reflectionNudge === 'missed' ? (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-zinc-900/50 px-4 py-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-zinc-300">
-                You skipped last week&apos;s reflection
-              </p>
-              <p className="mt-0.5 text-xs font-medium text-zinc-500">
-                Late reflections still count
-              </p>
-            </div>
-            <Link
-              to="/reflection"
-              className="shrink-0 text-sm font-bold text-amber-200 underline-offset-2 hover:text-amber-100 hover:underline"
-            >
-              Reflect now →
-            </Link>
           </div>
         ) : null}
         {loadError ? (

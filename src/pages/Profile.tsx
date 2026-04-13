@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RankShield } from '../components/RankShield'
+import { useNotificationPrefs } from '../hooks/useNotificationPrefs'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
 import { streakTierTextStyle } from '../lib/streakTierStyle'
 import {
@@ -97,7 +98,53 @@ function parseUserStats(d: Record<string, unknown>): UserStats {
   }
 }
 
+function NotificationToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: (next: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-white">{label}</p>
+        <p className="mt-0.5 text-xs font-medium leading-snug text-zinc-500">
+          {description}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={[
+          'relative h-8 w-[3.25rem] shrink-0 rounded-full transition-colors',
+          checked ? 'bg-[#534AB7]' : 'bg-zinc-700',
+          disabled ? 'opacity-50' : '',
+        ].join(' ')}
+      >
+        <span
+          className={[
+            'absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform',
+            checked ? 'left-[calc(100%-1.75rem)]' : 'left-1',
+          ].join(' ')}
+          aria-hidden
+        />
+      </button>
+    </div>
+  )
+}
+
 export function Profile() {
+  const [notificationPrefs, setNotificationPrefsPatch] = useNotificationPrefs()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<QuestProgressionMode>('weekly')
@@ -497,6 +544,45 @@ export function Profile() {
                     Saving…
                   </p>
                 ) : null}
+              </section>
+
+              <section aria-labelledby="profile-notifications-heading">
+                <h2
+                  id="profile-notifications-heading"
+                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
+                >
+                  Notifications
+                </h2>
+                <div
+                  className="mt-4 space-y-5 rounded-2xl border border-zinc-800/80 bg-app-surface p-4"
+                  style={{
+                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03)',
+                  }}
+                >
+                  <NotificationToggleRow
+                    label="Urgency banners"
+                    description="Show reminders when missions are incomplete"
+                    checked={notificationPrefs.urgencyBanners}
+                    onChange={(v) => setNotificationPrefsPatch({ urgencyBanners: v })}
+                    disabled={loading}
+                  />
+                  <div className="h-px bg-zinc-800/80" aria-hidden />
+                  <NotificationToggleRow
+                    label="Streak warnings"
+                    description="Warn me when my streak is at risk"
+                    checked={notificationPrefs.streakWarnings}
+                    onChange={(v) => setNotificationPrefsPatch({ streakWarnings: v })}
+                    disabled={loading}
+                  />
+                  <div className="h-px bg-zinc-800/80" aria-hidden />
+                  <NotificationToggleRow
+                    label="New week banner"
+                    description="Show motivation banner every Monday"
+                    checked={notificationPrefs.newWeekBanner}
+                    onChange={(v) => setNotificationPrefsPatch({ newWeekBanner: v })}
+                    disabled={loading}
+                  />
+                </div>
               </section>
 
               <section
