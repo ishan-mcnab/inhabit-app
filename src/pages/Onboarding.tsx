@@ -240,19 +240,32 @@ export function Onboarding() {
 
   if (step === 'welcome') {
     return (
-      <div className="flex min-h-screen flex-col bg-app-bg px-6 pb-10 pt-[max(2.5rem,env(safe-area-inset-top))]">
+      <div
+        className="flex min-h-screen flex-col px-4 pb-10 pt-[max(2.5rem,env(safe-area-inset-top))]"
+        style={{
+          background:
+            'radial-gradient(ellipse at 50% 30%, rgba(83,74,183,0.12) 0%, transparent 70%), #0D0D0F',
+        }}
+      >
         <div className="flex flex-1 flex-col items-center justify-center px-2 text-center">
-          <h1 className="text-[2.75rem] font-extrabold leading-none tracking-tight text-white sm:text-6xl">
+          <h1
+            className="text-[56px] font-bold leading-none tracking-tight text-white"
+            style={{ textShadow: '0 0 40px rgba(83,74,183,0.6)' }}
+          >
             InHabit
           </h1>
-          <p className="mt-6 max-w-sm text-lg font-semibold leading-snug text-zinc-300">
+          <p
+            className="mx-auto mt-6 max-w-[280px] text-base font-medium leading-[1.6]"
+            style={{ color: '#888780' }}
+          >
             Build the life you&apos;ve been promising yourself.
           </p>
         </div>
         <button
           type="button"
           onClick={() => setStep('name')}
-          className="w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity active:opacity-90"
+          className="mx-auto h-[52px] w-full max-w-[320px] rounded-xl text-base font-semibold text-white transition-opacity active:opacity-90"
+          style={{ backgroundColor: GOAL_PURPLE }}
         >
           Get Started
         </button>
@@ -262,12 +275,24 @@ export function Onboarding() {
 
   if (step === 'name') {
     return (
-      <div className="flex min-h-screen flex-col bg-app-bg px-6 py-10">
+      <div
+        className="flex min-h-screen flex-col px-4 py-10"
+        style={{ backgroundColor: '#0D0D0F' }}
+      >
         <div className="mx-auto flex w-full max-w-[22rem] flex-1 flex-col justify-center">
-          <h1 className="text-3xl font-bold tracking-tight text-white">
+          <p
+            className="text-center text-sm font-medium"
+            style={{ color: '#888780' }}
+          >
+            Welcome to InHabit
+          </p>
+          <h1 className="mt-3 text-center text-2xl font-semibold tracking-tight text-white">
             What should we call you?
           </h1>
-          <p className="mt-2 text-sm font-medium text-zinc-400">
+          <p
+            className="mt-2 text-center text-sm font-medium"
+            style={{ color: '#888780' }}
+          >
             This is how we&apos;ll greet you in the app.
           </p>
 
@@ -293,7 +318,11 @@ export function Onboarding() {
                   setDisplayName(ev.target.value)
                   if (nameError) setNameError(null)
                 }}
-                className="rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none transition-[border-color,box-shadow] placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30"
+                className="h-12 rounded-xl border px-4 text-base font-medium text-white outline-none transition-[border-color,box-shadow] placeholder:text-zinc-600 focus-visible:ring-2 focus-visible:ring-[#534AB7]/50"
+                style={{
+                  backgroundColor: '#141418',
+                  borderColor: 'rgba(255,255,255,0.08)',
+                }}
                 placeholder="Your name"
               />
               {nameError ? (
@@ -311,7 +340,8 @@ export function Onboarding() {
 
             <button
               type="submit"
-              className="mt-2 rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg transition-opacity disabled:opacity-50"
+              className="mx-auto mt-2 h-[52px] w-full max-w-[320px] rounded-xl text-base font-semibold text-white transition-opacity disabled:opacity-50"
+              style={{ backgroundColor: GOAL_PURPLE }}
             >
               Continue
             </button>
@@ -415,12 +445,15 @@ export function Onboarding() {
   const canFinish = selectedOrder.length > 0
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg px-5 pb-10 pt-8">
+    <div
+      className="flex min-h-screen flex-col px-4 pb-10 pt-8"
+      style={{ backgroundColor: '#0D0D0F' }}
+    >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
-        <h1 className="text-3xl font-bold tracking-tight text-white">
+        <h1 className="text-[22px] font-semibold tracking-tight text-white">
           What are you working on?
         </h1>
-        <p className="mt-2 text-base font-semibold text-zinc-400">
+        <p className="mt-2 text-sm font-medium" style={{ color: '#888780' }}>
           Pick all that apply.
         </p>
 
@@ -434,28 +467,33 @@ export function Onboarding() {
                 aria-pressed={selected}
                 onClick={() => toggleCategory(opt.id)}
                 className={[
-                  'flex flex-col rounded-2xl border-2 p-3.5 text-left transition-colors',
-                  'min-h-[7.5rem] active:scale-[0.98]',
-                  selected
-                    ? 'shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]'
-                    : 'border-zinc-800 bg-app-surface hover:border-zinc-700',
+                  'flex min-h-[80px] flex-col rounded-xl border p-3.5 text-left transition-colors active:scale-[0.98]',
+                  selected ? '' : 'hover:bg-white/[0.02]',
                 ].join(' ')}
                 style={
                   selected
                     ? {
                         borderColor: GOAL_PURPLE,
-                        backgroundColor: 'rgba(83, 74, 183, 0.12)',
+                        backgroundColor: 'rgba(83, 74, 183, 0.1)',
                       }
-                    : undefined
+                    : {
+                        backgroundColor: '#141418',
+                        borderColor: 'rgba(255,255,255,0.08)',
+                      }
                 }
               >
-                <span className="text-sm font-bold leading-tight text-white">
-                  {opt.title}{' '}
-                  <span className="text-base" aria-hidden>
+                <span className="flex items-center gap-2 leading-tight">
+                  <span className="text-[28px] leading-none" aria-hidden>
                     {opt.emoji}
                   </span>
+                  <span className="text-sm font-medium text-white">
+                    {opt.title}
+                  </span>
                 </span>
-                <span className="mt-2 text-[11px] font-medium leading-snug text-zinc-500">
+                <span
+                  className="mt-2 text-xs font-medium leading-snug"
+                  style={{ color: '#888780' }}
+                >
                   {opt.subtitle}
                 </span>
               </button>
@@ -474,7 +512,8 @@ export function Onboarding() {
             type="button"
             disabled={!canFinish}
             onClick={handleGoalsContinue}
-            className="w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ backgroundColor: GOAL_PURPLE }}
           >
             Let&apos;s go
           </button>

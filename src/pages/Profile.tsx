@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactNode,
   type TouchEvent,
 } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -21,7 +22,24 @@ import { supabase } from '../supabase'
 
 const GOAL_PURPLE = '#534AB7'
 const CARD_BG = '#141418'
+const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const MUTED_BODY = '#888780'
+const MUTED_VERY = 'rgba(136, 135, 128, 0.65)'
 const BAR_TRACK = '#2A2A2E'
+
+const SECTION_HEAD_CLASS =
+  'shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]'
+
+function SectionHeadingRow({ children }: { children: ReactNode }) {
+  return (
+    <div className="-mx-4 flex items-center gap-3 px-4">
+      <span className={SECTION_HEAD_CLASS} style={{ color: MUTED_BODY }}>
+        {children}
+      </span>
+      <div className="h-px min-w-[2rem] flex-1 bg-zinc-800/50" aria-hidden />
+    </div>
+  )
+}
 
 const STAT_PURPLE = '#534AB7'
 const STAT_AMBER = '#F59E0B'
@@ -206,20 +224,36 @@ function StatCard({
   accent,
   label,
   value,
+  sub,
 }: {
   accent: string
   label: string
   value: string
+  sub?: string | null
 }) {
   return (
     <div
-      className="rounded-xl border border-zinc-800/80 border-l-[3px] px-4 py-3"
-      style={{ backgroundColor: CARD_BG, borderLeftColor: accent }}
+      className="rounded-xl border border-l-[3px] px-4 py-3 transition-colors hover:bg-white/[0.04]"
+      style={{
+        backgroundColor: CARD_BG,
+        borderColor: CARD_BORDER,
+        borderLeftColor: accent,
+      }}
     >
       <p className="text-[28px] font-bold tabular-nums leading-none text-white">
         {value}
       </p>
-      <p className="mt-1.5 text-xs font-semibold text-zinc-500">{label}</p>
+      <p className="mt-1.5 text-xs font-semibold" style={{ color: MUTED_BODY }}>
+        {label}
+      </p>
+      {sub ? (
+        <p
+          className="mt-0.5 text-[11px] font-medium"
+          style={{ color: MUTED_VERY }}
+        >
+          {sub}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -594,7 +628,7 @@ export function Profile() {
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-10 pt-6"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-10 pt-0"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -609,20 +643,20 @@ export function Profile() {
           </div>
         ) : null}
 
-        <div className="mx-auto max-w-lg space-y-0">
+        <div className="mx-auto max-w-lg space-y-6">
           {loading ? (
-            <div className="space-y-8 pb-8">
-              <div className="flex flex-col items-center border-b border-zinc-800/40 pb-8">
+            <div className="space-y-6 pb-8">
+              <div className="flex flex-col items-center pt-8">
                 <div className="mission-skeleton-shell size-20 shrink-0 rounded-full" />
                 <div className="mission-skeleton-shell mt-4 h-6 w-40 rounded-lg" />
                 <div className="mission-skeleton-shell mt-2 h-4 w-32 rounded-md" />
               </div>
-              <div className="border-b border-zinc-800/40 pb-8">
+              <div className="text-center">
                 <div className="mx-auto h-[140px] max-w-[120px] rounded-xl mission-skeleton-shell" />
                 <div className="mx-auto mt-4 h-4 w-48 rounded-md mission-skeleton-shell" />
                 <div className="mx-auto mt-3 h-3 w-full max-w-xs rounded-md mission-skeleton-shell" />
               </div>
-              <div className="grid grid-cols-2 gap-3 border-b border-zinc-800/40 pb-8">
+              <div className="grid grid-cols-2 gap-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
@@ -647,11 +681,11 @@ export function Profile() {
             <>
               <section
                 ref={nameBlockRef}
-                className="flex flex-col items-center border-b border-zinc-800/40 pb-8 text-center"
+                className="flex flex-col items-center pt-8 text-center"
                 aria-label="Profile header"
               >
                 <div
-                  className="flex size-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold text-white"
+                  className="flex size-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold text-white ring-2 ring-purple-600/30"
                   style={{ backgroundColor: GOAL_PURPLE }}
                   aria-hidden
                 >
@@ -660,13 +694,13 @@ export function Profile() {
 
                 {!editingName ? (
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                    <p className="text-[20px] font-bold text-white">
+                    <p className="text-[20px] font-semibold text-white">
                       {displayName}
                     </p>
                     <button
                       type="button"
                       onClick={beginEditName}
-                      className="text-xs font-bold text-app-accent underline-offset-2 hover:underline"
+                      className="text-xs font-semibold text-[#534AB7] underline-offset-2 hover:underline"
                     >
                       Edit
                     </button>
@@ -712,23 +746,31 @@ export function Profile() {
                 )}
 
                 {memberSinceLabel ? (
-                  <p className="mt-3 text-sm font-medium text-zinc-500">
+                  <p
+                    className="mt-1 text-xs font-medium"
+                    style={{ color: MUTED_BODY }}
+                  >
                     Member since {memberSinceLabel}
                   </p>
                 ) : null}
+                <div
+                  className="mt-6 w-full border-b"
+                  style={{ borderColor: CARD_BORDER }}
+                  aria-hidden
+                />
               </section>
 
-              <section
-                className="border-b border-zinc-800/40 py-8"
-                aria-label="Weekly rank"
-              >
-                <div className="flex flex-col items-center text-center">
+              <section className="text-center" aria-label="Weekly rank">
+                <div className="pt-6 pb-5">
                   <RankShield rankName={displayRank} accentColor={rankHue} />
-                  <p className="mt-3 text-sm font-medium text-zinc-500">
+                  <p
+                    className="mt-3 text-[14px] font-medium leading-snug"
+                    style={{ color: MUTED_BODY }}
+                  >
                     {stats.weekly_xp.toLocaleString()} XP this week ·{' '}
                     {displayRank} rank
                   </p>
-                  <p className="mt-4 max-w-sm text-sm font-medium leading-snug text-zinc-400">
+                  <p className="mt-4 text-sm font-medium leading-snug text-zinc-400">
                     {weeklyBand.kind === 'legend' ? (
                       <>Maximum rank achieved</>
                     ) : (
@@ -743,9 +785,9 @@ export function Profile() {
                       </>
                     )}
                   </p>
-                  <div className="mt-3 w-full max-w-sm">
+                  <div className="mt-3 w-full">
                     <div
-                      className="h-2.5 w-full overflow-hidden rounded-full"
+                      className="h-2 w-full overflow-hidden rounded-full"
                       style={{ backgroundColor: BAR_TRACK }}
                     >
                       <div
@@ -760,16 +802,11 @@ export function Profile() {
                 </div>
               </section>
 
-              <section
-                className="border-b border-zinc-800/40 py-8"
-                aria-labelledby="profile-stats-heading"
-              >
-                <h2
-                  id="profile-stats-heading"
-                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
-                >
+              <section aria-labelledby="profile-stats-heading">
+                <div id="profile-stats-heading" className="sr-only">
                   Stats
-                </h2>
+                </div>
+                <SectionHeadingRow>Stats</SectionHeadingRow>
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <StatCard
                     accent={STAT_PURPLE}
@@ -812,18 +849,16 @@ export function Profile() {
                 </div>
               </section>
 
-              <section
-                className="border-b border-zinc-800/40 py-8"
-                aria-labelledby="profile-habit-streaks-heading"
-              >
-                <h2
-                  id="profile-habit-streaks-heading"
-                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
-                >
-                  Habit Streaks
-                </h2>
+              <section aria-labelledby="profile-habit-streaks-heading">
+                <div id="profile-habit-streaks-heading" className="sr-only">
+                  Habit streaks
+                </div>
+                <SectionHeadingRow>Habit streaks</SectionHeadingRow>
                 {habitStreaks.length === 0 ? (
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-zinc-500">
+                  <p
+                    className="mt-3 text-sm font-medium leading-relaxed"
+                    style={{ color: MUTED_BODY }}
+                  >
                     No active habit streaks yet
                   </p>
                 ) : (
@@ -833,14 +868,23 @@ export function Profile() {
                       const nextM = nextStreakMilestone(h.current_streak)
                       const pct = streakMilestonePercent(h.current_streak)
                       const barColor = streakMilestoneBarColor(h.current_streak)
+                      const daysLeft = Math.max(0, nextM - h.current_streak)
+                      const milestoneLabel =
+                        daysLeft === 1
+                          ? `1 day to ${nextM}-day milestone`
+                          : `${daysLeft} days to ${nextM}-day milestone`
                       return (
                         <li
                           key={h.id}
-                          className="rounded-xl border border-zinc-800/80 bg-app-surface px-4 py-3 ring-1 ring-zinc-800/25"
+                          className="rounded-lg border px-4 py-3"
+                          style={{
+                            backgroundColor: CARD_BG,
+                            borderColor: CARD_BORDER,
+                          }}
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-bold text-white">
+                              <p className="truncate text-sm font-medium text-white">
                                 <span aria-hidden>{cat.emoji} </span>
                                 {h.title}
                               </p>
@@ -854,32 +898,38 @@ export function Profile() {
                             </p>
                           </div>
                           <div className="mt-2.5">
-                            <div className="flex items-center justify-between text-[10px] font-semibold text-zinc-600">
-                              <span>
-                                Next milestone {nextM}
-                                {h.current_streak >= 100 ? ' · max' : ''}
-                              </span>
-                              <span className="tabular-nums text-zinc-500">
-                                {Math.round(pct)}%
-                              </span>
-                            </div>
-                            <div
-                              className="mt-1 h-1 w-full overflow-hidden rounded-full"
-                              style={{ backgroundColor: BAR_TRACK }}
-                              role="progressbar"
-                              aria-valuenow={Math.round(pct)}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                              aria-label="Streak milestone progress"
-                            >
-                              <div
-                                className="h-full rounded-full transition-[width] duration-300"
-                                style={{
-                                  width: `${pct}%`,
-                                  backgroundColor: barColor,
-                                }}
-                              />
-                            </div>
+                            {h.current_streak >= 100 ? (
+                              <p className="text-center text-[11px] font-semibold text-[#534AB7]">
+                                Legend streak{' '}
+                                <span aria-hidden>🔥</span>
+                              </p>
+                            ) : (
+                              <>
+                                <div
+                                  className="h-1 w-full overflow-hidden rounded-full"
+                                  style={{ backgroundColor: BAR_TRACK }}
+                                  role="progressbar"
+                                  aria-valuenow={Math.round(pct)}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-label="Streak milestone progress"
+                                >
+                                  <div
+                                    className="h-full rounded-full transition-[width] duration-300"
+                                    style={{
+                                      width: `${pct}%`,
+                                      backgroundColor: barColor,
+                                    }}
+                                  />
+                                </div>
+                                <p
+                                  className="mt-2 text-[11px] font-medium"
+                                  style={{ color: MUTED_VERY }}
+                                >
+                                  {milestoneLabel}
+                                </p>
+                              </>
+                            )}
                           </div>
                         </li>
                       )
@@ -888,16 +938,16 @@ export function Profile() {
                 )}
               </section>
 
-              <section className="py-8" aria-labelledby="profile-prefs-heading">
-                <h2
-                  id="profile-prefs-heading"
-                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
-                >
+              <section aria-labelledby="profile-prefs-heading">
+                <div id="profile-prefs-heading" className="sr-only">
                   Goal preferences
-                </h2>
+                </div>
+                <SectionHeadingRow>Goal preferences</SectionHeadingRow>
                 <div
-                  className="mt-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4"
+                  className="mt-4 rounded-2xl border p-4"
                   style={{
+                    backgroundColor: CARD_BG,
+                    borderColor: CARD_BORDER,
                     boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03)',
                   }}
                 >
@@ -980,19 +1030,16 @@ export function Profile() {
                 ) : null}
               </section>
 
-              <section
-                className="border-t border-zinc-800/40 py-8"
-                aria-labelledby="profile-notifications-heading"
-              >
-                <h2
-                  id="profile-notifications-heading"
-                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
-                >
+              <section aria-labelledby="profile-notifications-heading">
+                <div id="profile-notifications-heading" className="sr-only">
                   Notifications
-                </h2>
+                </div>
+                <SectionHeadingRow>Notifications</SectionHeadingRow>
                 <div
-                  className="mt-4 space-y-5 rounded-2xl border border-zinc-800/80 bg-app-surface p-4"
+                  className="mt-4 space-y-5 rounded-2xl border p-4"
                   style={{
+                    backgroundColor: CARD_BG,
+                    borderColor: CARD_BORDER,
                     boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03)',
                   }}
                 >
@@ -1022,46 +1069,59 @@ export function Profile() {
                 </div>
               </section>
 
-              <section
-                className="border-t border-zinc-800/40 py-8"
-                aria-labelledby="profile-xp-log-heading"
-              >
-                <h2
-                  id="profile-xp-log-heading"
-                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
-                >
-                  Recent XP Activity
-                </h2>
+              <section aria-labelledby="profile-xp-log-heading">
+                <div id="profile-xp-log-heading" className="sr-only">
+                  Recent XP
+                </div>
+                <SectionHeadingRow>Recent XP</SectionHeadingRow>
                 {xpLogs.length === 0 ? (
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-zinc-500">
+                  <p
+                    className="mt-3 text-sm font-medium leading-relaxed"
+                    style={{ color: MUTED_BODY }}
+                  >
                     No XP earned yet — complete missions to get started
                   </p>
                 ) : (
-                  <ul className="mt-3 space-y-2">
-                    {xpLogs.map((row) => {
+                  <ul className="mt-3">
+                    {xpLogs.map((row, idx) => {
                       const pos = row.amount > 0
                       const amtLabel = pos
                         ? `+${row.amount} XP`
                         : `${row.amount} XP`
+                      const last = idx === xpLogs.length - 1
                       return (
                         <li
                           key={row.id}
-                          className="flex flex-col gap-0.5 rounded-lg border border-zinc-800/50 bg-app-surface/40 px-3 py-2.5 ring-1 ring-zinc-800/20"
+                          className={[
+                            'flex flex-col gap-1 py-3',
+                            last ? '' : 'border-b',
+                          ].join(' ')}
+                          style={
+                            last
+                              ? undefined
+                              : { borderBottomColor: CARD_BORDER }
+                          }
                         >
-                          <div className="flex items-baseline justify-between gap-2">
+                          <div className="flex items-start justify-between gap-3">
                             <span
                               className={[
-                                'text-sm font-bold tabular-nums',
+                                'text-[13px] font-medium tabular-nums',
                                 pos ? 'text-emerald-500' : 'text-red-400',
                               ].join(' ')}
                             >
                               {amtLabel}
                             </span>
-                            <span className="shrink-0 text-[11px] font-medium text-zinc-600">
+                            <span
+                              className="shrink-0 text-right text-[11px] font-medium"
+                              style={{ color: MUTED_VERY }}
+                            >
                               {formatRelativeXpTime(row.created_at)}
                             </span>
                           </div>
-                          <p className="text-xs font-medium text-zinc-500">
+                          <p
+                            className="text-[13px] font-medium"
+                            style={{ color: MUTED_BODY }}
+                          >
                             {formatXpLogReason(row.reason)}
                           </p>
                         </li>
@@ -1071,43 +1131,38 @@ export function Profile() {
                 )}
               </section>
 
-              <section
-                className="border-t border-zinc-800/40 py-8"
-                aria-labelledby="profile-account-heading"
-              >
-                <h2
-                  id="profile-account-heading"
-                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
-                >
+              <section aria-labelledby="profile-account-heading">
+                <div id="profile-account-heading" className="sr-only">
                   Account
-                </h2>
+                </div>
+                <SectionHeadingRow>Account</SectionHeadingRow>
                 <div className="mt-4 flex flex-col gap-3">
                   <button
                     type="button"
-                    onClick={beginEditName}
-                    className="rounded-xl border border-zinc-700 bg-app-surface px-4 py-3.5 text-left text-sm font-bold text-white transition-colors hover:border-zinc-600"
-                  >
-                    Edit Display Name
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => navigate('/share')}
-                    className="rounded-xl border-2 border-[#534AB7] bg-transparent px-4 py-3.5 text-center text-sm font-bold text-[#534AB7] transition-colors hover:bg-[#534AB7]/10"
+                    className="min-h-[44px] w-full rounded-xl border-2 border-[#534AB7] bg-transparent px-4 py-3 text-center text-sm font-bold text-[#534AB7] transition-colors hover:bg-[#534AB7]/10"
                   >
                     Share My Stats
                   </button>
                   <button
                     type="button"
                     onClick={() => setSignOutConfirmOpen(true)}
-                    className="rounded-xl border border-zinc-800/80 px-4 py-3.5 text-center text-sm font-bold transition-colors"
-                    style={{ backgroundColor: CARD_BG, color: SIGN_OUT_RED }}
+                    className="min-h-[44px] w-full rounded-xl border px-4 py-3 text-center text-sm font-bold transition-colors"
+                    style={{
+                      backgroundColor: CARD_BG,
+                      borderColor: CARD_BORDER,
+                      color: SIGN_OUT_RED,
+                    }}
                   >
                     Sign Out
                   </button>
                 </div>
               </section>
 
-              <p className="pb-6 text-center text-[11px] font-medium text-zinc-600">
+              <p
+                className="pb-6 text-center text-[11px] font-medium"
+                style={{ color: MUTED_VERY }}
+              >
                 InHabit v1.0.0
               </p>
             </>

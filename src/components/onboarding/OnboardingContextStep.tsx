@@ -2,6 +2,9 @@ import { ONBOARDING_CONTEXT_FIELDS } from '../../constants/onboardingContextConf
 import type { GoalContextCategoryId } from '../../types/goalContext'
 
 const GOAL_PURPLE = '#534AB7'
+const CARD_BG = '#141418'
+const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const MUTED_BODY = '#888780'
 
 type Props = {
   categoryId: GoalContextCategoryId
@@ -47,69 +50,77 @@ export function OnboardingContextStep({
   const canContinue = contextStepComplete(categoryId, values)
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg px-5 pb-10 pt-[max(0.75rem,env(safe-area-inset-top))]">
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-4 flex h-10 w-10 items-center justify-center self-start rounded-xl text-zinc-400 transition-colors hover:bg-zinc-800/80 hover:text-white"
-        aria-label="Back"
-      >
-        <svg
-          className="h-6 w-6"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-          aria-hidden
+    <div
+      className="flex min-h-screen flex-col px-4 pb-10 pt-[max(0.75rem,env(safe-area-inset-top))]"
+      style={{ backgroundColor: '#0D0D0F' }}
+    >
+      <div className="relative flex h-11 shrink-0 items-center justify-center">
+        <button
+          type="button"
+          onClick={onBack}
+          className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-800/80 hover:text-white"
+          aria-label="Back"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-      </button>
-
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
-        <p className="text-2xl font-bold text-white">
-          <span aria-hidden>{headingEmoji}</span>{' '}
-          {headingTitle}
+          <svg
+            className="h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        </button>
+        <p className="text-xs font-medium" style={{ color: MUTED_BODY }}>
+          Step {stepNumber} of {totalSteps}
         </p>
-        <p className="mt-2 text-base font-semibold text-zinc-400">
+      </div>
+
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col pt-2">
+        <p className="text-[20px] font-semibold text-white">
+          <span aria-hidden>{headingEmoji}</span> {headingTitle}
+        </p>
+        <p className="mt-2 text-sm font-medium" style={{ color: MUTED_BODY }}>
           Help us personalize your plan
         </p>
         {categoryId === 'fitness_consistency' ? (
           <div
-            className="mt-4 flex gap-3 rounded-xl border border-zinc-800/80 px-3 py-3"
+            className="mt-4 flex gap-3 rounded-xl border px-3 py-3"
             style={{
-              backgroundColor: '#141418',
+              backgroundColor: CARD_BG,
+              borderColor: CARD_BORDER,
               borderLeftWidth: 3,
               borderLeftColor: GOAL_PURPLE,
             }}
           >
             <span className="shrink-0 text-base leading-none" aria-hidden>
-              💡
+              {'\u{1F4A1}'}
             </span>
-            <p className="text-[13px] font-medium leading-snug text-zinc-500">
+            <p
+              className="text-[13px] font-medium leading-snug"
+              style={{ color: MUTED_BODY }}
+            >
               InHabit tracks your fitness consistency, not your workout
               programming. We&apos;ll help you show up every day — bring your own
               program or follow one you love.
             </p>
           </div>
         ) : null}
-        <p className="mt-3 text-sm font-bold uppercase tracking-wider text-zinc-500">
-          Step {stepNumber} of {totalSteps}
-        </p>
 
         <div className="mt-8 flex flex-col gap-8">
           {fields.map((field) => {
             if (field.type === 'pills') {
               return (
                 <div key={field.key}>
-                  <p className="text-sm font-semibold text-zinc-200">
+                  <p className="mb-2 text-[13px] font-medium text-white">
                     {field.label}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {field.options.map((opt) => {
                       const selected = values[field.key] === opt
                       return (
@@ -119,18 +130,20 @@ export function OnboardingContextStep({
                           aria-pressed={selected}
                           onClick={() => onFieldChange(field.key, opt)}
                           className={[
-                            'rounded-full border-2 px-4 py-2.5 text-left text-sm font-bold text-white transition-colors',
-                            selected
-                              ? ''
-                              : 'border-zinc-800 bg-app-surface hover:border-zinc-700',
+                            'inline-flex h-9 items-center rounded-lg border px-[14px] py-2 text-left text-[13px] font-medium transition-colors',
+                            selected ? '' : 'text-white hover:bg-white/[0.04]',
                           ].join(' ')}
                           style={
                             selected
                               ? {
                                   borderColor: GOAL_PURPLE,
-                                  backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                                  backgroundColor: 'rgba(83, 74, 183, 0.1)',
+                                  color: '#fff',
                                 }
-                              : undefined
+                              : {
+                                  borderColor: CARD_BORDER,
+                                  backgroundColor: CARD_BG,
+                                }
                           }
                         >
                           {opt}
@@ -144,10 +157,10 @@ export function OnboardingContextStep({
 
             return (
               <div key={field.key}>
-                <div className="flex items-start justify-between gap-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
                   <label
                     htmlFor={`ctx-${categoryId}-${field.key}`}
-                    className="text-sm font-semibold text-zinc-200"
+                    className="text-[13px] font-medium text-white"
                   >
                     {field.label}
                   </label>
@@ -155,7 +168,8 @@ export function OnboardingContextStep({
                     <button
                       type="button"
                       onClick={() => onFieldChange(field.key, '')}
-                      className="shrink-0 text-sm font-semibold text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+                      className="shrink-0 text-xs font-medium underline-offset-2 transition-colors hover:underline"
+                      style={{ color: MUTED_BODY }}
                     >
                       Skip
                     </button>
@@ -167,7 +181,11 @@ export function OnboardingContextStep({
                   value={values[field.key] ?? ''}
                   onChange={(e) => onFieldChange(field.key, e.target.value)}
                   placeholder={field.placeholder}
-                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30"
+                  className="h-11 w-full rounded-xl border px-4 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus-visible:ring-2 focus-visible:ring-[#534AB7]/50"
+                  style={{
+                    backgroundColor: CARD_BG,
+                    borderColor: CARD_BORDER,
+                  }}
                 />
               </div>
             )
@@ -185,7 +203,8 @@ export function OnboardingContextStep({
             type="button"
             disabled={!canContinue || submitting}
             onClick={onContinue}
-            className="w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ backgroundColor: GOAL_PURPLE }}
           >
             {submitting ? 'Saving…' : 'Continue'}
           </button>

@@ -6,7 +6,13 @@ import {
   LinearScale,
   Tooltip,
 } from 'chart.js'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Bar } from 'react-chartjs-2'
 import { Link, useLocation } from 'react-router-dom'
 import { RankShield } from '../components/RankShield'
@@ -42,10 +48,14 @@ import { supabase } from '../supabase'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 
-const SECTION_HEAD =
-  'text-xs font-bold uppercase tracking-[0.2em] text-zinc-500'
-
 const CARD_BG = '#141418'
+const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const MUTED_BODY = '#888780'
+const MUTED_VERY = 'rgba(136, 135, 128, 0.65)'
+
+const SECTION_HEAD_CLASS =
+  'shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]'
+
 const BAR_TRACK = '#2A2A2E'
 const BAR_PURPLE = '#534AB7'
 const BAR_HOVER = '#7F77DD'
@@ -86,8 +96,6 @@ type HabitRow = {
   category: string | null
   current_streak: number
 }
-
-const PREVIEW_LEN = 120
 
 function formatShortMd(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -208,7 +216,7 @@ function WeeklyXpBarChart({
   )
 
   return (
-    <div className="h-[180px] w-full">
+    <div className="h-[160px] w-full">
       <Bar data={data} options={options} />
     </div>
   )
@@ -242,10 +250,10 @@ function daysUntilTarget(isoDate: string | null): number | null {
 
 function dueDateClass(isoDate: string | null): string {
   const days = daysUntilTarget(isoDate)
-  if (days == null) return 'text-zinc-500'
+  if (days == null) return 'text-[#888780]'
   if (days <= 14) return 'text-red-400'
   if (days <= 30) return 'text-amber-400'
-  return 'text-zinc-500'
+  return 'text-[#888780]'
 }
 
 function missionRateBadgeClass(rate: number): string {
@@ -267,18 +275,46 @@ function StatCard({
 }) {
   return (
     <div
-      className="rounded-xl border border-zinc-800/80 border-l-[3px] px-4 py-3"
-      style={{ backgroundColor: CARD_BG, borderLeftColor: accent }}
+      className="rounded-xl border border-l-[3px] px-4 py-3 transition-colors hover:bg-white/[0.04]"
+      style={{
+        backgroundColor: CARD_BG,
+        borderColor: CARD_BORDER,
+        borderLeftColor: accent,
+      }}
     >
       <p className="text-[28px] font-bold tabular-nums leading-none text-white">
         {value}
       </p>
-      <p className="mt-1.5 text-xs font-semibold text-zinc-500">{label}</p>
+      <p className="mt-1.5 text-xs font-semibold" style={{ color: MUTED_BODY }}>
+        {label}
+      </p>
       {sub ? (
-        <p className="mt-0.5 text-[11px] font-medium text-zinc-600">{sub}</p>
+        <p
+          className="mt-0.5 text-[11px] font-medium"
+          style={{ color: MUTED_VERY }}
+        >
+          {sub}
+        </p>
       ) : null}
     </div>
   )
+}
+
+function SectionHeadingRow({ children }: { children: ReactNode }) {
+  return (
+    <div className="-mx-4 flex items-center gap-3 px-4">
+      <span className={SECTION_HEAD_CLASS} style={{ color: MUTED_BODY }}>
+        {children}
+      </span>
+      <div className="h-px min-w-[2rem] flex-1 bg-zinc-800/50" aria-hidden />
+    </div>
+  )
+}
+
+function dayInitialFromOffset(daysAgo: number): string {
+  const d = localDayStart(new Date())
+  d.setDate(d.getDate() - (6 - daysAgo))
+  return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()] ?? '?'
 }
 
 export function Progress() {
@@ -615,7 +651,7 @@ export function Progress() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-12 pt-6">
-        <div className="mx-auto max-w-lg space-y-10">
+        <div className="mx-auto max-w-lg space-y-6">
           {error ? (
             <div className="space-y-3">
               <p className="text-sm font-medium text-red-400">{error}</p>
@@ -631,15 +667,15 @@ export function Progress() {
 
           {!error && loading ? (
             <>
-              <div
-                className="mission-skeleton-shell rounded-2xl border border-zinc-800/60 p-6"
-                style={{ backgroundColor: CARD_BG }}
-              >
+              <div className="px-0 pb-5 pt-6 text-center">
                 <div className="mx-auto h-[140px] w-[120px] rounded-xl mission-skeleton-shell" />
                 <div className="mx-auto mt-4 h-4 w-32 rounded-md mission-skeleton-shell" />
                 <div className="mx-auto mt-3 h-3 w-full max-w-[240px] rounded-md mission-skeleton-shell" />
               </div>
-              <div className="mission-skeleton-shell h-[180px] w-full rounded-xl border border-zinc-800/60" />
+              <div
+                className="mission-skeleton-shell h-[160px] w-full rounded-xl border p-4"
+                style={{ borderColor: CARD_BORDER, backgroundColor: CARD_BG }}
+              />
               <div className="grid grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div
@@ -675,12 +711,12 @@ export function Progress() {
           {!error && !loading ? (
             <>
               <section aria-label="Weekly rank" className="text-center">
-                <div
-                  className="rounded-2xl border border-zinc-800/80 p-6 shadow-lg ring-1 ring-zinc-800/30"
-                  style={{ backgroundColor: CARD_BG }}
-                >
+                <div className="pt-6 pb-5">
                   <RankShield rankName={displayRank} accentColor={rankHue} />
-                  <p className="mt-3 text-sm font-medium text-zinc-500">
+                  <p
+                    className="mt-3 text-[14px] font-medium leading-snug"
+                    style={{ color: MUTED_BODY }}
+                  >
                     {weeklyXp.toLocaleString()} XP this week
                   </p>
                   <p className="mt-4 text-sm font-medium leading-snug text-zinc-400">
@@ -698,9 +734,9 @@ export function Progress() {
                       </>
                     )}
                   </p>
-                  <div className="mt-3 w-full max-w-sm mx-auto">
+                  <div className="mt-3 w-full">
                     <div
-                      className="h-2.5 w-full overflow-hidden rounded-full"
+                      className="h-2 w-full overflow-hidden rounded-full"
                       style={{ backgroundColor: BAR_TRACK }}
                     >
                       <div
@@ -713,17 +749,47 @@ export function Progress() {
                     </div>
                   </div>
                 </div>
+                <div
+                  className="border-b"
+                  style={{ borderColor: CARD_BORDER }}
+                  aria-hidden
+                />
               </section>
 
               <section aria-label="Weekly XP chart">
-                <h2 className={SECTION_HEAD}>Last 6 weeks</h2>
-                <div className="mt-4 bg-transparent px-0 pb-0 pt-2">
-                  <WeeklyXpBarChart labels={chartLabels} values={chartValues} />
+                <SectionHeadingRow>Weekly XP</SectionHeadingRow>
+                <p
+                  className="mt-2 text-[11px] font-medium"
+                  style={{ color: MUTED_VERY }}
+                >
+                  Last 6 weeks
+                </p>
+                <div
+                  className="mt-4 rounded-xl border p-4"
+                  style={{
+                    backgroundColor: CARD_BG,
+                    borderColor: CARD_BORDER,
+                  }}
+                >
+                  {chartValues.length > 0 &&
+                  chartValues.every((v) => v === 0) ? (
+                    <div
+                      className="flex h-[160px] items-center justify-center px-4 text-center text-[13px] font-medium"
+                      style={{ color: MUTED_BODY }}
+                    >
+                      Complete missions to start earning XP
+                    </div>
+                  ) : (
+                    <WeeklyXpBarChart
+                      labels={chartLabels}
+                      values={chartValues}
+                    />
+                  )}
                 </div>
               </section>
 
               <section aria-label="Stats">
-                <h2 className={SECTION_HEAD}>Stats</h2>
+                <SectionHeadingRow>Stats</SectionHeadingRow>
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <StatCard
                     accent={STAT_PURPLE}
@@ -759,15 +825,19 @@ export function Progress() {
               </section>
 
               <section aria-labelledby="progress-goals-heading">
-                <h2 id="progress-goals-heading" className={SECTION_HEAD}>
-                  Active Goals
-                </h2>
+                <div id="progress-goals-heading" className="sr-only">
+                  Active goals
+                </div>
+                <SectionHeadingRow>Active goals</SectionHeadingRow>
                 {goals.length === 0 ? (
-                  <p className="mt-4 text-sm font-medium text-zinc-500">
+                  <p
+                    className="mt-4 text-sm font-medium"
+                    style={{ color: MUTED_BODY }}
+                  >
                     No active goals — create one on the Goals tab
                   </p>
                 ) : (
-                  <ul className="mt-4 flex flex-col gap-3">
+                  <ul className="mt-4 flex flex-col gap-2.5">
                     {goals.map((goal) => {
                       const { label, emoji } = getGoalCategoryDisplay(
                         goal.category,
@@ -780,41 +850,49 @@ export function Progress() {
                       const currentW = goal.created_at
                         ? calculateCurrentWeekFromGoalStart(goal.created_at)
                         : 1
-                      const dueCls = dueDateClass(goal.target_date)
+                      const targetCls = dueDateClass(goal.target_date)
                       return (
                         <li key={goal.id}>
                           <Link
                             to={`/goals/${goal.id}`}
-                            className="block rounded-2xl outline-none ring-app-accent/0 transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-app-accent/50"
+                            className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
                           >
-                            <article className="flex gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm transition-colors hover:border-zinc-700/80">
+                            <article
+                              className="flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
+                              style={{
+                                backgroundColor: CARD_BG,
+                                borderColor: CARD_BORDER,
+                              }}
+                            >
                               <div
-                                className="w-1 shrink-0 self-stretch rounded-full"
+                                className="w-[3px] shrink-0 self-stretch rounded-full"
                                 style={{ backgroundColor: accent }}
                                 aria-hidden
                               />
                               <div className="min-w-0 flex-1">
-                                <h3 className="text-lg font-bold leading-snug text-white">
+                                <h3 className="text-[15px] font-semibold leading-snug text-white">
                                   {goal.title}
                                 </h3>
-                                <p className="mt-2 text-sm font-semibold text-zinc-400">
-                                  <span aria-hidden>{emoji}</span>{' '}
-                                  <span className="text-zinc-500">{label}</span>
+                                <p
+                                  className="mt-2 text-xs font-medium"
+                                  style={{ color: MUTED_BODY }}
+                                >
+                                  <span aria-hidden>{emoji}</span> {label}
                                 </p>
                                 <p
-                                  className={`mt-1 text-xs font-medium ${dueCls}`}
+                                  className={`mt-1 text-xs font-medium ${targetCls}`}
                                 >
-                                  Due {formatTargetDate(goal.target_date)}
+                                  Target {formatTargetDate(goal.target_date)}
                                 </p>
                                 <div className="mt-4">
                                   <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
                                     <span>Progress</span>
-                                    <span className="tabular-nums text-zinc-400">
+                                    <span className="tabular-nums text-app-accent">
                                       {pct}%
                                     </span>
                                   </div>
                                   <div
-                                    className="mt-1.5 h-2 overflow-hidden rounded-full bg-zinc-800"
+                                    className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-800"
                                     role="progressbar"
                                     aria-valuenow={pct}
                                     aria-valuemin={0}
@@ -826,17 +904,21 @@ export function Progress() {
                                       style={{ width: `${pct}%` }}
                                     />
                                   </div>
-                                  <p className="mt-2 text-xs font-medium text-zinc-500">
-                                    Week {currentW} of {totalW}
-                                  </p>
                                   {questPreviewByGoalId[goal.id] ? (
                                     <p
-                                      className="mt-1 truncate text-xs text-zinc-500"
+                                      className="mt-2 truncate text-[11px] font-medium italic text-zinc-500"
                                       title={questPreviewByGoalId[goal.id]}
                                     >
                                       This week: {questPreviewByGoalId[goal.id]}
                                     </p>
                                   ) : null}
+                                  <p
+                                    className="mt-2 text-[11px] font-medium"
+                                    style={{ color: MUTED_BODY }}
+                                  >
+                                    Week {currentW} of {totalW} · {pct}%
+                                    complete
+                                  </p>
                                 </div>
                               </div>
                             </article>
@@ -849,46 +931,60 @@ export function Progress() {
               </section>
 
               <section aria-labelledby="progress-habits-heading">
-                <h2 id="progress-habits-heading" className={SECTION_HEAD}>
-                  Habit Consistency
-                </h2>
+                <div id="progress-habits-heading" className="sr-only">
+                  Habit consistency
+                </div>
+                <SectionHeadingRow>Habit consistency</SectionHeadingRow>
                 {habits.length === 0 ? (
-                  <p className="mt-4 text-sm font-medium text-zinc-500">
+                  <p
+                    className="mt-4 text-sm font-medium"
+                    style={{ color: MUTED_BODY }}
+                  >
                     No habits yet — add them on the Today tab
                   </p>
                 ) : (
-                  <ul className="mt-4 flex flex-col gap-4">
+                  <ul className="mt-4 flex flex-col gap-3">
                     {habits.map((h) => {
-                      const { label, emoji } = getGoalCategoryDisplay(
-                        h.category,
-                      )
+                      const { emoji } = getGoalCategoryDisplay(h.category)
                       const cells = habitCompletionById[h.id] ?? []
                       return (
                         <li
                           key={h.id}
-                          className="rounded-xl border border-zinc-800/80 px-4 py-3"
-                          style={{ backgroundColor: CARD_BG }}
+                          className="rounded-lg border px-4 py-3"
+                          style={{
+                            backgroundColor: CARD_BG,
+                            borderColor: CARD_BORDER,
+                          }}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold text-white">
-                                <span aria-hidden>{emoji} </span>
-                                {h.title}
-                              </p>
-                              <p className="mt-0.5 text-xs text-zinc-500">
-                                {label}
-                              </p>
-                            </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="min-w-0 truncate text-sm font-medium text-white">
+                              {h.title}
+                            </p>
                             <p
-                              className="shrink-0 text-sm font-bold tabular-nums"
+                              className="flex shrink-0 items-center gap-1 text-sm font-bold tabular-nums"
                               style={streakTierTextStyle(h.current_streak)}
                             >
+                              <span aria-hidden>{emoji}</span>
                               <span aria-hidden>{'\u{1F525}'} </span>
                               {h.current_streak}
                             </p>
                           </div>
                           <div
-                            className="mt-3 flex justify-start gap-2"
+                            className="mt-3 flex gap-1.5"
+                            aria-hidden
+                          >
+                            {cells.map((_, idx) => (
+                              <span
+                                key={`init-${idx}`}
+                                className="inline-flex w-2.5 shrink-0 justify-center text-[10px] font-medium"
+                                style={{ color: MUTED_VERY }}
+                              >
+                                {dayInitialFromOffset(idx)}
+                              </span>
+                            ))}
+                          </div>
+                          <div
+                            className="mt-1 flex gap-1.5"
                             role="list"
                             aria-label="Last 7 days"
                           >
@@ -909,10 +1005,10 @@ export function Progress() {
                                   role="listitem"
                                   title={formatShortMd(d)}
                                   className={[
-                                    'inline-block size-3 shrink-0 rounded-full',
-                                    done ? 'bg-emerald-500' : 'bg-zinc-700',
+                                    'inline-block size-2.5 shrink-0 rounded-full',
+                                    done ? 'bg-[#1D9E75]' : 'bg-zinc-800',
                                     isToday
-                                      ? 'ring-2 ring-white/35 ring-offset-0'
+                                      ? 'box-border border-[1.5px] border-white'
                                       : '',
                                   ].join(' ')}
                                 />
@@ -927,11 +1023,15 @@ export function Progress() {
               </section>
 
               <section aria-labelledby="progress-reflections-heading">
-                <h2 id="progress-reflections-heading" className={SECTION_HEAD}>
+                <div id="progress-reflections-heading" className="sr-only">
                   Reflections
-                </h2>
+                </div>
+                <SectionHeadingRow>Reflections</SectionHeadingRow>
                 {reflectionRows.length === 0 ? (
-                  <p className="mt-4 text-sm font-medium text-zinc-500">
+                  <p
+                    className="mt-4 text-sm font-medium"
+                    style={{ color: MUTED_BODY }}
+                  >
                     No reflections yet — complete your first one on Sunday
                   </p>
                 ) : (
@@ -943,10 +1043,6 @@ export function Progress() {
                         r.miss_answer?.trim() ||
                         r.improve_answer?.trim()
                       )
-                      const insightPreview =
-                        insight.length <= PREVIEW_LEN
-                          ? insight
-                          : `${insight.slice(0, PREVIEW_LEN)}…`
                       const isOpen = !!expanded[r.id]
                       const rate = r.mission_completion_rate
                       const xpEarned =
@@ -955,141 +1051,151 @@ export function Progress() {
                           ? Math.round(r.xp_earned)
                           : null
                       const showExpandToggle =
-                        insight.length > PREVIEW_LEN ||
-                        hasAnswers ||
-                        xpEarned != null
-                      const insightShown = isOpen
-                        ? insight
-                        : insightPreview
+                        insight.length > 0 || hasAnswers || xpEarned != null
+                      const needsReadMore =
+                        insight.length > 80 || hasAnswers || xpEarned != null
                       return (
                         <li
                           key={r.id}
-                          className="rounded-2xl border border-zinc-800/80 bg-app-surface p-4 ring-1 ring-zinc-800/40"
+                          className="rounded-xl border p-4"
+                          style={{
+                            backgroundColor: CARD_BG,
+                            borderColor: CARD_BORDER,
+                          }}
                         >
-                          {!isOpen ? (
-                            <button
-                              type="button"
-                              className={[
-                                'w-full text-left',
-                                showExpandToggle ? 'cursor-pointer'
-                                  : 'cursor-default',
-                              ].join(' ')}
-                              onClick={() => {
-                                if (!showExpandToggle) return
-                                setExpanded((prev) => ({
-                                  ...prev,
-                                  [r.id]: true,
-                                }))
-                              }}
-                            >
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-bold text-white">
-                                  {weekRangeHeading(r)}
-                                </p>
-                                {rate != null ? (
-                                  <span
-                                    className={[
-                                      'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1',
-                                      missionRateBadgeClass(rate),
-                                    ].join(' ')}
-                                  >
-                                    {rate}% missions
-                                  </span>
-                                ) : null}
-                              </div>
-                              {insight ? (
-                                <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-                                  {insightShown}
-                                </p>
-                              ) : (
-                                <p className="mt-3 text-sm text-zinc-600">
-                                  No coaching note for this week
-                                </p>
-                              )}
-                            </button>
-                          ) : (
-                            <div className="space-y-4">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-bold text-white">
-                                  {weekRangeHeading(r)}
-                                </p>
-                                {rate != null ? (
-                                  <span
-                                    className={[
-                                      'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1',
-                                      missionRateBadgeClass(rate),
-                                    ].join(' ')}
-                                  >
-                                    {rate}% missions
-                                  </span>
-                                ) : null}
-                              </div>
-                              {insight ? (
-                                <div>
-                                  <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-                                    Insight
-                                  </p>
-                                  <p className="mt-1 text-sm leading-relaxed text-zinc-300">
-                                    {insight}
-                                  </p>
-                                </div>
-                              ) : (
-                                <p className="text-sm text-zinc-600">
-                                  No coaching note for this week
-                                </p>
-                              )}
-                              {hasAnswers ? (
-                                <div className="space-y-3 text-sm text-zinc-400">
-                                  <div className="border-l-2 border-zinc-700 pl-3">
-                                    <p className="text-[11px] font-bold uppercase text-zinc-500">
-                                      Win
-                                    </p>
-                                    <p className="mt-0.5">
-                                      {r.win_answer?.trim() || '—'}
-                                    </p>
-                                  </div>
-                                  <div className="border-l-2 border-zinc-700 pl-3">
-                                    <p className="text-[11px] font-bold uppercase text-zinc-500">
-                                      Miss
-                                    </p>
-                                    <p className="mt-0.5">
-                                      {r.miss_answer?.trim() || '—'}
-                                    </p>
-                                  </div>
-                                  <div className="border-l-2 border-zinc-700 pl-3">
-                                    <p className="text-[11px] font-bold uppercase text-zinc-500">
-                                      Improve
-                                    </p>
-                                    <p className="mt-0.5">
-                                      {r.improve_answer?.trim() || '—'}
-                                    </p>
-                                  </div>
-                                </div>
-                              ) : null}
-                              {xpEarned != null ? (
-                                <p className="text-sm font-semibold text-zinc-400">
-                                  <span className="text-zinc-500">
-                                    XP earned:
-                                  </span>{' '}
-                                  <span className="tabular-nums text-zinc-200">
-                                    {xpEarned.toLocaleString()}
-                                  </span>
-                                </p>
-                              ) : null}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpanded((prev) => ({
-                                    ...prev,
-                                    [r.id]: false,
-                                  }))
-                                }
-                                className="text-xs font-bold text-app-accent underline-offset-2 hover:underline"
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-white">
+                              {weekRangeHeading(r)}
+                            </p>
+                            {rate != null ? (
+                              <span
+                                className={[
+                                  'inline-flex shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold tabular-nums ring-1',
+                                  missionRateBadgeClass(rate),
+                                ].join(' ')}
                               >
-                                Collapse
-                              </button>
+                                {rate}%
+                              </span>
+                            ) : null}
+                          </div>
+                          {!isOpen ? (
+                            <div className="mt-3">
+                              {insight ? (
+                                <p
+                                  className="line-clamp-2 text-[13px] font-medium italic leading-snug"
+                                  style={{ color: MUTED_BODY }}
+                                >
+                                  {insight}
+                                </p>
+                              ) : (
+                                <p
+                                  className="text-[13px] font-medium"
+                                  style={{ color: MUTED_VERY }}
+                                >
+                                  No coaching note for this week
+                                </p>
+                              )}
+                              {showExpandToggle && needsReadMore ? (
+                                <button
+                                  type="button"
+                                  className="mt-3 text-xs font-semibold text-[#534AB7] transition-colors hover:underline"
+                                  onClick={() =>
+                                    setExpanded((prev) => ({
+                                      ...prev,
+                                      [r.id]: true,
+                                    }))
+                                  }
+                                >
+                                  Read more →
+                                </button>
+                              ) : null}
                             </div>
-                          )}
+                          ) : null}
+                          <div
+                            className={[
+                              'grid transition-[grid-template-rows] duration-300 ease-out',
+                              isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+                            ].join(' ')}
+                          >
+                            <div className="min-h-0 overflow-hidden">
+                              {isOpen ? (
+                                <div className="space-y-4 pt-3">
+                                  {insight ? (
+                                    <p className="text-[13px] leading-relaxed text-white">
+                                      {insight}
+                                    </p>
+                                  ) : (
+                                    <p
+                                      className="text-[13px] font-medium"
+                                      style={{ color: MUTED_VERY }}
+                                    >
+                                      No coaching note for this week
+                                    </p>
+                                  )}
+                                  {hasAnswers ? (
+                                    <div className="space-y-4">
+                                      <div>
+                                        <p
+                                          className="text-[10px] font-semibold uppercase tracking-wide"
+                                          style={{ color: MUTED_BODY }}
+                                        >
+                                          Your win:
+                                        </p>
+                                        <p className="mt-1 text-[13px] text-white">
+                                          {r.win_answer?.trim() || '—'}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p
+                                          className="text-[10px] font-semibold uppercase tracking-wide"
+                                          style={{ color: MUTED_BODY }}
+                                        >
+                                          You struggled with:
+                                        </p>
+                                        <p className="mt-1 text-[13px] text-white">
+                                          {r.miss_answer?.trim() || '—'}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p
+                                          className="text-[10px] font-semibold uppercase tracking-wide"
+                                          style={{ color: MUTED_BODY }}
+                                        >
+                                          You&apos;ll change:
+                                        </p>
+                                        <p className="mt-1 text-[13px] text-white">
+                                          {r.improve_answer?.trim() || '—'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {xpEarned != null ? (
+                                    <p className="text-[13px] font-medium text-white">
+                                      <span style={{ color: MUTED_BODY }}>
+                                        XP earned:
+                                      </span>{' '}
+                                      <span className="tabular-nums">
+                                        {xpEarned.toLocaleString()}
+                                      </span>
+                                    </p>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpanded((prev) => ({
+                                        ...prev,
+                                        [r.id]: false,
+                                      }))
+                                    }
+                                    className="text-xs font-semibold transition-colors"
+                                    style={{ color: MUTED_VERY }}
+                                  >
+                                    Show less ↑
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
                         </li>
                       )
                     })}
