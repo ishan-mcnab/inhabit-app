@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
 import {
@@ -17,6 +17,7 @@ import {
   type PickableQuest,
   type QuestProgressionMode,
 } from '../lib/weeklyQuestPick'
+import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
 import { supabase } from '../supabase'
 
 type GoalRow = {
@@ -120,6 +121,10 @@ export function Goals() {
   const [completedGoals, setCompletedGoals] = useState<CompletedGoalRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [loadStallMessage, setLoadStallMessage] = useState<string | null>(null)
+  const [completedGoalsError, setCompletedGoalsError] = useState<string | null>(
+    null,
+  )
   const [toast, setToast] = useState<string | null>(null)
   const [fitnessHabitTitles, setFitnessHabitTitles] = useState<Set<string>>(
     () => new Set(),
@@ -137,9 +142,14 @@ export function Goals() {
     Record<string, string>
   >({})
 
+  const loadGenRef = useRef(0)
+
   const load = useCallback(async () => {
+    const gen = ++loadGenRef.current
     setLoading(true)
     setError(null)
+    setLoadStallMessage(null)
+    setCompletedGoalsError(null)
 
     const {
       data: { user },
@@ -147,6 +157,7 @@ export function Goals() {
     } = await supabase.auth.getUser()
 
     if (userError || !user) {
+      if (loadGenRef.current !== gen) return
       setLoading(false)
       setGoalsNeedingAttention(0)
       setError(userError?.message ?? 'Not signed in')
@@ -180,18 +191,19 @@ export function Goals() {
         .maybeSingle(),
     ])
 
-    setLoading(false)
-
     if (activeRes.error) {
+      if (loadGenRef.current !== gen) return
       setError(activeRes.error.message)
       setGoals([])
       setCompletedGoals([])
       setQuestPreviewByGoalId({})
       setGoalsNeedingAttention(0)
+      setLoading(false)
       return
     }
 
     const goalsList = (activeRes.data ?? []) as GoalRow[]
+    if (loadGenRef.current !== gen) return
     setGoals(goalsList)
 
     const goalIds = goalsList.map((g) => g.id)
@@ -219,6 +231,8 @@ export function Goals() {
         setGoalsNeedingAttention(need)
       }
     }
+
+    if (loadGenRef.current !== gen) return
 
     const questMode: QuestProgressionMode =
       prefsRes.data?.quest_progression === 'completion'
@@ -261,9 +275,11 @@ export function Goals() {
         }
       }
     }
+    if (loadGenRef.current !== gen) return
     setQuestPreviewByGoalId(nextPreviews)
 
     if (completedRes.error) {
+      setCompletedGoalsError(completedRes.error.message)
       setCompletedGoals([])
     } else {
       setCompletedGoals((completedRes.data ?? []) as CompletedGoalRow[])
@@ -274,12 +290,32 @@ export function Goals() {
       if (row.title) titles.add(row.title)
     }
     setFitnessHabitTitles(titles)
+
+    if (habitsRes.error) {
+      console.error('Goals: fitness habits check failed:', habitsRes.error)
+    }
+
+    if (loadGenRef.current !== gen) return
+    setLoading(false)
   }, [setGoalsNeedingAttention])
 
   useEffect(() => {
     if (location.pathname !== '/goals') return
     void load()
   }, [location.pathname, load])
+
+  useEffect(() => {
+    if (!loading) return
+    const gen = loadGenRef.current
+    const t = window.setTimeout(() => {
+      if (loadGenRef.current !== gen) return
+      setLoadStallMessage(
+        'Taking longer than expected. Please check your connection and try again.',
+      )
+      setLoading(false)
+    }, 10_000)
+    return () => window.clearTimeout(t)
+  }, [loading])
 
   useEffect(() => {
     if (location.pathname !== '/goals') return
@@ -438,18 +474,16 @@ export function Goals() {
           <div className="flex flex-1 flex-col items-center justify-center py-16">
             <p className="text-sm font-medium text-zinc-500">Loading goals…</p>
           </div>
-        ) : error ? (
-          <div className="flex flex-col items-center gap-4 py-12">
-            <p className="max-w-md text-center text-sm font-medium text-red-400">
-              {error}
-            </p>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-app-bg"
-            >
-              Retry
-            </button>
+        ) : error || loadStallMessage ? (
+          <div className="mx-auto flex max-w-lg flex-col items-center gap-4 py-12 px-2">
+            <SectionLoadErrorCard
+              sectionLabel="goals"
+              message={loadStallMessage ?? error ?? 'Unknown error'}
+              onRetry={() => {
+                setLoadStallMessage(null)
+                void load()
+              }}
+            />
           </div>
         ) : (
           <>
@@ -569,7 +603,15 @@ export function Goals() {
               </ul>
             )}
 
-            {completedGoals.length > 0 ? (
+            {completedGoalsError ? (
+              <section className="mx-auto mt-10 max-w-lg border-t border-zinc-800/60 pt-8">
+                <SectionLoadErrorCard
+                  sectionLabel="completed goals"
+                  message={completedGoalsError}
+                  onRetry={() => void load()}
+                />
+              </section>
+            ) : completedGoals.length > 0 ? (
               <section className="mx-auto mt-10 max-w-lg border-t border-zinc-800/60 pt-8">
                 <h2 className="text-lg font-bold text-white">Completed</h2>
                 <p className="mt-1 text-sm font-medium text-zinc-500">

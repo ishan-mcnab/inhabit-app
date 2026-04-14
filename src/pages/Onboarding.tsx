@@ -86,6 +86,7 @@ export function Onboarding() {
     Record<string, Record<string, string>>
   >({})
   const [nameError, setNameError] = useState<string | null>(null)
+  const [goalsError, setGoalsError] = useState<string | null>(null)
   const [checking, setChecking] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -126,6 +127,7 @@ export function Onboarding() {
   }, [redirectIfOnboarded])
 
   function toggleCategory(id: string) {
+    if (goalsError) setGoalsError(null)
     setSelectedOrder((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
       return [...prev, id]
@@ -169,6 +171,7 @@ export function Onboarding() {
   }
 
   async function handleContextContinue() {
+    if (submitting) return
     setFormError(null)
     if (contextIndex < selectedOrder.length - 1) {
       setContextIndex((i) => i + 1)
@@ -442,8 +445,6 @@ export function Onboarding() {
     )
   }
 
-  const canFinish = selectedOrder.length > 0
-
   return (
     <div
       className="flex min-h-screen flex-col px-4 pb-10 pt-8"
@@ -501,6 +502,12 @@ export function Onboarding() {
           })}
         </div>
 
+        {goalsError ? (
+          <p className="mt-6 text-sm font-medium text-red-400" role="alert">
+            {goalsError}
+          </p>
+        ) : null}
+
         {formError ? (
           <p className="mt-6 text-sm font-medium text-red-400" role="alert">
             {formError}
@@ -510,9 +517,8 @@ export function Onboarding() {
         <div className="mt-auto pt-10">
           <button
             type="button"
-            disabled={!canFinish}
             onClick={handleGoalsContinue}
-            className="h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity active:opacity-90"
             style={{ backgroundColor: GOAL_PURPLE }}
           >
             Let&apos;s go

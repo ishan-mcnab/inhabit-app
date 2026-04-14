@@ -16,6 +16,7 @@ import {
 import { Bar } from 'react-chartjs-2'
 import { Link, useLocation } from 'react-router-dom'
 import { RankShield } from '../components/RankShield'
+import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
 import {
   getCategoryBorderColor,
   getGoalCategoryDisplay,
@@ -321,6 +322,13 @@ export function Progress() {
   const location = useLocation()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null)
+  const [chartLoadError, setChartLoadError] = useState<string | null>(null)
+  const [goalsLoadError, setGoalsLoadError] = useState<string | null>(null)
+  const [habitsLoadError, setHabitsLoadError] = useState<string | null>(null)
+  const [reflectionsLoadError, setReflectionsLoadError] = useState<
+    string | null
+  >(null)
 
   const [weeklyXp, setWeeklyXp] = useState(0)
   const [totalXp, setTotalXp] = useState(0)
@@ -349,6 +357,11 @@ export function Progress() {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setProfileLoadError(null)
+    setChartLoadError(null)
+    setGoalsLoadError(null)
+    setHabitsLoadError(null)
+    setReflectionsLoadError(null)
 
     const {
       data: { user },
@@ -432,11 +445,22 @@ export function Progress() {
     setLoading(false)
 
     if (userRes.error || !userRes.data) {
-      setError(userRes.error?.message ?? 'No profile found')
-      return
+      setProfileLoadError(userRes.error?.message ?? 'No profile found')
+      setWeeklyXp(0)
+      setTotalXp(0)
+      setLevel(1)
+      setLongestStreak(0)
+    } else {
+      setProfileLoadError(null)
     }
 
-    const u = userRes.data as Record<string, unknown>
+    const u = (userRes.data ?? {
+      weekly_xp: 0,
+      total_xp: 0,
+      level: 1,
+      longest_streak: 0,
+      quest_progression: 'weekly',
+    }) as Record<string, unknown>
     setWeeklyXp(
       typeof u.weekly_xp === 'number' && !Number.isNaN(u.weekly_xp)
         ? Math.max(0, Math.floor(u.weekly_xp))
@@ -463,6 +487,9 @@ export function Progress() {
 
     if (xpLogsRes.error) {
       console.error('Progress xp_logs:', xpLogsRes.error)
+      setChartLoadError(xpLogsRes.error.message)
+    } else {
+      setChartLoadError(null)
     }
     const logs = (xpLogsRes.data ?? []) as { amount: number; created_at: string }[]
     const agg = aggregateWeeklyXp(logs, weekKeys)
@@ -480,9 +507,11 @@ export function Progress() {
 
     if (goalsRes.error) {
       console.error('Progress goals:', goalsRes.error)
+      setGoalsLoadError(goalsRes.error.message)
       setGoals([])
       setQuestPreviewByGoalId({})
     } else {
+      setGoalsLoadError(null)
       const goalsList = (goalsRes.data ?? []) as GoalRow[]
       setGoals(goalsList)
 
@@ -528,9 +557,11 @@ export function Progress() {
 
     if (habitsRes.error) {
       console.error('Progress habits:', habitsRes.error)
+      setHabitsLoadError(habitsRes.error.message)
       setHabits([])
       setHabitCompletionById({})
     } else {
+      setHabitsLoadError(null)
       const hrows = (habitsRes.data ?? []) as Record<string, unknown>[]
       const parsed: HabitRow[] = hrows
         .map((r) => ({
@@ -585,8 +616,10 @@ export function Progress() {
 
     if (reflectionsRes.error) {
       console.error('Progress reflections:', reflectionsRes.error)
+      setReflectionsLoadError(reflectionsRes.error.message)
       setReflectionRows([])
     } else {
+      setReflectionsLoadError(null)
       setReflectionRows((reflectionsRes.data ?? []) as ReflectionHistoryRow[])
     }
   }, [])
@@ -711,6 +744,15 @@ export function Progress() {
           {!error && !loading ? (
             <>
               <section aria-label="Weekly rank" className="text-center">
+                {profileLoadError ? (
+                  <div className="px-0 pb-4 pt-2">
+                    <SectionLoadErrorCard
+                      sectionLabel="your stats"
+                      message={profileLoadError}
+                      onRetry={() => void load()}
+                    />
+                  </div>
+                ) : null}
                 <div className="pt-6 pb-5">
                   <RankShield rankName={displayRank} accentColor={rankHue} />
                   <p
@@ -771,8 +813,14 @@ export function Progress() {
                     borderColor: CARD_BORDER,
                   }}
                 >
-                  {chartValues.length > 0 &&
-                  chartValues.every((v) => v === 0) ? (
+                  {chartLoadError ? (
+                    <SectionLoadErrorCard
+                      sectionLabel="weekly XP chart"
+                      message={chartLoadError}
+                      onRetry={() => void load()}
+                    />
+                  ) : chartValues.length > 0 &&
+                    chartValues.every((v) => v === 0) ? (
                     <div
                       className="flex h-[160px] items-center justify-center px-4 text-center text-[13px] font-medium"
                       style={{ color: MUTED_BODY }}
@@ -829,7 +877,15 @@ export function Progress() {
                   Active goals
                 </div>
                 <SectionHeadingRow>Active goals</SectionHeadingRow>
-                {goals.length === 0 ? (
+                {goalsLoadError ? (
+                  <div className="mt-4">
+                    <SectionLoadErrorCard
+                      sectionLabel="active goals"
+                      message={goalsLoadError}
+                      onRetry={() => void load()}
+                    />
+                  </div>
+                ) : goals.length === 0 ? (
                   <p
                     className="mt-4 text-sm font-medium"
                     style={{ color: MUTED_BODY }}
@@ -935,7 +991,15 @@ export function Progress() {
                   Habit consistency
                 </div>
                 <SectionHeadingRow>Habit consistency</SectionHeadingRow>
-                {habits.length === 0 ? (
+                {habitsLoadError ? (
+                  <div className="mt-4">
+                    <SectionLoadErrorCard
+                      sectionLabel="habits"
+                      message={habitsLoadError}
+                      onRetry={() => void load()}
+                    />
+                  </div>
+                ) : habits.length === 0 ? (
                   <p
                     className="mt-4 text-sm font-medium"
                     style={{ color: MUTED_BODY }}
@@ -1027,7 +1091,15 @@ export function Progress() {
                   Reflections
                 </div>
                 <SectionHeadingRow>Reflections</SectionHeadingRow>
-                {reflectionRows.length === 0 ? (
+                {reflectionsLoadError ? (
+                  <div className="mt-4">
+                    <SectionLoadErrorCard
+                      sectionLabel="reflections"
+                      message={reflectionsLoadError}
+                      onRetry={() => void load()}
+                    />
+                  </div>
+                ) : reflectionRows.length === 0 ? (
                   <p
                     className="mt-4 text-sm font-medium"
                     style={{ color: MUTED_BODY }}
@@ -1088,11 +1160,8 @@ export function Progress() {
                                   {insight}
                                 </p>
                               ) : (
-                                <p
-                                  className="text-[13px] font-medium"
-                                  style={{ color: MUTED_VERY }}
-                                >
-                                  No coaching note for this week
+                                <p className="text-[13px] font-medium italic" style={{ color: MUTED_BODY }}>
+                                  Insight unavailable
                                 </p>
                               )}
                               {showExpandToggle && needsReadMore ? (
@@ -1125,11 +1194,8 @@ export function Progress() {
                                       {insight}
                                     </p>
                                   ) : (
-                                    <p
-                                      className="text-[13px] font-medium"
-                                      style={{ color: MUTED_VERY }}
-                                    >
-                                      No coaching note for this week
+                                    <p className="text-[13px] font-medium italic" style={{ color: MUTED_BODY }}>
+                                      Insight unavailable
                                     </p>
                                   )}
                                   {hasAnswers ? (

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
 import { XPToast } from '../components/XPToast'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
@@ -193,6 +194,7 @@ export function GoalDetail() {
   const { goalId } = useParams<{ goalId: string }>()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [goalNotFound, setGoalNotFound] = useState(false)
   const [goal, setGoal] = useState<GoalRow | null>(null)
   const [quests, setQuests] = useState<WeeklyQuestRow[]>([])
   const [userId, setUserId] = useState<string | null>(null)
@@ -271,6 +273,7 @@ export function GoalDetail() {
 
     setLoading(true)
     setError(null)
+    setGoalNotFound(false)
 
     const {
       data: { user },
@@ -323,12 +326,14 @@ export function GoalDetail() {
       setGoal(null)
       setQuests([])
       setError(goalRes.error.message)
+      setGoalNotFound(false)
       return
     }
     if (!goalRes.data) {
       setGoal(null)
       setQuests([])
-      setError('Goal not found')
+      setError(null)
+      setGoalNotFound(true)
       return
     }
 
@@ -476,6 +481,14 @@ export function GoalDetail() {
   }, [goalToast])
 
   useEffect(() => {
+    if (!goalNotFound) return
+    const t = window.setTimeout(() => {
+      void navigate('/goals', { replace: true })
+    }, 3000)
+    return () => window.clearTimeout(t)
+  }, [goalNotFound, navigate])
+
+  useEffect(() => {
     if (!goal) return
     setGoalTitleDraft(goal.title ?? '')
   }, [goal])
@@ -591,12 +604,11 @@ export function GoalDetail() {
       setError('This goal has no target date to regenerate against')
       return
     }
-    console.log('Starting regeneration...')
     setConfirmRegenerateOpen(false)
     setRegeneratingPlan(true)
     setError(null)
     try {
-      const { data: deletedMissions, error: delMErr } = await supabase
+      const { error: delMErr } = await supabase
         .from('daily_missions')
         .delete({ count: 'exact' })
         .select('id')
@@ -604,12 +616,8 @@ export function GoalDetail() {
         .eq('user_id', userId)
         .eq('completed', false)
       if (delMErr) throw new Error(delMErr.message)
-      console.log(
-        'Deleted incomplete missions:',
-        Array.isArray(deletedMissions) ? deletedMissions.length : 0,
-      )
 
-      const { data: deletedQuests, error: delQErr } = await supabase
+      const { error: delQErr } = await supabase
         .from('weekly_quests')
         .delete({ count: 'exact' })
         .select('id')
@@ -617,10 +625,6 @@ export function GoalDetail() {
         .eq('user_id', userId)
         .eq('completed', false)
       if (delQErr) throw new Error(delQErr.message)
-      console.log(
-        'Deleted incomplete quests:',
-        Array.isArray(deletedQuests) ? deletedQuests.length : 0,
-      )
 
       const { data: maxCompletedRow, error: maxErr } = await supabase
         .from('weekly_quests')
@@ -659,17 +663,6 @@ export function GoalDetail() {
         }
       }
 
-      console.log('Calling generateMissions with:', {
-        goalTitle: goal.title,
-        category: cat,
-        targetDate: goal.target_date,
-        batchStart,
-        batchEnd,
-        totalW,
-        highestCompleted,
-        hasUserContext: userContext !== undefined,
-      })
-
       const missions = await generateMissions(
         goal.title,
         cat,
@@ -679,7 +672,6 @@ export function GoalDetail() {
         batchEnd,
         totalW,
       )
-      console.log('Missions generated:', missions)
 
       const weeklyRows = missions.weekly_quests.map((title, i) => ({
         goal_id: goalId,
@@ -694,7 +686,6 @@ export function GoalDetail() {
         .from('weekly_quests')
         .insert(weeklyRows)
       if (weeklyErr) throw new Error(weeklyErr.message)
-      console.log('Saved new quests:', weeklyRows.length)
 
       const base = new Date()
       base.setHours(0, 0, 0, 0)
@@ -710,11 +701,9 @@ export function GoalDetail() {
         .from('daily_missions')
         .insert(dailyRows)
       if (dailyErr) throw new Error(dailyErr.message)
-      console.log('Saved new missions:', dailyRows.length)
 
       await load()
       setGoalToast('Your plan has been regenerated')
-      console.log('Regeneration complete')
     } catch (e) {
       console.error('Regeneration failed:', e)
       setError(e instanceof Error ? e.message : 'Could not regenerate plan')
@@ -1529,23 +1518,41 @@ export function GoalDetail() {
 
       {loading ? (
         <DetailSkeleton />
-      ) : error && !goal ? (
+      ) : goalNotFound ? (
         <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-800/80 bg-app-surface px-6 py-8 text-center shadow-lg ring-1 ring-zinc-800/40">
-            <p className="text-lg font-bold text-white">
-              Couldn&apos;t load goal
+          <div
+            className="w-full max-w-md rounded-lg border px-5 py-6 text-center"
+            style={{
+              backgroundColor: '#141418',
+              borderColor: 'rgba(255,255,255,0.08)',
+            }}
+          >
+            <p className="text-[13px] font-semibold text-white">
+              This goal no longer exists
             </p>
-            <p className="mt-2 text-sm text-zinc-500">{error}</p>
+            <p className="mt-2 text-xs" style={{ color: '#888780' }}>
+              It may have been deleted. Redirecting to Goals…
+            </p>
             <button
               type="button"
-              onClick={() => void load()}
-              className="mt-6 w-full rounded-xl bg-white py-3.5 text-sm font-bold text-app-bg"
+              onClick={() => void navigate('/goals')}
+              className="mt-5 w-full rounded-lg border-2 border-[#534AB7] bg-transparent py-2.5 text-xs font-semibold text-[#534AB7]"
             >
-              Retry
+              Back to Goals
             </button>
+          </div>
+        </div>
+      ) : error && !goal ? (
+        <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
+          <div className="w-full max-w-md px-2">
+            <SectionLoadErrorCard
+              sectionLabel="this goal"
+              message={error}
+              onRetry={() => void load()}
+            />
             <Link
               to="/goals"
-              className="mt-3 block text-sm font-semibold text-zinc-400 hover:text-white"
+              className="mt-4 block text-center text-xs font-semibold text-zinc-400 underline-offset-2 hover:text-white hover:underline"
             >
               Back to Goals
             </Link>

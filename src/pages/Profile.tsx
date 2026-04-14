@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { RankShield } from '../components/RankShield'
+import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
 import { useNotificationPrefs } from '../hooks/useNotificationPrefs'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
 import { streakTierTextStyle } from '../lib/streakTierStyle'
@@ -265,6 +266,16 @@ export function Profile() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadStallMessage, setLoadStallMessage] = useState<string | null>(null)
+  const [habitsSectionError, setHabitsSectionError] = useState<string | null>(
+    null,
+  )
+  const [xpLogsSectionError, setXpLogsSectionError] = useState<string | null>(
+    null,
+  )
+  const [statsCountsError, setStatsCountsError] = useState<string | null>(
+    null,
+  )
   const [mode, setMode] = useState<QuestProgressionMode>('weekly')
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
@@ -289,13 +300,19 @@ export function Profile() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const pullStartY = useRef<number | null>(null)
   const pullDistance = useRef(0)
+  const loadGenRef = useRef(0)
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent)
+    const gen = ++loadGenRef.current
     if (!silent) {
       setLoading(true)
       setError(null)
+      setLoadStallMessage(null)
     }
+    setHabitsSectionError(null)
+    setXpLogsSectionError(null)
+    setStatsCountsError(null)
 
     const {
       data: { user },
@@ -303,6 +320,7 @@ export function Profile() {
     } = await supabase.auth.getUser()
 
     if (userError || !user) {
+      if (loadGenRef.current !== gen) return
       if (!silent) setLoading(false)
       setStats(null)
       setXpLogs([])
@@ -359,10 +377,13 @@ export function Profile() {
         .eq('completed', true),
     ])
 
+    if (loadGenRef.current !== gen) return
+
     if (!silent) setLoading(false)
 
     if (habitsRes.error) {
       console.error('habits load (profile) failed:', habitsRes.error)
+      setHabitsSectionError(habitsRes.error.message)
       setHabitStreaks([])
     } else {
       const rows = (habitsRes.data ?? []) as Record<string, unknown>[]
@@ -383,6 +404,7 @@ export function Profile() {
 
     if (logsRes.error) {
       console.error('xp_logs load failed:', logsRes.error)
+      setXpLogsSectionError(logsRes.error.message)
       setXpLogs([])
     } else {
       const rows = (logsRes.data ?? []) as Record<string, unknown>[]
@@ -402,19 +424,24 @@ export function Profile() {
       )
     }
 
-    if (goalsCountRes.error) {
-      console.error('goals completed count failed:', goalsCountRes.error)
+    if (goalsCountRes.error || missionsCountRes.error) {
+      if (goalsCountRes.error) {
+        console.error('goals completed count failed:', goalsCountRes.error)
+      }
+      if (missionsCountRes.error) {
+        console.error('missions completed count failed:', missionsCountRes.error)
+      }
+      setStatsCountsError(
+        goalsCountRes.error?.message ??
+          missionsCountRes.error?.message ??
+          'Could not load completion stats',
+      )
       setGoalsCompleted(null)
+      setMissionsCompleted(null)
     } else {
       setGoalsCompleted(
         typeof goalsCountRes.count === 'number' ? goalsCountRes.count : 0,
       )
-    }
-
-    if (missionsCountRes.error) {
-      console.error('missions completed count failed:', missionsCountRes.error)
-      setMissionsCompleted(null)
-    } else {
       setMissionsCompleted(
         typeof missionsCountRes.count === 'number'
           ? missionsCountRes.count
@@ -423,16 +450,20 @@ export function Profile() {
     }
 
     if (qErr) {
+      if (loadGenRef.current !== gen) return
       setError(qErr.message)
       setStats(null)
       return
     }
 
     if (!data) {
+      if (loadGenRef.current !== gen) return
       setError('No profile found')
       setStats(null)
       return
     }
+
+    if (loadGenRef.current !== gen) return
 
     const row = data as Record<string, unknown>
     const raw = row.quest_progression
@@ -452,6 +483,19 @@ export function Profile() {
     if (location.pathname !== '/profile') return
     void load()
   }, [location.pathname, load])
+
+  useEffect(() => {
+    if (!loading) return
+    const gen = loadGenRef.current
+    const t = window.setTimeout(() => {
+      if (loadGenRef.current !== gen) return
+      setLoadStallMessage(
+        'Taking longer than expected. Please check your connection and try again.',
+      )
+      setLoading(false)
+    }, 10_000)
+    return () => window.clearTimeout(t)
+  }, [loading])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -666,16 +710,13 @@ export function Profile() {
                 ))}
               </div>
             </div>
-          ) : error ? (
-            <div className="space-y-3 py-8">
-              <p className="text-sm font-medium text-red-400">{error}</p>
-              <button
-                type="button"
-                onClick={() => void load()}
-                className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-app-bg"
-              >
-                Retry
-              </button>
+          ) : error || loadStallMessage ? (
+            <div className="py-8">
+              <SectionLoadErrorCard
+                sectionLabel="your profile"
+                message={loadStallMessage ?? error ?? 'Something went wrong'}
+                onRetry={() => void load()}
+              />
             </div>
           ) : stats ? (
             <>
@@ -807,6 +848,15 @@ export function Profile() {
                   Stats
                 </div>
                 <SectionHeadingRow>Stats</SectionHeadingRow>
+                {statsCountsError ? (
+                  <div className="mt-4">
+                    <SectionLoadErrorCard
+                      sectionLabel="goals and missions counts"
+                      message={statsCountsError}
+                      onRetry={() => void load()}
+                    />
+                  </div>
+                ) : null}
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <StatCard
                     accent={STAT_PURPLE}
@@ -854,7 +904,15 @@ export function Profile() {
                   Habit streaks
                 </div>
                 <SectionHeadingRow>Habit streaks</SectionHeadingRow>
-                {habitStreaks.length === 0 ? (
+                {habitsSectionError ? (
+                  <div className="mt-3">
+                    <SectionLoadErrorCard
+                      sectionLabel="habit streaks"
+                      message={habitsSectionError}
+                      onRetry={() => void load()}
+                    />
+                  </div>
+                ) : habitStreaks.length === 0 ? (
                   <p
                     className="mt-3 text-sm font-medium leading-relaxed"
                     style={{ color: MUTED_BODY }}
@@ -1074,7 +1132,15 @@ export function Profile() {
                   Recent XP
                 </div>
                 <SectionHeadingRow>Recent XP</SectionHeadingRow>
-                {xpLogs.length === 0 ? (
+                {xpLogsSectionError ? (
+                  <div className="mt-3">
+                    <SectionLoadErrorCard
+                      sectionLabel="recent XP"
+                      message={xpLogsSectionError}
+                      onRetry={() => void load()}
+                    />
+                  </div>
+                ) : xpLogs.length === 0 ? (
                   <p
                     className="mt-3 text-sm font-medium leading-relaxed"
                     style={{ color: MUTED_BODY }}

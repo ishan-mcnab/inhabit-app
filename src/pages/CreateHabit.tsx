@@ -38,11 +38,11 @@ export function CreateHabit() {
   async function submit() {
     const trimmed = title.trim()
     if (!trimmed) {
-      setError('Habit name is required')
+      setError('Please enter a habit name')
       return
     }
     if (!category) {
-      setError('Category is required')
+      setError('Please select a category')
       return
     }
 

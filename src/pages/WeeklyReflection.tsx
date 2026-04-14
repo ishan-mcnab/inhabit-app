@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
 import { XPToast } from '../components/XPToast'
 import { useXpToastQueue } from '../hooks/useXpToastQueue'
 import {
@@ -145,7 +146,14 @@ function CompletionView({
         className="mt-8 rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-4 pl-5"
         style={{ borderLeftWidth: 4, borderLeftColor: REFLECTION_PURPLE }}
       >
-        <p className="text-sm font-semibold leading-relaxed text-zinc-200">
+        <p
+          className={[
+            'text-sm leading-relaxed',
+            insight === 'Insight unavailable'
+              ? 'font-medium italic text-zinc-500'
+              : 'font-semibold text-zinc-200',
+          ].join(' ')}
+        >
           {insight}
         </p>
       </div>
@@ -194,6 +202,7 @@ export function WeeklyReflection() {
     formatWeekOfRangeLabel(new Date()),
   )
   const isoRef = useRef({ week: getLocalISOWeek(new Date()), year: getLocalISOWeekYear(new Date()) })
+  const loadGenRef = useRef(0)
 
   const canSubmit =
     win.trim().length >= MIN_SUBMIT &&
@@ -201,6 +210,7 @@ export function WeeklyReflection() {
     improve.trim().length >= MIN_SUBMIT
 
   const load = useCallback(async () => {
+    const gen = ++loadGenRef.current
     setPhase('loading')
     setLoadError(null)
 
@@ -215,6 +225,7 @@ export function WeeklyReflection() {
       error: authErr,
     } = await supabase.auth.getUser()
     if (authErr || !user) {
+      if (loadGenRef.current !== gen) return
       setLoadError(authErr?.message ?? 'Not signed in')
       setPhase('error')
       return
@@ -242,6 +253,7 @@ export function WeeklyReflection() {
     ])
 
     if (curRes.error || prevRes.error) {
+      if (loadGenRef.current !== gen) return
       setLoadError(curRes.error?.message ?? prevRes.error?.message ?? 'Error')
       setPhase('error')
       return
@@ -252,6 +264,7 @@ export function WeeklyReflection() {
 
     if (dow === 0) {
       if (existingCur) {
+        if (loadGenRef.current !== gen) return
         setExistingReflection(existingCur)
         setPhase('already')
         setWeekLabel(formatWeekOfRangeLabel(now))
@@ -260,6 +273,7 @@ export function WeeklyReflection() {
       isoRef.current = { week: cw, year: cy }
     } else {
       if (existingCur) {
+        if (loadGenRef.current !== gen) return
         setExistingReflection(existingCur)
         setPhase('already')
         setWeekLabel(formatWeekOfRangeLabel(now))
@@ -344,6 +358,7 @@ export function WeeklyReflection() {
       goalContextRaw && typeof goalContextRaw === 'object' && !Array.isArray(goalContextRaw)
         ? (goalContextRaw as Record<string, any>)
         : {}
+    if (loadGenRef.current !== gen) return
     setUserCtx({
       displayName: displayName?.trim() || '—',
       goalCategories,
@@ -364,6 +379,19 @@ export function WeeklyReflection() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (phase !== 'loading') return
+    const gen = loadGenRef.current
+    const t = window.setTimeout(() => {
+      if (loadGenRef.current !== gen) return
+      setLoadError(
+        'Taking longer than expected. Please check your connection and try again.',
+      )
+      setPhase('error')
+    }, 10_000)
+    return () => window.clearTimeout(t)
+  }, [phase])
 
   async function handleSubmit() {
     if (!canSubmit || phase !== 'form') return
@@ -555,17 +583,14 @@ export function WeeklyReflection() {
 
       {phase === 'error' ? (
         <div className="mx-auto flex max-w-lg flex-1 flex-col items-center justify-center px-4 py-12">
-          <p className="text-center text-sm text-red-400">{loadError}</p>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="mt-6 rounded-xl bg-white px-5 py-3 text-sm font-bold text-app-bg"
-          >
-            Retry
-          </button>
+          <SectionLoadErrorCard
+            sectionLabel="reflection"
+            message={loadError ?? 'Something went wrong'}
+            onRetry={() => void load()}
+          />
           <Link
             to="/today"
-            className="mt-4 text-sm font-semibold text-zinc-400 underline-offset-2 hover:underline"
+            className="mt-4 text-xs font-semibold text-zinc-400 underline-offset-2 hover:underline"
           >
             Back to Today
           </Link>
@@ -577,8 +602,7 @@ export function WeeklyReflection() {
           <CompletionView
             heading="Already reflected this week"
             insight={
-              existingReflection.ai_insight?.trim() ||
-              'No coaching note was saved for this reflection.'
+              existingReflection.ai_insight?.trim() || 'Insight unavailable'
             }
             showFreshXp={false}
             answers={{

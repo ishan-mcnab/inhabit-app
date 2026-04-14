@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { PageErrorBoundary } from './components/PageErrorBoundary'
 import { NotificationProvider } from './context/NotificationContext'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireGuest } from './components/RequireGuest'
@@ -20,6 +21,8 @@ import { Today } from './pages/Today'
 import { supabase } from './supabase'
 
 function App() {
+  const location = useLocation()
+
   useEffect(() => {
     void supabase
       .from('_inhabit_connection_probe_')
@@ -27,7 +30,6 @@ function App() {
       .limit(0)
       .then(({ error }) => {
         if (!error) {
-          console.log('Supabase connected')
           return
         }
         // Missing table still means PostgREST responded — URL + anon key work
@@ -35,7 +37,6 @@ function App() {
           error.code === 'PGRST205' ||
           error.message.includes('schema cache')
         ) {
-          console.log('Supabase connected')
           return
         }
         console.error('Supabase connection test failed', error)
@@ -59,14 +60,56 @@ function App() {
             }
           >
             <Route index element={<Navigate to="/today" replace />} />
-            <Route path="today" element={<Today />} />
-            <Route path="goals" element={<Goals />} />
+            <Route
+              path="today"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <Today />
+                </PageErrorBoundary>
+              }
+            />
+            <Route
+              path="goals"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <Goals />
+                </PageErrorBoundary>
+              }
+            />
             <Route path="goals/new" element={<CreateGoal />} />
-            <Route path="goals/:goalId" element={<GoalDetail />} />
+            <Route
+              path="goals/:goalId"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <GoalDetail />
+                </PageErrorBoundary>
+              }
+            />
             <Route path="habits/new" element={<CreateHabit />} />
-            <Route path="reflection" element={<WeeklyReflection />} />
-            <Route path="progress" element={<Progress />} />
-            <Route path="profile" element={<Profile />} />
+            <Route
+              path="reflection"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <WeeklyReflection />
+                </PageErrorBoundary>
+              }
+            />
+            <Route
+              path="progress"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <Progress />
+                </PageErrorBoundary>
+              }
+            />
+            <Route
+              path="profile"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <Profile />
+                </PageErrorBoundary>
+              }
+            />
             <Route path="share" element={<Share />} />
             <Route path="*" element={<Navigate to="/today" replace />} />
           </Route>

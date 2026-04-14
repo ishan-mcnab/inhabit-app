@@ -14,6 +14,7 @@ import {
   previousIsoWeek,
 } from '../lib/isoWeek'
 import { GracePassModal } from '../components/GracePassModal'
+import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
 import { StreakMilestoneModal } from '../components/StreakMilestoneModal'
 import { XPToast } from '../components/XPToast'
 import { useNotifications } from '../context/NotificationContext'
@@ -561,6 +562,14 @@ export function Today() {
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadStallMessage, setLoadStallMessage] = useState<string | null>(null)
+  const [missionsLoadError, setMissionsLoadError] = useState<string | null>(
+    null,
+  )
+  const [habitsLoadError, setHabitsLoadError] = useState<string | null>(null)
+  const [missionRegenerateWorking, setMissionRegenerateWorking] =
+    useState(false)
+  const loadGenRef = useRef(0)
   const [hasGoals, setHasGoals] = useState(false)
   const [missions, setMissions] = useState<TodayMission[]>([])
   const [userId, setUserId] = useState<string | null>(null)
@@ -867,9 +876,26 @@ export function Today() {
     [todayStr],
   )
 
+  const handleRegenerateMissionsTap = useCallback(async () => {
+    if (!userId) return
+    setMissionRegenerateWorking(true)
+    try {
+      await checkAndRegenerateWeeklyMissions(userId)
+      await reloadTodayMissions(userId)
+    } catch (e) {
+      console.error('Regenerate missions failed:', e)
+    } finally {
+      setMissionRegenerateWorking(false)
+    }
+  }, [userId, reloadTodayMissions])
+
   const load = useCallback(async () => {
+    const gen = ++loadGenRef.current
     setLoading(true)
     setLoadError(null)
+    setLoadStallMessage(null)
+    setMissionsLoadError(null)
+    setHabitsLoadError(null)
     setXpProfileLoading(true)
     setHabitsLoading(true)
     setReflectionNudge('none')
@@ -952,10 +978,6 @@ export function Today() {
         .gte('completed_at', startIso)
         .lte('completed_at', endIso),
     ])
-
-    setLoading(false)
-    setXpProfileLoading(false)
-    setHabitsLoading(false)
 
     let streakBeforeMount = 0
     let streakForDebug = 0
@@ -1060,26 +1082,37 @@ export function Today() {
           ? dbg.level
           : 1
       const rank = normalizeRank(dbg.rank)
-      console.log(
-        `[InHabit] XP Summary — Total: ${total} | Weekly: ${weekly} | Level: ${level} | Rank: ${rank} | Streak: ${streakForDebug} days`,
-      )
+      if (
+        typeof localStorage !== 'undefined' &&
+        localStorage.getItem('inhabit_debug') === 'true'
+      ) {
+        console.log(
+          `[InHabit] XP Summary — Total: ${total} | Weekly: ${weekly} | Level: ${level} | Rank: ${rank} | Streak: ${streakForDebug} days`,
+        )
+      }
     }
 
     if (goalsRes.error) {
-      setLoadError(goalsRes.error.message)
-      return
+      setMissionsLoadError(goalsRes.error.message)
+      setHasGoals(false)
+      setMissions([])
+    } else {
+      const count = goalsRes.count ?? 0
+      setHasGoals(count > 0)
     }
+
     if (missionsRes.error) {
-      setLoadError(missionsRes.error.message)
-      return
+      setMissionsLoadError(
+        missionsRes.error.message,
+      )
+      setMissions([])
+    } else if (!goalsRes.error) {
+      const rows = (missionsRes.data ?? []) as unknown as MissionRow[]
+      const list = rows.map(mapRowToMission)
+      setMissions(list)
+    } else {
+      setMissions([])
     }
-
-    const count = goalsRes.count ?? 0
-    setHasGoals(count > 0)
-
-    const rows = (missionsRes.data ?? []) as unknown as MissionRow[]
-    const list = rows.map(mapRowToMission)
-    setMissions(list)
 
     void (async () => {
       setMissionRegenerating(true)
@@ -1102,8 +1135,10 @@ export function Today() {
 
     if (habitsRes.error) {
       console.error('Failed to load habits:', habitsRes.error)
+      setHabitsLoadError(habitsRes.error.message)
       setHabits([])
     } else {
+      setHabitsLoadError(null)
       const doneIds = new Set<string>(
         ((habitLogsRes.data ?? []) as unknown as Record<string, unknown>[])
           .map((r) => (typeof r.habit_id === 'string' ? r.habit_id : null))
@@ -1171,11 +1206,31 @@ export function Today() {
       setReflectionNudge('missed')
       setReflectionMissedDaysAgo(daysSinceLastLocalSundayStart())
     }
+
+    if (loadGenRef.current !== gen) return
+    setLoading(false)
+    setXpProfileLoading(false)
+    setHabitsLoading(false)
   }, [todayStr, reloadTodayMissions])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!loading) return
+    const gen = loadGenRef.current
+    const t = window.setTimeout(() => {
+      if (loadGenRef.current !== gen) return
+      setLoadStallMessage(
+        'Taking longer than expected. Please check your connection and try again.',
+      )
+      setLoading(false)
+      setXpProfileLoading(false)
+      setHabitsLoading(false)
+    }, 10_000)
+    return () => window.clearTimeout(t)
+  }, [loading])
 
   const dismissNewWeekMotivation = useCallback(() => {
     for (const id of newWeekBannerTimersRef.current) {
@@ -1194,7 +1249,7 @@ export function Today() {
   }, [])
 
   useEffect(() => {
-    if (loading || loadError || !userId) return
+    if (loading || loadError || loadStallMessage || !userId) return
     if (!notificationPrefs.newWeekBanner) return
     if (new Date().getDay() !== 1) return
     const mon = getMostRecentMondayYmd()
@@ -1222,7 +1277,13 @@ export function Today() {
       }
       newWeekBannerTimersRef.current = []
     }
-  }, [loading, loadError, userId, notificationPrefs.newWeekBanner])
+  }, [
+    loading,
+    loadError,
+    loadStallMessage,
+    userId,
+    notificationPrefs.newWeekBanner,
+  ])
 
   useEffect(() => {
     const tick = () => setClockHour(new Date().getHours())
@@ -1262,7 +1323,7 @@ export function Today() {
   }, [location.pathname, refreshReflectionStatus])
 
   useEffect(() => {
-    if (loading || loadError) return
+    if (loading || loadError || loadStallMessage) return
     if (missions.length === 0 || !missions.every((m) => m.completed)) {
       setCelebrationBannerExpanded(false)
       const collapseTimer = window.setTimeout(() => {
@@ -1272,7 +1333,7 @@ export function Today() {
     }
     if (deferBannerForConfettiRef.current) return
     revealBanner(setCelebrationBannerOpen, setCelebrationBannerExpanded)
-  }, [loading, loadError, missions])
+  }, [loading, loadError, loadStallMessage, missions])
 
   const doneCount = missions.filter((m) => m.completed).length
   const total = missions.length
@@ -1799,7 +1860,7 @@ export function Today() {
   }, [enqueueStreakToast])
 
   const todayPriorityBanner = (() => {
-    if (loading || loadError) return null
+    if (loading || loadError || loadStallMessage) return null
 
     const incompleteCount = missions.filter((m) => !m.completed).length
     const completedTodayCount = missions.filter((m) => m.completed).length
@@ -1977,7 +2038,7 @@ export function Today() {
             </h1>
             {loading ? (
               <div className="mt-2 h-4 w-40 rounded bg-[#1e1e22] mission-skeleton-shell" />
-            ) : loadError ? null : total > 0 ? (
+            ) : loadError || loadStallMessage ? null : total > 0 ? (
               allDone ? (
                 <p className="mt-1 text-[13px] font-semibold text-emerald-400">
                   All done today!
@@ -2073,9 +2134,10 @@ export function Today() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
-        {!loading && !loadError ? todayPriorityBanner : null}
+        {!loading && !loadError && !loadStallMessage ? todayPriorityBanner : null}
         {!loading &&
         !loadError &&
+        !loadStallMessage &&
         weeklyNewMissionsBannerPhase !== 'off' &&
         !todayPriorityBanner ? (
           <div
@@ -2089,18 +2151,23 @@ export function Today() {
             🔄 New missions for this week are ready!
           </div>
         ) : null}
-        {loadError ? (
+        {loadError || loadStallMessage ? (
           <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
             <StateCard>
               <p className="text-lg font-bold text-white">
-                Couldn&apos;t load missions
+                {loadStallMessage
+                  ? 'Taking longer than expected'
+                  : 'Couldn&apos;t load Today'}
               </p>
               <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                {loadError}
+                {loadStallMessage ?? loadError}
               </p>
               <button
                 type="button"
-                onClick={() => void load()}
+                onClick={() => {
+                  setLoadStallMessage(null)
+                  void load()
+                }}
                 className="mt-6 w-full rounded-xl bg-white py-3.5 text-sm font-bold text-app-bg transition-opacity active:opacity-90"
               >
                 Try again
@@ -2135,16 +2202,35 @@ export function Today() {
             <MissionSkeleton />
             <MissionSkeleton />
           </div>
-        ) : missions.length === 0 ? (
+        ) : hasGoals && missionsLoadError ? (
+          <div className="mx-auto max-w-lg px-1 py-4">
+            <SectionLoadErrorCard
+              sectionLabel="missions"
+              message={missionsLoadError}
+              onRetry={() => void load()}
+            />
+          </div>
+        ) : hasGoals && missions.length === 0 ? (
           <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
             <StateCard>
-              <p className="text-lg font-bold text-white">No missions today</p>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                Check back tomorrow or create a new goal
+              <p className="text-lg font-bold text-white">
+                Some missions couldn&apos;t load
               </p>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+                Tap regenerate to try loading missions for this week.
+              </p>
+              <button
+                type="button"
+                disabled={missionRegenerateWorking}
+                onClick={() => void handleRegenerateMissionsTap()}
+                className="mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: '#534AB7' }}
+              >
+                {missionRegenerateWorking ? 'Regenerating…' : 'Regenerate'}
+              </button>
               <Link
                 to="/goals"
-                className="mt-6 block w-full rounded-xl border border-zinc-700 bg-zinc-800/50 py-3.5 text-center text-sm font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
+                className="mt-3 block w-full rounded-xl border border-zinc-700 bg-zinc-800/50 py-3.5 text-center text-sm font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
               >
                 Go to Goals
               </Link>
@@ -2388,7 +2474,15 @@ export function Today() {
                     </Link>
                   </div>
 
-                  {habitsLoading ? (
+                  {habitsLoadError ? (
+                    <div className="mt-5">
+                      <SectionLoadErrorCard
+                        sectionLabel="habits"
+                        message={habitsLoadError}
+                        onRetry={() => void load()}
+                      />
+                    </div>
+                  ) : habitsLoading ? (
                     <div className="mt-5 space-y-3">
                       {[0, 1].map((i) => (
                         <div

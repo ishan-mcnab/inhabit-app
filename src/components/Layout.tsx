@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
+import { useNetworkStatus } from '../hooks/useNetworkStatus'
 
 const tabs = [
   { to: '/today', label: 'Today', badge: 'today' as const },
@@ -15,6 +16,7 @@ export function Layout() {
     reflectionDue,
     goalsNeedingAttention,
   } = useNotifications()
+  const { isOnline } = useNetworkStatus()
   const [localHour, setLocalHour] = useState(() => new Date().getHours())
 
   useEffect(() => {
@@ -29,6 +31,22 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-app-bg">
+      <div
+        className={[
+          'fixed left-0 right-0 z-[9999] border-l-4 py-2.5 pl-3 pr-4 text-[13px] font-medium text-white transition-opacity duration-300 ease-out',
+          isOnline ? 'pointer-events-none opacity-0' : 'opacity-100',
+        ].join(' ')}
+        style={{
+          top: 'env(safe-area-inset-top, 0px)',
+          backgroundColor: '#141418',
+          borderLeftColor: '#FF6B35',
+        }}
+        role="status"
+        aria-live="polite"
+        aria-hidden={isOnline}
+      >
+        You&apos;re offline — changes will sync when you reconnect
+      </div>
       <main className="flex min-h-0 flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))]">
         <Outlet />
       </main>

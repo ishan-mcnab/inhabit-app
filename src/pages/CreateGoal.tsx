@@ -258,13 +258,13 @@ export function CreateGoal() {
     const trimmedTitle = title.trim()
     let valid = true
     if (!trimmedTitle) {
-      setTitleError('Add a goal title')
+      setTitleError('Goal title is required')
       valid = false
     } else {
       setTitleError(null)
     }
     if (!categoryId) {
-      setCategoryError('Choose a category')
+      setCategoryError('Please select a category')
       valid = false
     } else {
       setCategoryError(null)
@@ -290,7 +290,6 @@ export function CreateGoal() {
     }
 
     const descTrimmed = description.trim()
-    console.log('Starting goal save...')
     const { data: goalRow, error: goalError } = await supabase
       .from('goals')
       .insert({
@@ -312,11 +311,9 @@ export function CreateGoal() {
     }
 
     const goalId = goalRow.id
-    console.log('Goal saved, id:', goalId)
 
     setSubmitPhase('generating')
 
-    console.log('Fetching user context...')
     const { data: profile } = await supabase
       .from('users')
       .select('goal_context')
@@ -344,22 +341,6 @@ export function CreateGoal() {
       }
     }
 
-    if (userContext !== undefined) {
-      console.log('User context found:', userContext)
-    } else {
-      console.log('No context found')
-    }
-
-    console.log('Calling generateMissions with:', [
-      trimmedTitle,
-      category,
-      targetDate,
-      userContext,
-      batchStartWeek,
-      batchEndWeek,
-      totalWeeks,
-    ])
-
     let missions: Awaited<ReturnType<typeof generateMissions>>
     try {
       missions = await generateMissions(
@@ -377,8 +358,6 @@ export function CreateGoal() {
       return
     }
 
-    console.log('Missions generated:', missions)
-
     setSubmitPhase('saving_missions')
 
     const base = new Date()
@@ -393,7 +372,6 @@ export function CreateGoal() {
       xp_reward: 150,
     }))
 
-    console.log('Saving weekly quests...')
     const { error: weeklyError } = await supabase
       .from('weekly_quests')
       .insert(weeklyRows)
@@ -412,7 +390,6 @@ export function CreateGoal() {
       due_date: formatLocalDate(addDays(base, i)),
     }))
 
-    console.log('Saving daily missions...')
     const { error: dailyError } = await supabase
       .from('daily_missions')
       .insert(dailyRows)
