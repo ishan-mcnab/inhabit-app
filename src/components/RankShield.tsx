@@ -12,7 +12,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   return { r: 136, g: 135, b: 128 }
 }
 
-function rankEmoji(rankName: string): string {
+export function rankEmoji(rankName: string): string {
   switch (rankName) {
     case 'Recruit':
       return '🔘'
