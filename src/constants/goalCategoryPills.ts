@@ -27,15 +27,15 @@ const EXTRA_CATEGORY_DISPLAY: Record<string, { label: string; emoji: string }> =
   },
 }
 
-/** Subtle left-border color per category for goal cards and related UI */
+/** Subtle left-border color per category — matches mission board accents */
 export const GOAL_CATEGORY_BORDER: Record<string, string> = {
-  fitness_consistency: '#ea580c',
-  physical_fitness: '#ea580c',
-  health_habits: '#22c55e',
-  skills_growth: '#534AB7',
-  building_confidence: '#ca8a04',
-  mental_emotional_health: '#8b5cf6',
-  financial_goals: '#14b8a6',
+  fitness_consistency: '#FF6B35',
+  physical_fitness: '#FF6B35',
+  health_habits: '#1D9E75',
+  skills_growth: '#185FA5',
+  building_confidence: '#534AB7',
+  mental_emotional_health: '#3B6D11',
+  financial_goals: '#BA7517',
 }
 
 export function getGoalCategoryDisplay(slug: string | null | undefined): {

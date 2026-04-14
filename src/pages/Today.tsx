@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -198,9 +199,9 @@ const SKELETON_STRIPE = '#52525b'
 
 function MissionSkeleton() {
   return (
-    <div className="mission-skeleton-shell flex min-h-[92px] items-stretch gap-3 rounded-2xl border border-zinc-800/80 p-4 shadow-sm">
+    <div className="mission-skeleton-shell flex min-h-[64px] items-stretch gap-3 rounded-2xl border border-zinc-800/80 p-4 shadow-sm">
       <div
-        className="w-1 shrink-0 self-stretch rounded-full"
+        className="w-[3px] shrink-0 self-stretch rounded-full"
         style={{ backgroundColor: SKELETON_STRIPE }}
         aria-hidden
       />
@@ -215,10 +216,10 @@ function MissionSkeleton() {
   )
 }
 
-function CheckIcon() {
+function CheckIcon({ small }: { small?: boolean }) {
   return (
     <svg
-      className="h-5 w-5 text-white"
+      className={small ? 'h-3.5 w-3.5 text-white' : 'h-5 w-5 text-white'}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -238,22 +239,26 @@ function StateCard({ children }: { children: React.ReactNode }) {
   )
 }
 
-const LEVEL_CARD_BG = '#141418'
+const LEVEL_CARD_BG = 'rgba(83, 74, 183, 0.05)'
+const LEVEL_CARD_BORDER = '1px solid rgba(83, 74, 183, 0.2)'
 const BAR_TRACK = '#2A2A2E'
 const BAR_FILL = '#534AB7'
 const LEVEL_UP_PURPLE = '#534AB7'
+const MUTED_HEADING = '#888780'
+const CARD_SURFACE = '#141418'
+const CARD_BORDER = 'rgba(255,255,255,0.08)'
 
-/** Rank pill background: rank color at ~22% opacity (15% was easy to lose on #141418). */
+/** Rank pill background — slightly stronger for readability on dark cards */
 function rankBadgeBackground(hex: string): string {
   if (hex.length === 7 && hex.startsWith('#')) {
     const r = Number.parseInt(hex.slice(1, 3), 16)
     const g = Number.parseInt(hex.slice(3, 5), 16)
     const b = Number.parseInt(hex.slice(5, 7), 16)
     if ([r, g, b].every((n) => !Number.isNaN(n))) {
-      return `rgba(${r},${g},${b},0.22)`
+      return `rgba(${r},${g},${b},0.25)`
     }
   }
-  return 'rgba(136, 135, 128, 0.22)'
+  return 'rgba(136, 135, 128, 0.25)'
 }
 
 function rankBadgeBorderRgba(hex: string, alpha: number): string {
@@ -276,7 +281,7 @@ const DEBUG_RANK_BADGE_STYLES = false
 
 function LevelProgressSkeleton() {
   return (
-    <div className="mission-skeleton-shell mx-4 mt-[max(0.5rem,env(safe-area-inset-top))] animate-pulse rounded-2xl border border-zinc-800/80 p-4">
+    <div className="mission-skeleton-shell mx-4 mt-3 animate-pulse rounded-2xl border border-zinc-800/80 p-4">
       <div className="flex items-center gap-3">
         <div className="h-8 w-14 shrink-0 rounded-md bg-black/22" />
         <div className="h-2 min-w-0 flex-1 rounded-full bg-black/22" />
@@ -365,18 +370,21 @@ function LevelProgressCard({
   }, [weeklyXpVal])
 
   return (
-    <div className="shrink-0 px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
+    <div className="shrink-0 px-4 pt-3">
       <div
-        className="rounded-2xl border border-zinc-800/80 px-3 py-3 shadow-sm ring-1 ring-zinc-800/30"
-        style={{ backgroundColor: LEVEL_CARD_BG }}
+        className="rounded-2xl px-4 py-3.5 shadow-sm"
+        style={{
+          backgroundColor: LEVEL_CARD_BG,
+          border: LEVEL_CARD_BORDER,
+        }}
       >
         <div className="flex items-center gap-2 sm:gap-3">
-          <span className="shrink-0 text-base font-bold tabular-nums text-white sm:text-lg">
+          <span className="shrink-0 text-[18px] font-bold tabular-nums text-white">
             LVL {level}
           </span>
           <div className="min-w-0 flex-1">
             <div
-              className="h-2.5 w-full overflow-hidden rounded-full"
+              className="h-2 w-full overflow-hidden rounded-full"
               style={{ backgroundColor: BAR_TRACK }}
             >
               <div
@@ -391,7 +399,7 @@ function LevelProgressCard({
               />
             </div>
           </div>
-          <span className="max-w-[5.5rem] shrink-0 text-right text-[10px] font-semibold leading-tight text-zinc-500 sm:max-w-none sm:text-xs">
+          <span className="max-w-[6rem] shrink-0 text-right text-[12px] font-medium leading-tight text-zinc-500 sm:max-w-none">
             {xpRight}
           </span>
         </div>
@@ -442,7 +450,7 @@ function LevelProgressCard({
           {rankInfoOpen ? (
             <div
               className="absolute left-0 top-full z-50 mt-2 w-[min(100vw-2rem,18rem)] rounded-xl border border-zinc-800/80 p-3 shadow-xl ring-1 ring-zinc-800/40"
-              style={{ backgroundColor: LEVEL_CARD_BG }}
+              style={{ backgroundColor: CARD_SURFACE }}
               role="dialog"
               aria-label="Weekly rank tiers"
             >
@@ -1807,7 +1815,7 @@ export function Today() {
     if (showStreak) {
       return (
         <div
-          className="inhabit-banner-fade-in mb-3 flex items-center gap-3 rounded-xl border border-[#EF9F27]/35 px-4 py-3"
+          className="inhabit-banner-fade-in mb-3 flex items-center gap-3 rounded-lg border border-[#EF9F27]/35 px-4 py-3"
           style={{
             backgroundColor: 'rgba(239, 159, 39, 0.1)',
             borderLeftWidth: 4,
@@ -1816,10 +1824,12 @@ export function Today() {
           role="status"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-white">
+            <p className="text-[13px] font-bold leading-snug text-white">
               🔥 {streakCurrent} day streak at risk
             </p>
-            <p className="mt-0.5 text-xs font-medium text-zinc-300">
+            <p
+              className="mt-0.5 text-[13px] font-medium leading-snug text-zinc-300"
+            >
               Complete at least one mission to keep it alive
             </p>
           </div>
@@ -1843,15 +1853,15 @@ export function Today() {
       const severe = clockHour >= 21
       return (
         <div
-          className="inhabit-banner-fade-in mb-3 w-full rounded-r-xl border border-zinc-800/60 px-3 py-2.5"
+          className="inhabit-banner-fade-in mb-3 w-full rounded-lg border border-zinc-800/60 px-4 py-3"
           style={{
-            backgroundColor: '#141418',
+            backgroundColor: CARD_SURFACE,
             borderLeftWidth: 4,
             borderLeftColor: severe ? '#E24B4A' : '#FF6B35',
           }}
           role="status"
         >
-          <p className="text-sm font-semibold leading-snug text-white">
+          <p className="text-[13px] font-semibold leading-snug text-white">
             {severe
               ? `🚨 ${incompleteCount} mission${incompleteCount === 1 ? '' : 's'} left — midnight deadline approaching`
               : `⚡ ${incompleteCount} mission${incompleteCount === 1 ? '' : 's'} left today — don't break the streak`}
@@ -1876,22 +1886,22 @@ export function Today() {
       return (
         <div
           className={[
-            'inhabit-banner-fade-in mb-3 flex items-center justify-between gap-3 rounded-xl px-4 py-3.5',
+            'inhabit-banner-fade-in mb-3 flex items-center justify-between gap-3 rounded-lg px-4 py-3',
             lastChance ? 'border-l-4 border-[#E24B4A]' : '',
           ].join(' ')}
           style={{ backgroundColor: '#534AB7' }}
           role="status"
         >
           <div className="min-w-0">
-            <p className="text-sm font-bold text-white">{title}</p>
-            <p className="mt-0.5 text-xs font-medium text-white/80">
+            <p className="text-[13px] font-bold leading-snug text-white">{title}</p>
+            <p className="mt-0.5 text-[13px] font-medium leading-snug text-white/80">
               You completed {reflectionWeekMissionRate ?? 0}% of your missions
               this week
             </p>
           </div>
           <Link
             to="/reflection"
-            className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-bold text-white ring-1 ring-white/25 transition-colors hover:bg-white/25"
+            className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-[13px] font-bold text-white ring-1 ring-white/25 transition-colors hover:bg-white/25 active:scale-[0.98]"
           >
             Start →
           </Link>
@@ -1904,14 +1914,14 @@ export function Today() {
       const dayWord = d === 1 ? 'day' : 'days'
       return (
         <div
-          className="inhabit-banner-fade-in mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 border-l-4 border-l-amber-500 bg-zinc-900/50 px-4 py-3"
+          className="inhabit-banner-fade-in mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-500/25 border-l-4 border-l-amber-500 bg-zinc-900/50 px-4 py-3"
           role="status"
         >
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-zinc-300">
+            <p className="text-[13px] font-semibold leading-snug text-zinc-300">
               You skipped last week&apos;s reflection
             </p>
-            <p className="mt-0.5 text-xs font-medium text-zinc-500">
+            <p className="mt-0.5 text-[13px] font-medium leading-snug text-zinc-500">
               Reflection was due {d} {dayWord} ago — still counts
             </p>
           </div>
@@ -1929,17 +1939,17 @@ export function Today() {
       return (
         <div
           className={[
-            'inhabit-banner-fade-in relative mb-3 flex w-full items-start gap-3 rounded-r-xl border border-zinc-800/60 py-3.5 pl-3.5 pr-10 transition-opacity duration-300',
+            'inhabit-banner-fade-in relative mb-3 flex w-full items-start gap-3 rounded-lg border border-zinc-800/60 px-4 py-3 pr-10 transition-opacity duration-300',
             newWeekMotivationPhase === 'fading' ? 'opacity-0' : 'opacity-100',
           ].join(' ')}
           style={{
-            backgroundColor: '#141418',
+            backgroundColor: CARD_SURFACE,
             borderLeftWidth: 4,
             borderLeftColor: '#534AB7',
           }}
           role="status"
         >
-          <p className="min-w-0 flex-1 pl-0.5 text-sm font-semibold leading-snug text-white">
+          <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-white">
             🗓️ New week. Fresh start. Let&apos;s go.
           </p>
           <button
@@ -1959,6 +1969,43 @@ export function Today() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
+      <header className="shrink-0 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] transition-opacity duration-300">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-white">
+              {headingDate}
+            </h1>
+            {loading ? (
+              <div className="mt-2 h-4 w-40 rounded bg-[#1e1e22] mission-skeleton-shell" />
+            ) : loadError ? null : total > 0 ? (
+              allDone ? (
+                <p className="mt-1 text-[13px] font-semibold text-emerald-400">
+                  All done today!
+                </p>
+              ) : (
+                <p
+                  className="mt-1 text-[13px] font-medium"
+                  style={{ color: MUTED_HEADING }}
+                >
+                  {doneCount} / {total} missions done today
+                </p>
+              )
+            ) : null}
+          </div>
+          {streakCurrent > 0 ? (
+            <p
+              className="shrink-0 pt-0.5 text-base font-bold tabular-nums"
+              style={streakTierTextStyle(streakCurrent)}
+            >
+              🔥 {streakCurrent} day streak
+            </p>
+          ) : null}
+        </div>
+      </header>
+      <div
+        className="mx-4 shrink-0 border-b border-zinc-800/40"
+        aria-hidden
+      />
       {userId && xpProfileLoading ? <LevelProgressSkeleton /> : null}
       {userId && xpProfile && !xpProfileLoading ? (
         <LevelProgressCard
@@ -2016,7 +2063,7 @@ export function Today() {
         <div className="min-h-0 overflow-hidden">
           {celebrationBannerOpen ? (
             <div
-              className="bg-emerald-500/20 px-4 py-3 text-center text-sm font-bold leading-snug text-emerald-300 ring-1 ring-emerald-500/35"
+              className="inhabit-banner-fade-in rounded-lg bg-emerald-500/20 px-4 py-3 text-center text-[13px] font-bold leading-snug text-emerald-300 ring-1 ring-emerald-500/35"
               role="status"
             >
               All missions complete! Full clear bonus incoming.
@@ -2024,37 +2071,6 @@ export function Today() {
           ) : null}
         </div>
       </div>
-
-      <header className="shrink-0 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] transition-opacity duration-300">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-white">
-              {headingDate}
-            </h1>
-            {loading ? (
-              <div className="mt-2 h-4 w-40 rounded bg-[#1e1e22] mission-skeleton-shell" />
-            ) : loadError ? null : total > 0 ? (
-              allDone ? (
-                <p className="mt-1 text-sm font-semibold text-emerald-400">
-                  All done today!
-                </p>
-              ) : (
-                <p className="mt-1 text-sm font-medium text-zinc-500">
-                  {doneCount} / {total} missions done today
-                </p>
-              )
-            ) : null}
-          </div>
-          {streakCurrent > 0 ? (
-            <p
-              className="shrink-0 pt-0.5 text-base font-bold tabular-nums"
-              style={streakTierTextStyle(streakCurrent)}
-            >
-              🔥 {streakCurrent} day streak
-            </p>
-          ) : null}
-        </div>
-      </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
         {!loading && !loadError ? todayPriorityBanner : null}
@@ -2064,7 +2080,7 @@ export function Today() {
         !todayPriorityBanner ? (
           <div
             className={[
-              'inhabit-banner-fade-in -mx-4 mb-3 w-[calc(100%+2rem)] px-4 py-3 text-center text-sm font-bold text-white transition-opacity duration-300',
+              'inhabit-banner-fade-in -mx-4 mb-3 w-[calc(100%+2rem)] rounded-lg px-4 py-3 text-center text-[13px] font-bold leading-snug text-white transition-opacity duration-300',
               weeklyNewMissionsBannerPhase === 'fading' ? 'opacity-0' : 'opacity-100',
             ].join(' ')}
             style={{ backgroundColor: '#16a34a' }}
@@ -2092,17 +2108,9 @@ export function Today() {
             </StateCard>
           </div>
         ) : loading ? (
-          <div className="mx-auto flex max-w-lg flex-col gap-0">
+          <div className="mx-auto flex max-w-lg flex-col gap-3">
             <MissionSkeleton />
-            <div
-              className="my-3 h-px shrink-0 bg-zinc-800/60"
-              aria-hidden
-            />
             <MissionSkeleton />
-            <div
-              className="my-3 h-px shrink-0 bg-zinc-800/60"
-              aria-hidden
-            />
             <MissionSkeleton />
           </div>
         ) : !hasGoals ? (
@@ -2122,17 +2130,9 @@ export function Today() {
             </StateCard>
           </div>
         ) : missionRegenerating ? (
-          <div className="mx-auto flex max-w-lg flex-col gap-0">
+          <div className="mx-auto flex max-w-lg flex-col gap-3">
             <MissionSkeleton />
-            <div
-              className="my-3 h-px shrink-0 bg-zinc-800/60"
-              aria-hidden
-            />
             <MissionSkeleton />
-            <div
-              className="my-3 h-px shrink-0 bg-zinc-800/60"
-              aria-hidden
-            />
             <MissionSkeleton />
           </div>
         ) : missions.length === 0 ? (
@@ -2162,6 +2162,16 @@ export function Today() {
                 {missionActionError}
               </p>
             ) : null}
+            <div className="-mx-4 mb-0 flex items-center gap-3 px-4">
+              <span
+                className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
+                style={{ color: MUTED_HEADING }}
+              >
+                Missions
+              </span>
+              <div className="h-px min-w-[2rem] flex-1 bg-zinc-800/50" aria-hidden />
+            </div>
+            <div className="mt-5 flex flex-col gap-3">
             {missions.map((m, index) => {
               const accent = getMissionBoardAccent(m.category)
               const isPressing = pressingMissionId === m.id
@@ -2171,22 +2181,23 @@ export function Today() {
               const regeneratingThis = regeneratingMissionId === m.id
               const removing = removingMissionIds.has(m.id)
               return (
-                <div key={m.id}>
+                <Fragment key={m.id}>
                   {index > 0 ? (
-                    <div
-                      className="my-3 h-px bg-zinc-800/60"
-                      aria-hidden
-                    />
+                    <div className="h-px shrink-0 bg-zinc-800/50" aria-hidden />
                   ) : null}
                   <div
                     className={[
-                      'relative flex transform-gpu items-stretch gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm will-change-transform',
-                      m.completed ? 'opacity-50' : 'opacity-100',
+                      'relative flex min-h-[64px] transform-gpu items-stretch gap-3 rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
+                      m.completed ? 'opacity-[0.45]' : 'opacity-100',
                       removing ? 'opacity-0' : '',
                       isPressing
-                        ? 'scale-[0.97] transition-none'
-                        : 'scale-100 transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+                        ? 'scale-[0.98] transition-none'
+                        : 'scale-100 transition-[transform,opacity,background-color] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] active:scale-[0.98]',
                     ].join(' ')}
+                    style={{
+                      backgroundColor: CARD_SURFACE,
+                      borderColor: CARD_BORDER,
+                    }}
                     onPointerDownCapture={(e) => {
                       if (m.completed) return
                       const el = e.target
@@ -2207,7 +2218,7 @@ export function Today() {
                     }}
                   >
                     <div
-                      className="w-1 shrink-0 self-stretch rounded-full"
+                      className="w-[3px] shrink-0 self-stretch rounded-full"
                       style={{ backgroundColor: accent }}
                       aria-hidden
                     />
@@ -2253,14 +2264,17 @@ export function Today() {
                         ) : (
                           <p
                             className={[
-                              'text-base font-bold leading-snug text-white',
+                              'text-sm font-medium leading-snug text-white',
                               m.completed ? 'line-through' : '',
                             ].join(' ')}
                           >
                             {regeneratingThis ? 'Regenerating…' : m.title}
                           </p>
                         )}
-                        <p className="mt-1 truncate text-sm font-medium text-zinc-500">
+                        <p
+                          className="mt-1 truncate text-xs font-medium"
+                          style={{ color: MUTED_HEADING }}
+                        >
                           {m.goalTitle}
                         </p>
                       </div>
@@ -2300,7 +2314,7 @@ export function Today() {
                               setMissionMenuOpenId(m.id)
                               setMissionMenuAnchor({ id: m.id, left, top, openUp })
                             }}
-                            className="flex h-11 w-9 min-h-[44px] min-w-[36px] items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200"
+                            className="flex h-11 w-9 min-h-[44px] min-w-[36px] items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 active:scale-[0.98]"
                           >
                             <span className="text-xl leading-none" aria-hidden>
                               ⋯
@@ -2324,35 +2338,50 @@ export function Today() {
                             : `Mark complete: ${m.title}`
                         }
                         className={[
-                          'flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center rounded-full border-2',
-                          m.completed
-                            ? 'border-emerald-500 bg-emerald-500'
-                            : 'border-zinc-500 bg-transparent hover:border-zinc-400',
+                          'flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full',
                           m.completed ? '' : 'cursor-pointer',
                         ].join(' ')}
                       >
-                        {m.completed ? <CheckIcon /> : null}
+                        {m.completed ? (
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
+                            <CheckIcon small />
+                          </span>
+                        ) : (
+                          <span
+                            className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-zinc-500 bg-transparent transition-colors hover:border-zinc-400"
+                            aria-hidden
+                          />
+                        )}
                       </button>
                     </div>
                   </div>
-                </div>
+                </Fragment>
               )
             })}
+            </div>
 
             {userId ? (
               <>
-                <div className="my-6 h-px bg-zinc-800/60" aria-hidden />
+                <div
+                  className="my-5 border-t border-zinc-800/40 pt-5"
+                  aria-hidden
+                />
                 <section aria-labelledby="today-habits-heading">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="-mx-4 flex items-center gap-3 px-4">
                     <h2
                       id="today-habits-heading"
-                      className="text-sm font-bold uppercase tracking-wider text-zinc-500"
+                      className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
+                      style={{ color: MUTED_HEADING }}
                     >
                       Habits
                     </h2>
+                    <div
+                      className="h-px min-w-[2rem] flex-1 bg-zinc-800/50"
+                      aria-hidden
+                    />
                     <Link
                       to="/habits/new"
-                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/40 text-lg font-bold text-white transition-colors hover:bg-zinc-900/60"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/40 text-lg font-bold text-white transition-colors hover:bg-zinc-900/60 active:scale-[0.98]"
                       aria-label="Add habit"
                     >
                       +
@@ -2360,14 +2389,14 @@ export function Today() {
                   </div>
 
                   {habitsLoading ? (
-                    <div className="mt-4 space-y-3">
+                    <div className="mt-5 space-y-3">
                       {[0, 1].map((i) => (
                         <div
                           key={i}
-                          className="mission-skeleton-shell flex min-h-[82px] items-stretch gap-3 rounded-2xl border border-zinc-800/80 p-4 shadow-sm"
+                          className="mission-skeleton-shell flex min-h-[64px] items-stretch gap-3 rounded-2xl border border-zinc-800/80 p-4 shadow-sm"
                         >
                           <div
-                            className="w-1 shrink-0 self-stretch rounded-full"
+                            className="w-[3px] shrink-0 self-stretch rounded-full"
                             style={{ backgroundColor: SKELETON_STRIPE }}
                             aria-hidden
                           />
@@ -2382,19 +2411,28 @@ export function Today() {
                       ))}
                     </div>
                   ) : sortedVisibleHabits.length === 0 ? (
-                    <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4">
-                      <p className="text-sm font-medium text-zinc-500">
+                    <div
+                      className="mt-5 rounded-2xl border p-4"
+                      style={{
+                        backgroundColor: CARD_SURFACE,
+                        borderColor: CARD_BORDER,
+                      }}
+                    >
+                      <p
+                        className="text-sm font-medium"
+                        style={{ color: MUTED_HEADING }}
+                      >
                         No habits yet
                       </p>
                     </div>
                   ) : (
-                    <div className="mt-4 flex flex-col gap-3">
+                    <div className="mt-5 flex flex-col gap-3">
                       {habitActionError ? (
                         <p className="text-center text-sm font-medium text-red-400">
                           {habitActionError}
                         </p>
                       ) : null}
-                      {sortedVisibleHabits.map((h) => {
+                      {sortedVisibleHabits.map((h, hi) => {
                         const accent = getMissionBoardAccent(h.category)
                         const done = h.completedToday
                         const time =
@@ -2411,19 +2449,29 @@ export function Today() {
                         const isPressing = pressingHabitId === h.id
                         const isRemoving = removingHabitIds.has(h.id)
                         return (
+                          <Fragment key={h.id}>
+                            {hi > 0 ? (
+                              <div
+                                className="h-px shrink-0 bg-zinc-800/50"
+                                aria-hidden
+                              />
+                            ) : null}
                           <div
-                            key={h.id}
                             className={[
-                              'relative flex transform-gpu items-stretch gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm will-change-transform',
-                              done ? 'opacity-55' : 'opacity-100',
+                              'relative flex min-h-[64px] transform-gpu items-stretch gap-3 rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
+                              done ? 'opacity-[0.45]' : 'opacity-100',
                               isPressing
-                                ? 'scale-[0.97] transition-none'
-                                : 'scale-100 transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                                ? 'scale-[0.98] transition-none'
+                                : 'scale-100 transition-[transform,opacity,background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98]',
                               isRemoving ? 'opacity-0' : '',
                             ].join(' ')}
+                            style={{
+                              backgroundColor: CARD_SURFACE,
+                              borderColor: CARD_BORDER,
+                            }}
                           >
                             <div
-                              className="w-1 shrink-0 self-stretch rounded-full"
+                              className="w-[3px] shrink-0 self-stretch rounded-full"
                               style={{ backgroundColor: accent }}
                               aria-hidden
                             />
@@ -2472,13 +2520,16 @@ export function Today() {
                                   <>
                                     <p
                                       className={[
-                                        'truncate text-base font-bold text-white',
+                                        'truncate text-sm font-medium text-white',
                                         done ? 'line-through' : '',
                                       ].join(' ')}
                                     >
                                       {h.title}
                                     </p>
-                                    <p className="mt-1 text-xs font-medium text-zinc-500">
+                                    <p
+                                      className="mt-1 text-[11px] font-medium"
+                                      style={{ color: MUTED_HEADING }}
+                                    >
                                       {time}
                                     </p>
                                     {(h.frequency ?? 'daily') === 'weekdays' ? (
@@ -2488,7 +2539,7 @@ export function Today() {
                                     ) : null}
                                     {streakN > 0 && streakStyle ? (
                                       <p
-                                        className="mt-1.5 text-sm font-bold tabular-nums"
+                                        className="mt-1.5 text-xs font-bold tabular-nums"
                                         style={streakStyle}
                                       >
                                         🔥 {streakN}
@@ -2541,7 +2592,7 @@ export function Today() {
                                         openUp,
                                       })
                                     }}
-                                    className="flex h-11 w-9 min-h-[44px] min-w-[36px] items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200"
+                                    className="flex h-11 w-9 min-h-[44px] min-w-[36px] items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 active:scale-[0.98]"
                                   >
                                     <span
                                       className="text-xl leading-none"
@@ -2573,10 +2624,7 @@ export function Today() {
                                         : `Complete habit: ${h.title}`
                                     }
                                     className={[
-                                      'relative flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center overflow-hidden rounded-full border-2',
-                                      done
-                                        ? 'border-emerald-500 bg-emerald-500'
-                                        : 'border-zinc-500 bg-transparent hover:border-zinc-400',
+                                      'relative flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center overflow-hidden rounded-full',
                                       disabled ? 'opacity-70' : '',
                                       done ? '' : 'cursor-pointer',
                                     ].join(' ')}
@@ -2587,12 +2635,22 @@ export function Today() {
                                         aria-hidden
                                       />
                                     ) : null}
-                                    {done ? <CheckIcon /> : null}
+                                    {done ? (
+                                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
+                                        <CheckIcon small />
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-zinc-500 bg-transparent transition-colors hover:border-zinc-400"
+                                        aria-hidden
+                                      />
+                                    )}
                                   </button>
                                 </div>
                               ) : null}
                             </div>
                           </div>
+                          </Fragment>
                         )
                       })}
                     </div>
@@ -2600,7 +2658,7 @@ export function Today() {
 
                   <Link
                     to="/habits/new"
-                    className="mt-4 block w-full rounded-2xl py-3.5 text-center text-sm font-bold text-white transition-opacity active:opacity-90"
+                    className="mt-5 block w-full rounded-2xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95 active:scale-[0.98]"
                     style={{ backgroundColor: '#534AB7' }}
                   >
                     Add Habit

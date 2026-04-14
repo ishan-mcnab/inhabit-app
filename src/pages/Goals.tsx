@@ -73,6 +73,34 @@ function clampPercent(n: number): number {
   return Math.min(100, Math.max(0, n))
 }
 
+const CARD_SURFACE = '#141418'
+const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const MUTED_BODY = '#888780'
+
+function localDayStart(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+function daysUntilTarget(isoDate: string | null): number | null {
+  if (!isoDate) return null
+  const parts = isoDate.split('-').map(Number)
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null
+  const [y, m, d] = parts
+  const target = localDayStart(new Date(y, m - 1, d))
+  const today = localDayStart(new Date())
+  return Math.ceil(
+    (target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+  )
+}
+
+function targetDateClass(isoDate: string | null): string {
+  const days = daysUntilTarget(isoDate)
+  if (days == null) return 'text-[#888780]'
+  if (days <= 14) return 'text-red-400'
+  if (days <= 30) return 'text-amber-400'
+  return 'text-[#888780]'
+}
+
 function formatCompletedAt(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -376,31 +404,31 @@ export function Goals() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <h1 className="min-w-0 flex-1 text-2xl font-bold tracking-tight text-white">
+        <h1 className="min-w-0 flex-1 text-[22px] font-semibold tracking-tight text-white">
           Goals
         </h1>
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={() => void openSuggestions()}
-            className="rounded-xl border-2 px-3 py-2.5 text-sm font-bold text-white transition-colors active:scale-[0.98]"
-            style={{ borderColor: GOAL_PURPLE, color: GOAL_PURPLE }}
+            className="rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-2 text-sm font-bold text-[#534AB7] transition-colors hover:bg-white/5 active:scale-[0.98]"
           >
             ✨ Suggest goals
           </button>
           <Link
             to="/goals/new"
             aria-label="Create new goal"
-            className="flex h-14 w-14 items-center justify-center rounded-2xl bg-app-surface text-3xl font-light leading-none text-white shadow-lg shadow-black/25 ring-1 ring-zinc-800 transition-colors hover:bg-zinc-800/80 hover:ring-zinc-700"
+            className="flex size-9 items-center justify-center rounded-lg text-xl font-light leading-none text-white shadow-md transition-colors hover:opacity-90 active:scale-[0.98]"
+            style={{ backgroundColor: GOAL_PURPLE }}
           >
-            <span aria-hidden className="-mt-1">
+            <span aria-hidden className="-mt-0.5">
               +
             </span>
           </Link>
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-8 pt-4">
         {toast ? (
           <div className="mx-auto mb-4 max-w-lg rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/25">
             {toast}
@@ -427,10 +455,26 @@ export function Goals() {
           <>
             {goals.length === 0 ? (
               completedGoals.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
-                  <p className="max-w-xs text-center text-sm font-medium text-zinc-500">
-                    No goals yet — tap + to create your first goal
+                <div className="flex min-h-[min(60vh,28rem)] flex-1 flex-col items-center justify-center px-4 py-12">
+                  <span className="text-5xl" aria-hidden>
+                    🎯
+                  </span>
+                  <p className="mt-5 text-center text-base font-bold text-white">
+                    No goals yet
                   </p>
+                  <p
+                    className="mt-2 max-w-xs text-center text-[13px] font-medium leading-snug"
+                    style={{ color: MUTED_BODY }}
+                  >
+                    Create your first goal to get daily missions
+                  </p>
+                  <Link
+                    to="/goals/new"
+                    className="mt-8 w-full max-w-sm rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95 active:scale-[0.98]"
+                    style={{ backgroundColor: GOAL_PURPLE }}
+                  >
+                    Create a Goal
+                  </Link>
                 </div>
               ) : (
                 <p className="mx-auto max-w-lg px-1 pb-2 text-center text-sm font-medium text-zinc-500">
@@ -438,7 +482,7 @@ export function Goals() {
                 </p>
               )
             ) : (
-              <ul className="mx-auto flex max-w-lg flex-col gap-3">
+              <ul className="mx-auto flex max-w-lg flex-col gap-2.5">
                 {goals.map((goal) => {
                   const { label, emoji } = getGoalCategoryDisplay(goal.category)
                   const accent = getCategoryBorderColor(goal.category)
@@ -449,68 +493,77 @@ export function Goals() {
                   const currentW = goal.created_at
                     ? calculateCurrentWeekFromGoalStart(goal.created_at)
                     : 1
+                  const targetCls = targetDateClass(goal.target_date)
                   return (
                     <li key={goal.id}>
                       <Link
                         to={`/goals/${goal.id}`}
-                        className="block rounded-2xl outline-none ring-app-accent/0 transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-app-accent/50"
+                        className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
                       >
-                        <article className="flex gap-3 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-sm transition-colors hover:border-zinc-700/80">
+                        <article
+                          className="flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
+                          style={{
+                            backgroundColor: CARD_SURFACE,
+                            borderColor: CARD_BORDER,
+                          }}
+                        >
                           <div
-                            className="w-1 shrink-0 self-stretch rounded-full"
+                            className="w-[3px] shrink-0 self-stretch rounded-full"
                             style={{ backgroundColor: accent }}
                             aria-hidden
                           />
                           <div className="min-w-0 flex-1">
-                            <h2 className="text-lg font-bold leading-snug text-white">
+                            <h2 className="text-[15px] font-semibold leading-snug text-white">
                               {goal.title}
                             </h2>
-                            <p className="mt-2 text-sm font-semibold text-zinc-400">
-                              <span aria-hidden>{emoji}</span>{' '}
-                              <span className="text-zinc-300">{label}</span>
+                            <p
+                              className="mt-2 text-xs font-medium"
+                              style={{ color: MUTED_BODY }}
+                            >
+                              <span aria-hidden>{emoji}</span> {label}
                             </p>
-                            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                              Target{' '}
-                              <span className="text-zinc-400">
-                                {formatTargetDate(goal.target_date)}
-                              </span>
+                            <p className={`mt-1 text-xs font-medium ${targetCls}`}>
+                              Target {formatTargetDate(goal.target_date)}
                             </p>
                             <div className="mt-4">
                               <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
                                 <span>Progress</span>
-                                <span className="tabular-nums text-zinc-400">
+                                <span className="tabular-nums text-app-accent">
                                   {pct}%
                                 </span>
                               </div>
-                            <div
-                              className="mt-1.5 h-2 overflow-hidden rounded-full bg-zinc-800"
-                              role="progressbar"
-                              aria-valuenow={pct}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                              aria-label="Goal progress"
-                            >
                               <div
-                                className="h-full rounded-full bg-app-accent transition-[width] duration-300"
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                            {questPreviewByGoalId[goal.id] ? (
-                              <p
-                                className="mt-2 truncate text-xs text-zinc-500"
-                                title={questPreviewByGoalId[goal.id]}
+                                className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-800"
+                                role="progressbar"
+                                aria-valuenow={pct}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-label="Goal progress"
                               >
-                                This week: {questPreviewByGoalId[goal.id]}
+                                <div
+                                  className="h-full rounded-full bg-app-accent transition-[width] duration-300"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              {questPreviewByGoalId[goal.id] ? (
+                                <p
+                                  className="mt-2 truncate text-[11px] font-medium italic text-zinc-500"
+                                  title={questPreviewByGoalId[goal.id]}
+                                >
+                                  This week: {questPreviewByGoalId[goal.id]}
+                                </p>
+                              ) : null}
+                              <p
+                                className="mt-2 text-[11px] font-medium"
+                                style={{ color: MUTED_BODY }}
+                              >
+                                Week {currentW} of {totalW} · {pct}% complete
                               </p>
-                            ) : null}
-                            <p className="mt-2 text-xs font-medium text-zinc-500">
-                              Week {currentW} of {totalW} · {pct}% complete
-                            </p>
+                            </div>
                           </div>
-                        </div>
-                      </article>
-                    </Link>
-                  </li>
+                        </article>
+                      </Link>
+                    </li>
                   )
                 })}
               </ul>
@@ -524,7 +577,7 @@ export function Goals() {
                     ? '1 goal completed'
                     : `${completedGoals.length} goals completed`}
                 </p>
-                <ul className="mt-4 flex flex-col gap-3">
+                <ul className="mt-4 flex flex-col gap-2.5">
                   {completedGoals.map((goal) => {
                     const { label, emoji } = getGoalCategoryDisplay(goal.category)
                     const accent = getCategoryBorderColor(goal.category)
@@ -532,11 +585,17 @@ export function Goals() {
                       <li key={goal.id}>
                         <Link
                           to={`/goals/${goal.id}`}
-                          className="block rounded-2xl outline-none ring-app-accent/0 transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-app-accent/50"
+                          className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
                         >
-                          <article className="flex gap-3 rounded-2xl border border-zinc-800/50 bg-app-surface/80 p-4 opacity-90 shadow-sm transition-colors hover:border-zinc-700/60">
+                          <article
+                            className="flex gap-3 rounded-2xl border p-4 opacity-90 shadow-sm transition-colors hover:bg-white/[0.04]"
+                            style={{
+                              backgroundColor: CARD_SURFACE,
+                              borderColor: CARD_BORDER,
+                            }}
+                          >
                             <div
-                              className="w-1 shrink-0 self-stretch rounded-full opacity-60"
+                              className="w-[3px] shrink-0 self-stretch rounded-full opacity-60"
                               style={{ backgroundColor: accent }}
                               aria-hidden
                             />
@@ -571,7 +630,7 @@ export function Goals() {
           </>
         )}
 
-        <section className="mx-auto mt-10 max-w-lg border-t border-zinc-800/60 pt-8">
+        <section className="mx-auto mt-12 max-w-lg border-t border-zinc-800/50 pt-10">
           <div className="flex items-start justify-between gap-3">
             <h2 className="text-lg font-bold text-white">Fitness Habits</h2>
             <button
