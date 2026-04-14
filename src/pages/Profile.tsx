@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type TouchEvent,
+} from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { RankShield } from '../components/RankShield'
 import { useNotificationPrefs } from '../hooks/useNotificationPrefs'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
@@ -15,6 +22,18 @@ import { supabase } from '../supabase'
 const GOAL_PURPLE = '#534AB7'
 const CARD_BG = '#141418'
 const BAR_TRACK = '#2A2A2E'
+
+const STAT_PURPLE = '#534AB7'
+const STAT_AMBER = '#F59E0B'
+const STAT_ORANGE = '#FF6B35'
+const STAT_ORANGE_MUTED = 'rgba(255, 107, 53, 0.45)'
+const STAT_GREEN = '#34D399'
+const STAT_GREEN_MUTED = 'rgba(52, 211, 153, 0.45)'
+const SIGN_OUT_RED = '#E24B4A'
+
+const STREAK_MILESTONES = [7, 14, 21, 30, 60, 100] as const
+
+const PULL_THRESHOLD_PX = 60
 
 type QuestProgressionMode = 'weekly' | 'completion'
 
@@ -98,6 +117,46 @@ function parseUserStats(d: Record<string, unknown>): UserStats {
   }
 }
 
+function initialsFromDisplayName(name: string): string {
+  const t = name.trim()
+  if (!t) return '?'
+  const parts = t.split(/\s+/).filter(Boolean)
+  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase()
+  return (
+    parts[0]!.slice(0, 1) + parts[parts.length - 1]!.slice(0, 1)
+  ).toUpperCase()
+}
+
+function formatMemberSince(iso: string | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
+function nextStreakMilestone(streak: number): number {
+  const s = Math.max(0, Math.floor(streak))
+  for (const m of STREAK_MILESTONES) {
+    if (s < m) return m
+  }
+  return 100
+}
+
+function streakMilestonePercent(streak: number): number {
+  const s = Math.max(0, Math.floor(streak))
+  if (s >= 100) return 100
+  const next = nextStreakMilestone(s)
+  return Math.min(100, (s / next) * 100)
+}
+
+function streakMilestoneBarColor(streak: number): string {
+  const n = Math.max(0, Math.floor(streak))
+  if (n <= 6) return '#ffffff'
+  if (n <= 13) return '#FF6B35'
+  if (n <= 20) return '#EF9F27'
+  return '#534AB7'
+}
+
 function NotificationToggleRow({
   label,
   description,
@@ -143,9 +202,34 @@ function NotificationToggleRow({
   )
 }
 
+function StatCard({
+  accent,
+  label,
+  value,
+}: {
+  accent: string
+  label: string
+  value: string
+}) {
+  return (
+    <div
+      className="rounded-xl border border-zinc-800/80 border-l-[3px] px-4 py-3"
+      style={{ backgroundColor: CARD_BG, borderLeftColor: accent }}
+    >
+      <p className="text-[28px] font-bold tabular-nums leading-none text-white">
+        {value}
+      </p>
+      <p className="mt-1.5 text-xs font-semibold text-zinc-500">{label}</p>
+    </div>
+  )
+}
+
 export function Profile() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const [notificationPrefs, setNotificationPrefsPatch] = useNotificationPrefs()
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<QuestProgressionMode>('weekly')
   const [saving, setSaving] = useState(false)
@@ -153,23 +237,51 @@ export function Profile() {
   const [stats, setStats] = useState<UserStats | null>(null)
   const [xpLogs, setXpLogs] = useState<XpLogEntry[]>([])
   const [habitStreaks, setHabitStreaks] = useState<HabitStreakRow[]>([])
+  const [displayName, setDisplayName] = useState('')
+  const [memberSinceLabel, setMemberSinceLabel] = useState('')
+  const [goalsCompleted, setGoalsCompleted] = useState<number | null>(null)
+  const [missionsCompleted, setMissionsCompleted] = useState<number | null>(
+    null,
+  )
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [nameSaving, setNameSaving] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
+
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false)
+
+  const nameBlockRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const pullStartY = useRef<number | null>(null)
+  const pullDistance = useRef(0)
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent)
+    if (!silent) {
+      setLoading(true)
+      setError(null)
+    }
+
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser()
 
     if (userError || !user) {
-      setLoading(false)
+      if (!silent) setLoading(false)
       setStats(null)
       setXpLogs([])
       setHabitStreaks([])
+      setGoalsCompleted(null)
+      setMissionsCompleted(null)
+      setDisplayName('')
+      setMemberSinceLabel('')
       setError(userError?.message ?? 'Not signed in')
       return
     }
+
+    setMemberSinceLabel(formatMemberSince(user.created_at))
 
     try {
       await checkAndResetWeeklyXp(user.id)
@@ -177,11 +289,17 @@ export function Profile() {
       console.error('checkAndResetWeeklyXp (Profile) failed:', e)
     }
 
-    const [{ data, error: qErr }, logsRes, habitsRes] = await Promise.all([
+    const [
+      { data, error: qErr },
+      logsRes,
+      habitsRes,
+      goalsCountRes,
+      missionsCountRes,
+    ] = await Promise.all([
       supabase
         .from('users')
         .select(
-          'quest_progression, weekly_xp, rank, total_xp, level, current_streak, longest_streak',
+          'display_name, quest_progression, weekly_xp, rank, total_xp, level, current_streak, longest_streak',
         )
         .eq('id', user.id)
         .maybeSingle(),
@@ -195,9 +313,19 @@ export function Profile() {
         .from('habits')
         .select('id,title,category,current_streak')
         .eq('user_id', user.id),
+      supabase
+        .from('goals')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'completed'),
+      supabase
+        .from('daily_missions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('completed', true),
     ])
 
-    setLoading(false)
+    if (!silent) setLoading(false)
 
     if (habitsRes.error) {
       console.error('habits load (profile) failed:', habitsRes.error)
@@ -240,6 +368,26 @@ export function Profile() {
       )
     }
 
+    if (goalsCountRes.error) {
+      console.error('goals completed count failed:', goalsCountRes.error)
+      setGoalsCompleted(null)
+    } else {
+      setGoalsCompleted(
+        typeof goalsCountRes.count === 'number' ? goalsCountRes.count : 0,
+      )
+    }
+
+    if (missionsCountRes.error) {
+      console.error('missions completed count failed:', missionsCountRes.error)
+      setMissionsCompleted(null)
+    } else {
+      setMissionsCompleted(
+        typeof missionsCountRes.count === 'number'
+          ? missionsCountRes.count
+          : 0,
+      )
+    }
+
     if (qErr) {
       setError(qErr.message)
       setStats(null)
@@ -256,11 +404,92 @@ export function Profile() {
     const raw = row.quest_progression
     setMode(raw === 'completion' ? 'completion' : 'weekly')
     setStats(parseUserStats(row))
+
+    const dn =
+      typeof row.display_name === 'string' ? row.display_name.trim() : ''
+    const fallback =
+      typeof user.email === 'string' && user.email.includes('@')
+        ? user.email.split('@')[0]!
+        : 'User'
+    setDisplayName(dn || fallback)
   }, [])
 
   useEffect(() => {
+    if (location.pathname !== '/profile') return
     void load()
-  }, [load])
+  }, [location.pathname, load])
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      if (location.pathname !== '/profile') return
+      void load({ silent: true })
+    }
+    const onWindowFocus = () => {
+      if (location.pathname !== '/profile') return
+      void load({ silent: true })
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onWindowFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onWindowFocus)
+    }
+  }, [load, location.pathname])
+
+  function beginEditName() {
+    setNameError(null)
+    setNameDraft(displayName)
+    setEditingName(true)
+    requestAnimationFrame(() => {
+      nameBlockRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+  }
+
+  function cancelEditName() {
+    setEditingName(false)
+    setNameDraft('')
+    setNameError(null)
+  }
+
+  async function saveDisplayName() {
+    setNameError(null)
+    const next = nameDraft.trim()
+    if (!next) {
+      setNameError('Name cannot be empty')
+      return
+    }
+
+    setNameSaving(true)
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+    if (userError || !user) {
+      setNameSaving(false)
+      setNameError(userError?.message ?? 'Not signed in')
+      return
+    }
+
+    const { error: uErr } = await supabase
+      .from('users')
+      .update({ display_name: next })
+      .eq('id', user.id)
+
+    setNameSaving(false)
+
+    if (uErr) {
+      setNameError(uErr.message)
+      return
+    }
+
+    setDisplayName(next)
+    setEditingName(false)
+    setNameDraft('')
+  }
 
   async function updateMode(next: QuestProgressionMode) {
     setError(null)
@@ -297,6 +526,53 @@ export function Profile() {
     window.setTimeout(() => setSavedFlash(false), 2000)
   }
 
+  async function runPullRefresh() {
+    if (refreshing || loading || editingName) return
+    setRefreshing(true)
+    try {
+      await load({ silent: true })
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  function handleTouchStart(e: TouchEvent<HTMLDivElement>) {
+    const el = scrollRef.current
+    if (!el || el.scrollTop > 0 || editingName) return
+    pullStartY.current = e.touches[0].clientY
+    pullDistance.current = 0
+  }
+
+  function handleTouchMove(e: TouchEvent<HTMLDivElement>) {
+    const el = scrollRef.current
+    if (pullStartY.current == null || !el || el.scrollTop > 0) return
+    pullDistance.current = Math.max(
+      0,
+      e.touches[0].clientY - pullStartY.current,
+    )
+  }
+
+  function handleTouchEnd() {
+    if (pullDistance.current >= PULL_THRESHOLD_PX) {
+      void runPullRefresh()
+    }
+    pullStartY.current = null
+    pullDistance.current = 0
+  }
+
+  async function confirmSignOut() {
+    setSignOutConfirmOpen(false)
+    setStats(null)
+    setXpLogs([])
+    setHabitStreaks([])
+    setDisplayName('')
+    setGoalsCompleted(null)
+    setMissionsCompleted(null)
+    setEditingName(false)
+    await supabase.auth.signOut()
+    navigate('/login', { replace: true })
+  }
+
   const displayRank =
     stats !== null ? calculateRank(stats.weekly_xp) : 'Recruit'
   const rankHue = rankColor(displayRank)
@@ -306,6 +582,8 @@ export function Profile() {
   const weeklyBarPct =
     weeklyBand.kind === 'legend' ? 100 : weeklyBand.percent
 
+  const avatarInitials = initialsFromDisplayName(displayName)
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       <header className="shrink-0 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -314,12 +592,48 @@ export function Profile() {
         </h1>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-6">
-        <div className="mx-auto max-w-lg space-y-8">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-10 pt-6"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {refreshing ? (
+          <div
+            className="sticky top-0 z-10 -mx-4 mb-2 h-0.5 overflow-hidden bg-zinc-800/50"
+            role="status"
+            aria-label="Refreshing"
+          >
+            <div className="h-full w-full origin-left animate-pulse bg-[#534AB7]/70" />
+          </div>
+        ) : null}
+
+        <div className="mx-auto max-w-lg space-y-0">
           {loading ? (
-            <p className="text-sm font-medium text-zinc-500">Loading…</p>
+            <div className="space-y-8 pb-8">
+              <div className="flex flex-col items-center border-b border-zinc-800/40 pb-8">
+                <div className="mission-skeleton-shell size-20 shrink-0 rounded-full" />
+                <div className="mission-skeleton-shell mt-4 h-6 w-40 rounded-lg" />
+                <div className="mission-skeleton-shell mt-2 h-4 w-32 rounded-md" />
+              </div>
+              <div className="border-b border-zinc-800/40 pb-8">
+                <div className="mx-auto h-[140px] max-w-[120px] rounded-xl mission-skeleton-shell" />
+                <div className="mx-auto mt-4 h-4 w-48 rounded-md mission-skeleton-shell" />
+                <div className="mx-auto mt-3 h-3 w-full max-w-xs rounded-md mission-skeleton-shell" />
+              </div>
+              <div className="grid grid-cols-2 gap-3 border-b border-zinc-800/40 pb-8">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="mission-skeleton-shell h-[92px] rounded-xl border border-zinc-800/60"
+                    style={{ backgroundColor: CARD_BG }}
+                  />
+                ))}
+              </div>
+            </div>
           ) : error ? (
-            <div className="space-y-3">
+            <div className="space-y-3 py-8">
               <p className="text-sm font-medium text-red-400">{error}</p>
               <button
                 type="button"
@@ -331,56 +645,125 @@ export function Profile() {
             </div>
           ) : stats ? (
             <>
-              <section aria-labelledby="profile-rank-heading">
-                <h2
-                  id="profile-rank-heading"
-                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
-                >
-                  Weekly rank
-                </h2>
+              <section
+                ref={nameBlockRef}
+                className="flex flex-col items-center border-b border-zinc-800/40 pb-8 text-center"
+                aria-label="Profile header"
+              >
                 <div
-                  className="mt-4 rounded-2xl border border-zinc-800/80 p-5 shadow-lg ring-1 ring-zinc-800/30"
-                  style={{ backgroundColor: CARD_BG }}
+                  className="flex size-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold text-white"
+                  style={{ backgroundColor: GOAL_PURPLE }}
+                  aria-hidden
                 >
-                  <div className="flex flex-col items-center text-center">
-                    <RankShield rankName={displayRank} accentColor={rankHue} />
-                    <p className="mt-3 text-sm font-medium text-zinc-500">
-                      {stats.weekly_xp.toLocaleString()} XP this week
+                  {avatarInitials}
+                </div>
+
+                {!editingName ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <p className="text-[20px] font-bold text-white">
+                      {displayName}
                     </p>
-                    <p className="mt-4 text-sm font-medium leading-snug text-zinc-400">
-                      {weeklyBand.kind === 'legend' ? (
-                        <>Maximum rank achieved</>
-                      ) : (
-                        <>
-                          {weeklyBand.progressInBand.toLocaleString()} /{' '}
-                          {weeklyBand.bandSize.toLocaleString()} XP toward{' '}
-                          <span
-                            style={{ color: rankColor(weeklyBand.nextRank) }}
-                          >
-                            {weeklyBand.nextRank}
-                          </span>
-                        </>
-                      )}
-                    </p>
-                    <div className="mt-3 w-full">
-                      <div
-                        className="h-2.5 w-full overflow-hidden rounded-full"
-                        style={{ backgroundColor: BAR_TRACK }}
+                    <button
+                      type="button"
+                      onClick={beginEditName}
+                      className="text-xs font-bold text-app-accent underline-offset-2 hover:underline"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-4 w-full max-w-sm px-1">
+                    <label className="sr-only" htmlFor="profile-display-name">
+                      Display name
+                    </label>
+                    <input
+                      id="profile-display-name"
+                      type="text"
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-app-surface px-4 py-3 text-base font-semibold text-white outline-none ring-app-accent/0 focus-visible:ring-2"
+                      autoComplete="name"
+                      disabled={nameSaving}
+                    />
+                    {nameError ? (
+                      <p className="mt-2 text-left text-xs font-medium text-red-400">
+                        {nameError}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        disabled={nameSaving}
+                        onClick={() => void saveDisplayName()}
+                        className="rounded-xl bg-[#534AB7] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
                       >
-                        <div
-                          className="h-full rounded-full transition-[width] duration-500 ease-out"
-                          style={{
-                            width: `${weeklyBarPct}%`,
-                            backgroundColor: rankHue,
-                          }}
-                        />
-                      </div>
+                        {nameSaving ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={nameSaving}
+                        onClick={cancelEditName}
+                        className="text-sm font-bold text-zinc-500 underline-offset-2 hover:underline"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {memberSinceLabel ? (
+                  <p className="mt-3 text-sm font-medium text-zinc-500">
+                    Member since {memberSinceLabel}
+                  </p>
+                ) : null}
+              </section>
+
+              <section
+                className="border-b border-zinc-800/40 py-8"
+                aria-label="Weekly rank"
+              >
+                <div className="flex flex-col items-center text-center">
+                  <RankShield rankName={displayRank} accentColor={rankHue} />
+                  <p className="mt-3 text-sm font-medium text-zinc-500">
+                    {stats.weekly_xp.toLocaleString()} XP this week ·{' '}
+                    {displayRank} rank
+                  </p>
+                  <p className="mt-4 max-w-sm text-sm font-medium leading-snug text-zinc-400">
+                    {weeklyBand.kind === 'legend' ? (
+                      <>Maximum rank achieved</>
+                    ) : (
+                      <>
+                        {weeklyBand.progressInBand.toLocaleString()} /{' '}
+                        {weeklyBand.bandSize.toLocaleString()} XP toward{' '}
+                        <span
+                          style={{ color: rankColor(weeklyBand.nextRank) }}
+                        >
+                          {weeklyBand.nextRank}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                  <div className="mt-3 w-full max-w-sm">
+                    <div
+                      className="h-2.5 w-full overflow-hidden rounded-full"
+                      style={{ backgroundColor: BAR_TRACK }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-[width] duration-500 ease-out"
+                        style={{
+                          width: `${weeklyBarPct}%`,
+                          backgroundColor: rankHue,
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
               </section>
 
-              <section aria-labelledby="profile-stats-heading">
+              <section
+                className="border-b border-zinc-800/40 py-8"
+                aria-labelledby="profile-stats-heading"
+              >
                 <h2
                   id="profile-stats-heading"
                   className="text-sm font-bold uppercase tracking-wider text-zinc-500"
@@ -388,34 +771,51 @@ export function Profile() {
                   Stats
                 </h2>
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Total XP', value: stats.total_xp.toLocaleString() },
-                    { label: 'Level', value: String(stats.level) },
-                    {
-                      label: 'Current streak',
-                      value: `${stats.current_streak} days`,
-                    },
-                    {
-                      label: 'Longest streak',
-                      value: `${stats.longest_streak} days`,
-                    },
-                  ].map((s) => (
-                    <div
-                      key={s.label}
-                      className="rounded-xl border border-zinc-800/80 bg-app-surface px-4 py-3 ring-1 ring-zinc-800/25"
-                    >
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-                        {s.label}
-                      </p>
-                      <p className="mt-1 text-lg font-bold tabular-nums text-white">
-                        {s.value}
-                      </p>
-                    </div>
-                  ))}
+                  <StatCard
+                    accent={STAT_PURPLE}
+                    label="Total XP"
+                    value={stats.total_xp.toLocaleString()}
+                  />
+                  <StatCard
+                    accent={STAT_AMBER}
+                    label="Current Level"
+                    value={String(stats.level)}
+                  />
+                  <StatCard
+                    accent={STAT_ORANGE}
+                    label="Current Streak"
+                    value={String(stats.current_streak)}
+                  />
+                  <StatCard
+                    accent={STAT_ORANGE_MUTED}
+                    label="Longest Streak"
+                    value={String(stats.longest_streak)}
+                  />
+                  <StatCard
+                    accent={STAT_GREEN}
+                    label="Goals Completed"
+                    value={
+                      goalsCompleted == null
+                        ? '—'
+                        : goalsCompleted.toLocaleString()
+                    }
+                  />
+                  <StatCard
+                    accent={STAT_GREEN_MUTED}
+                    label="Missions Completed"
+                    value={
+                      missionsCompleted == null
+                        ? '—'
+                        : missionsCompleted.toLocaleString()
+                    }
+                  />
                 </div>
               </section>
 
-              <section aria-labelledby="profile-habit-streaks-heading">
+              <section
+                className="border-b border-zinc-800/40 py-8"
+                aria-labelledby="profile-habit-streaks-heading"
+              >
                 <h2
                   id="profile-habit-streaks-heading"
                   className="text-sm font-bold uppercase tracking-wider text-zinc-500"
@@ -424,29 +824,63 @@ export function Profile() {
                 </h2>
                 {habitStreaks.length === 0 ? (
                   <p className="mt-3 text-sm font-medium leading-relaxed text-zinc-500">
-                    No habits yet — add habits on the Today tab
+                    No active habit streaks yet
                   </p>
                 ) : (
-                  <ul className="mt-4 space-y-2">
+                  <ul className="mt-4 space-y-3">
                     {habitStreaks.map((h) => {
                       const cat = getGoalCategoryDisplay(h.category)
+                      const nextM = nextStreakMilestone(h.current_streak)
+                      const pct = streakMilestonePercent(h.current_streak)
+                      const barColor = streakMilestoneBarColor(h.current_streak)
                       return (
                         <li
                           key={h.id}
-                          className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-app-surface px-4 py-3 ring-1 ring-zinc-800/25"
+                          className="rounded-xl border border-zinc-800/80 bg-app-surface px-4 py-3 ring-1 ring-zinc-800/25"
                         >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-white">
-                              <span aria-hidden>{cat.emoji} </span>
-                              {h.title}
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold text-white">
+                                <span aria-hidden>{cat.emoji} </span>
+                                {h.title}
+                              </p>
+                            </div>
+                            <p
+                              className="shrink-0 text-sm font-bold tabular-nums"
+                              style={streakTierTextStyle(h.current_streak)}
+                            >
+                              <span aria-hidden>{'\u{1F525}'} </span>
+                              {h.current_streak}
                             </p>
                           </div>
-                          <p
-                            className="shrink-0 text-sm font-bold tabular-nums"
-                            style={streakTierTextStyle(h.current_streak)}
-                          >
-                            🔥 {h.current_streak}
-                          </p>
+                          <div className="mt-2.5">
+                            <div className="flex items-center justify-between text-[10px] font-semibold text-zinc-600">
+                              <span>
+                                Next milestone {nextM}
+                                {h.current_streak >= 100 ? ' · max' : ''}
+                              </span>
+                              <span className="tabular-nums text-zinc-500">
+                                {Math.round(pct)}%
+                              </span>
+                            </div>
+                            <div
+                              className="mt-1 h-1 w-full overflow-hidden rounded-full"
+                              style={{ backgroundColor: BAR_TRACK }}
+                              role="progressbar"
+                              aria-valuenow={Math.round(pct)}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label="Streak milestone progress"
+                            >
+                              <div
+                                className="h-full rounded-full transition-[width] duration-300"
+                                style={{
+                                  width: `${pct}%`,
+                                  backgroundColor: barColor,
+                                }}
+                              />
+                            </div>
+                          </div>
                         </li>
                       )
                     })}
@@ -454,7 +888,7 @@ export function Profile() {
                 )}
               </section>
 
-              <section aria-labelledby="profile-prefs-heading">
+              <section className="py-8" aria-labelledby="profile-prefs-heading">
                 <h2
                   id="profile-prefs-heading"
                   className="text-sm font-bold uppercase tracking-wider text-zinc-500"
@@ -546,7 +980,10 @@ export function Profile() {
                 ) : null}
               </section>
 
-              <section aria-labelledby="profile-notifications-heading">
+              <section
+                className="border-t border-zinc-800/40 py-8"
+                aria-labelledby="profile-notifications-heading"
+              >
                 <h2
                   id="profile-notifications-heading"
                   className="text-sm font-bold uppercase tracking-wider text-zinc-500"
@@ -586,7 +1023,7 @@ export function Profile() {
               </section>
 
               <section
-                className="border-t border-zinc-800/60 pt-8"
+                className="border-t border-zinc-800/40 py-8"
                 aria-labelledby="profile-xp-log-heading"
               >
                 <h2
@@ -633,10 +1070,85 @@ export function Profile() {
                   </ul>
                 )}
               </section>
+
+              <section
+                className="border-t border-zinc-800/40 py-8"
+                aria-labelledby="profile-account-heading"
+              >
+                <h2
+                  id="profile-account-heading"
+                  className="text-sm font-bold uppercase tracking-wider text-zinc-500"
+                >
+                  Account
+                </h2>
+                <div className="mt-4 flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={beginEditName}
+                    className="rounded-xl border border-zinc-700 bg-app-surface px-4 py-3.5 text-left text-sm font-bold text-white transition-colors hover:border-zinc-600"
+                  >
+                    Edit Display Name
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/share')}
+                    className="rounded-xl border-2 border-[#534AB7] bg-transparent px-4 py-3.5 text-center text-sm font-bold text-[#534AB7] transition-colors hover:bg-[#534AB7]/10"
+                  >
+                    Share My Stats
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSignOutConfirmOpen(true)}
+                    className="rounded-xl border border-zinc-800/80 px-4 py-3.5 text-center text-sm font-bold transition-colors"
+                    style={{ backgroundColor: CARD_BG, color: SIGN_OUT_RED }}
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </section>
+
+              <p className="pb-6 text-center text-[11px] font-medium text-zinc-600">
+                InHabit v1.0.0
+              </p>
             </>
           ) : null}
         </div>
       </div>
+
+      {signOutConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sign-out-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-app-surface p-5 shadow-xl ring-1 ring-zinc-800/40">
+            <p
+              id="sign-out-title"
+              className="text-center text-base font-bold text-white"
+            >
+              Sign out of InHabit?
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => void confirmSignOut()}
+                className="rounded-xl py-3 text-sm font-bold text-white"
+                style={{ backgroundColor: SIGN_OUT_RED }}
+              >
+                Sign out
+              </button>
+              <button
+                type="button"
+                onClick={() => setSignOutConfirmOpen(false)}
+                className="rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-200"
+              >
+                Stay
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
