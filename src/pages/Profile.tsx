@@ -698,20 +698,20 @@ export function Profile() {
   const avatarInitials = initialsFromDisplayName(displayName)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
+    <div
+      ref={scrollRef}
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain bg-app-bg [-webkit-overflow-scrolling:touch]"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <header className="shrink-0 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <h1 className="text-2xl font-bold tracking-tight text-white">
           Profile
         </h1>
       </header>
 
-      <div
-        ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-10 pt-0"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div className="min-h-0 flex-1 px-4 pb-10 pt-0">
         {refreshing ? (
           <div
             className="sticky top-0 z-10 -mx-4 mb-2 h-0.5 overflow-hidden bg-zinc-800/50"

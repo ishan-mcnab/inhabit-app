@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { rankEmoji } from '../components/RankShield'
+import { RankShield } from '../components/RankShield'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
 import { getLocalISOWeek, localWeekMondaySundayYmd } from '../lib/isoWeek'
 import {
@@ -318,16 +318,8 @@ export function Share() {
                   </span>
                 </div>
 
-                <div className="mt-8 text-center">
-                  <p
-                    className="text-[42px] font-bold leading-none tracking-tight"
-                    style={{ color: rankHue }}
-                  >
-                    {displayRank.toUpperCase()}
-                  </p>
-                  <p className="mt-3 text-[32px] leading-none" aria-hidden>
-                    {rankEmoji(displayRank)}
-                  </p>
+                <div className="mt-8 flex flex-col items-center text-center">
+                  <RankShield rankName={displayRank} accentColor={rankHue} />
                   <p className="mt-4 text-[13px] font-medium text-zinc-500">
                     Week {isoWeekNum} · Level {level}
                   </p>

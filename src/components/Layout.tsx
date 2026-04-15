@@ -31,7 +31,7 @@ export function Layout() {
   const goalsTabBadge = goalsNeedingAttention > 0
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg">
+    <div className="flex h-[100dvh] min-h-0 flex-col bg-app-bg">
       <div
         className={[
           'fixed left-0 right-0 z-[9999] border-l-4 py-2.5 pl-3 pr-4 text-[13px] font-medium text-white transition-opacity duration-300 ease-out',
@@ -48,7 +48,7 @@ export function Layout() {
       >
         You&apos;re offline — changes will sync when you reconnect
       </div>
-      <main className="flex min-h-0 flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))]">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] [-webkit-overflow-scrolling:touch]">
         <div
           key={location.pathname}
           className="page-enter flex min-h-0 flex-1 flex-col"
