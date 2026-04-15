@@ -16,6 +16,7 @@ type Props = {
   onFieldChange: (key: string, value: string) => void
   onBack: () => void
   onContinue: () => void
+  onSkipSetupLater?: () => void
   submitting: boolean
   formError: string | null
 }
@@ -43,6 +44,7 @@ export function OnboardingContextStep({
   onFieldChange,
   onBack,
   onContinue,
+  onSkipSetupLater,
   submitting,
   formError,
 }: Props) {
@@ -117,9 +119,21 @@ export function OnboardingContextStep({
             if (field.type === 'pills') {
               return (
                 <div key={field.key}>
-                  <p className="mb-2 text-[13px] font-medium text-white">
-                    {field.label}
-                  </p>
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <p className="text-[13px] font-medium text-white">
+                      {field.label}
+                    </p>
+                    {!field.required ? (
+                      <button
+                        type="button"
+                        onClick={() => onFieldChange(field.key, '')}
+                        className="shrink-0 text-xs font-medium underline-offset-2 transition-colors hover:underline"
+                        style={{ color: MUTED_BODY }}
+                      >
+                        Skip
+                      </button>
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {field.options.map((opt) => {
                       const selected = values[field.key] === opt
@@ -208,6 +222,17 @@ export function OnboardingContextStep({
           >
             {submitting ? 'Saving…' : 'Continue'}
           </button>
+          {onSkipSetupLater ? (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={onSkipSetupLater}
+              className="mt-4 w-full text-center text-[12px] font-medium transition-opacity disabled:opacity-40"
+              style={{ color: MUTED_BODY }}
+            >
+              Skip for now — set up later
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

@@ -69,6 +69,20 @@ function daysSinceLastLocalSundayStart(): number {
   )
 }
 
+/** Whole calendar days from account creation (local midnight) to today (local midnight). */
+function localCalendarDaysSinceJoined(isoCreatedAt: string): number {
+  const created = new Date(isoCreatedAt)
+  if (Number.isNaN(created.getTime())) return 999
+  const start = new Date(
+    created.getFullYear(),
+    created.getMonth(),
+    created.getDate(),
+  )
+  const now = new Date()
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86400000))
+}
+
 /** True if `full_clear_bonus` was already logged for this user on the *local* calendar day. */
 async function wasFullClearBonusAwardedToday(userId: string): Promise<boolean> {
   const { startIso, endIso } = localDayStartEndIso()
@@ -684,6 +698,17 @@ export function Today() {
     } = await supabase.auth.getUser()
     if (userError || !user) return
 
+    const joinIso =
+      typeof user.created_at === 'string' ? user.created_at : ''
+    if (
+      joinIso &&
+      !Number.isNaN(new Date(joinIso).getTime()) &&
+      localCalendarDaysSinceJoined(joinIso) < 7
+    ) {
+      setReflectionNudge('none')
+      return
+    }
+
     const now = new Date()
     const cw = getLocalISOWeek(now)
     const cy = getLocalISOWeekYear(now)
@@ -1242,60 +1267,72 @@ export function Today() {
       setHabits(hs)
     }
 
-    const now = new Date()
-    const cw = getLocalISOWeek(now)
-    const cy = getLocalISOWeekYear(now)
-    const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
-    const { mon, sun } = localWeekMondaySundayYmd(now)
-    const { startIso: wStartIso, endIso: wEndIso } = localWeekStartEndIso(now)
-    const [curRes, prevRes, weekTotalRes, weekDoneRes] = await Promise.all([
-      supabase
-        .from('reflections')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('iso_week_year', cy)
-        .eq('week_number', cw)
-        .maybeSingle(),
-      supabase
-        .from('reflections')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('iso_week_year', py)
-        .eq('week_number', pw)
-        .maybeSingle(),
-      supabase
-        .from('daily_missions')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .gte('due_date', mon)
-        .lte('due_date', sun)
-        .not('due_date', 'is', null),
-      supabase
-        .from('daily_missions')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('completed', true)
-        .gte('completed_at', wStartIso)
-        .lte('completed_at', wEndIso)
-        .not('completed_at', 'is', null),
-    ])
+    const joinIso =
+      typeof user.created_at === 'string' ? user.created_at : ''
+    const daysSinceJoined =
+      joinIso && !Number.isNaN(new Date(joinIso).getTime())
+        ? localCalendarDaysSinceJoined(joinIso)
+        : 999
 
-    if (!weekTotalRes.error && !weekDoneRes.error) {
-      const tot = weekTotalRes.count ?? 0
-      const done = weekDoneRes.count ?? 0
-      const rate = tot <= 0 ? 0 : Math.min(100, Math.round((done / tot) * 100))
-      setReflectionWeekMissionRate(rate)
-    }
-
-    if (curRes.error || prevRes.error) {
-      setReflectionNudge('none')
-    } else if (now.getDay() === 0) {
-      setReflectionNudge(!curRes.data ? 'sunday' : 'none')
-    } else if (prevRes.data || curRes.data) {
+    if (daysSinceJoined < 7) {
       setReflectionNudge('none')
     } else {
-      setReflectionNudge('missed')
-      setReflectionMissedDaysAgo(daysSinceLastLocalSundayStart())
+      const now = new Date()
+      const cw = getLocalISOWeek(now)
+      const cy = getLocalISOWeekYear(now)
+      const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
+      const { mon, sun } = localWeekMondaySundayYmd(now)
+      const { startIso: wStartIso, endIso: wEndIso } = localWeekStartEndIso(now)
+      const [curRes, prevRes, weekTotalRes, weekDoneRes] = await Promise.all([
+        supabase
+          .from('reflections')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('iso_week_year', cy)
+          .eq('week_number', cw)
+          .maybeSingle(),
+        supabase
+          .from('reflections')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('iso_week_year', py)
+          .eq('week_number', pw)
+          .maybeSingle(),
+        supabase
+          .from('daily_missions')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .gte('due_date', mon)
+          .lte('due_date', sun)
+          .not('due_date', 'is', null),
+        supabase
+          .from('daily_missions')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('completed', true)
+          .gte('completed_at', wStartIso)
+          .lte('completed_at', wEndIso)
+          .not('completed_at', 'is', null),
+      ])
+
+      if (!weekTotalRes.error && !weekDoneRes.error) {
+        const tot = weekTotalRes.count ?? 0
+        const done = weekDoneRes.count ?? 0
+        const rate =
+          tot <= 0 ? 0 : Math.min(100, Math.round((done / tot) * 100))
+        setReflectionWeekMissionRate(rate)
+      }
+
+      if (curRes.error || prevRes.error) {
+        setReflectionNudge('none')
+      } else if (now.getDay() === 0) {
+        setReflectionNudge(!curRes.data ? 'sunday' : 'none')
+      } else if (prevRes.data || curRes.data) {
+        setReflectionNudge('none')
+      } else {
+        setReflectionNudge('missed')
+        setReflectionMissedDaysAgo(daysSinceLastLocalSundayStart())
+      }
     }
 
     if (loadGenRef.current !== gen) return

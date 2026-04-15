@@ -4,7 +4,7 @@ export type ContextPillField = {
   key: string
   label: string
   type: 'pills'
-  required: true
+  required: boolean
   options: readonly string[]
 }
 
@@ -46,7 +46,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       key: 'consistency_blocker',
       label: 'Biggest consistency blocker',
       type: 'pills',
-      required: true,
+      required: false,
       options: [
         'Motivation',
         'Time',
@@ -59,7 +59,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       key: 'training_location',
       label: 'Where do you train?',
       type: 'pills',
-      required: true,
+      required: false,
       options: ['Gym', 'Home', 'Both'],
     },
     {
@@ -107,7 +107,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
     },
     {
       key: 'time_per_day',
-      label: 'Time per day you can dedicate',
+      label: 'Time per day available',
       type: 'pills',
       required: true,
       options: ['15 mins', '30 mins', '1 hour', '2+ hours'],
@@ -116,7 +116,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       key: 'current_level',
       label: 'Current level',
       type: 'pills',
-      required: true,
+      required: false,
       options: [
         'Complete beginner',
         'Some knowledge',
@@ -145,18 +145,18 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       ],
     },
     {
-      key: 'confidence_level',
-      label: 'Current confidence level',
-      type: 'pills',
-      required: true,
-      options: ['Low', 'Building', 'Moderate', 'Situational'],
-    },
-    {
       key: 'life_stage',
       label: 'Current life stage',
       type: 'pills',
       required: true,
       options: ['In school', 'Working', 'Both', 'Neither'],
+    },
+    {
+      key: 'confidence_level',
+      label: 'Current confidence level',
+      type: 'pills',
+      required: false,
+      options: ['Low', 'Building', 'Moderate', 'Situational'],
     },
     {
       key: 'specific_work',
@@ -181,22 +181,22 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       ],
     },
     {
+      key: 'time_commitment',
+      label: 'Time per day available',
+      type: 'pills',
+      required: true,
+      options: ['5 mins', '10 mins', '20 mins', '30+ mins'],
+    },
+    {
       key: 'previous_experience',
       label: 'Previous experience with wellness practices',
       type: 'pills',
-      required: true,
+      required: false,
       options: [
         'Never tried',
         "Tried but didn't stick",
         'Currently do some',
       ],
-    },
-    {
-      key: 'time_commitment',
-      label: 'Time per day you can commit',
-      type: 'pills',
-      required: true,
-      options: ['5 mins', '10 mins', '20 mins', '30+ mins'],
     },
     {
       key: 'specific_address',
@@ -236,7 +236,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       key: 'tracks_spending',
       label: 'Do you currently track your spending?',
       type: 'pills',
-      required: true,
+      required: false,
       options: ['Never', 'Sometimes', 'Yes consistently'],
     },
     {

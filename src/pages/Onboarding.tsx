@@ -213,6 +213,44 @@ export function Onboarding() {
     void navigate('/today', { replace: true })
   }
 
+  async function handleSkipSetupLater() {
+    if (submitting) return
+    setFormError(null)
+    setSubmitting(true)
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setSubmitting(false)
+      setFormError(userError?.message ?? 'Not signed in')
+      return
+    }
+
+    const goal_context = buildGoalContextPayload(selectedOrder, contextDraft)
+
+    const { error } = await supabase.from('users').upsert(
+      {
+        id: user.id,
+        display_name: displayName.trim(),
+        goal_categories: [...selectedOrder],
+        goal_context,
+        onboarded: true,
+      },
+      { onConflict: 'id' },
+    )
+
+    setSubmitting(false)
+
+    if (error) {
+      setFormError(error.message)
+      return
+    }
+
+    void navigate('/today', { replace: true })
+  }
+
   if (checking) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-app-bg">
@@ -439,6 +477,7 @@ export function Onboarding() {
         }
         onBack={handleContextBack}
         onContinue={() => void handleContextContinue()}
+        onSkipSetupLater={() => void handleSkipSetupLater()}
         submitting={submitting}
         formError={formError}
       />

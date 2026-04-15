@@ -14,7 +14,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { BarChart2, Flag, Repeat } from 'lucide-react'
+import { BarChart2, Flag, Lock, Repeat } from 'lucide-react'
 import { Bar } from 'react-chartjs-2'
 import { Link, useLocation } from 'react-router-dom'
 import { RankShield } from '../components/RankShield'
@@ -108,6 +108,20 @@ function formatShortMd(d: Date): string {
 
 function localDayStart(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+/** Whole calendar days from account creation (local midnight) to today (local midnight). */
+function localCalendarDaysSinceJoined(isoCreatedAt: string): number {
+  const created = new Date(isoCreatedAt)
+  if (Number.isNaN(created.getTime())) return 999
+  const start = new Date(
+    created.getFullYear(),
+    created.getMonth(),
+    created.getDate(),
+  )
+  const now = new Date()
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86400000))
 }
 
 function buildLastSixWeekBuckets(): { mondays: Date[]; weekKeys: string[] } {
@@ -380,6 +394,8 @@ export function Progress() {
   )
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
+  const [accountCreatedAt, setAccountCreatedAt] = useState<string | null>(null)
+
   const lastFetchedAtRef = useRef<number | null>(null)
   const TAB_REFRESH_STALE_MS = 30_000
 
@@ -402,9 +418,14 @@ export function Progress() {
 
     if (authErr || !user) {
       if (!silent) setLoading(false)
+      setAccountCreatedAt(null)
       setError(authErr?.message ?? 'Not signed in')
       return
     }
+
+    setAccountCreatedAt(
+      typeof user.created_at === 'string' ? user.created_at : null,
+    )
 
     try {
       await checkAndResetWeeklyXp(user.id)
@@ -712,6 +733,21 @@ export function Progress() {
     return `${y}-${m}-${day}`
   }, [])
 
+  const daysSinceJoined = useMemo(() => {
+    if (!accountCreatedAt) return 0
+    return localCalendarDaysSinceJoined(accountCreatedAt)
+  }, [accountCreatedAt])
+
+  const progressLocked =
+    !error &&
+    !loading &&
+    accountCreatedAt !== null &&
+    daysSinceJoined < 7
+
+  const daysUntilProgressUnlock = 7 - daysSinceJoined
+  const progressWeekDayLabel = Math.min(7, daysSinceJoined + 1)
+  const progressWeekBarPct = Math.min(100, (daysSinceJoined / 7) * 100)
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       <header className="shrink-0 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -838,6 +874,95 @@ export function Progress() {
                 />
               </section>
 
+              {progressLocked ? (
+                <section
+                  aria-label="Progress unlocks soon"
+                  className="space-y-5 pt-2 text-center"
+                >
+                  <div
+                    className="rounded-2xl border p-6"
+                    style={{
+                      backgroundColor: CARD_BG,
+                      borderColor: CARD_BORDER,
+                    }}
+                  >
+                    <Lock
+                      className="mx-auto text-zinc-500"
+                      size={44}
+                      strokeWidth={1.25}
+                      aria-hidden
+                    />
+                    <h2 className="mt-4 text-lg font-bold text-white">
+                      Your progress unlocks in {daysUntilProgressUnlock}{' '}
+                      {daysUntilProgressUnlock === 1 ? 'day' : 'days'}
+                    </h2>
+                    <p
+                      className="mx-auto mt-3 max-w-[280px] text-[13px] font-medium leading-relaxed"
+                      style={{ color: MUTED_BODY }}
+                    >
+                      Keep completing missions and building habits. Your stats,
+                      charts, and insights will appear here once you&apos;ve built
+                      your first week of data.
+                    </p>
+                    <div className="mx-auto mt-6 w-full max-w-[280px]">
+                      <p
+                        className="text-left text-[11px] font-semibold uppercase tracking-wide"
+                        style={{ color: MUTED_VERY }}
+                      >
+                        Day {progressWeekDayLabel} of 7
+                      </p>
+                      <div
+                        className="mt-2 h-2 w-full overflow-hidden rounded-full"
+                        style={{ backgroundColor: BAR_TRACK }}
+                      >
+                        <div
+                          className="h-full rounded-full transition-[width] duration-500 ease-out"
+                          style={{
+                            width: `${progressWeekBarPct}%`,
+                            backgroundColor: BAR_PURPLE,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-3">
+                    {[
+                      {
+                        title: '📊 Weekly XP chart',
+                        sub: 'See your XP trends',
+                      },
+                      {
+                        title: '🎯 Goal progress',
+                        sub: 'Track every goal',
+                      },
+                      {
+                        title: '🔥 Habit consistency',
+                        sub: '7-day completion grids',
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.title}
+                        className="rounded-xl border px-4 py-3 text-left opacity-50 backdrop-blur-[2px]"
+                        style={{
+                          backgroundColor: 'rgba(20,20,24,0.8)',
+                          borderColor: 'rgba(255,255,255,0.06)',
+                        }}
+                      >
+                        <p className="text-sm font-semibold text-zinc-300">
+                          {item.title}
+                        </p>
+                        <p
+                          className="mt-1 text-[12px] font-medium"
+                          style={{ color: MUTED_BODY }}
+                        >
+                          {item.sub}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : (
+                <>
               <section aria-label="Weekly XP chart">
                 <SectionHeadingRow>Weekly XP</SectionHeadingRow>
                 <p
@@ -1349,6 +1474,8 @@ export function Progress() {
                   </ul>
                 )}
               </section>
+                </>
+              )}
             </>
           ) : null}
         </div>
