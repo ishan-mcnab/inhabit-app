@@ -7,6 +7,7 @@ import {
   type TouchEvent,
 } from 'react'
 import { useCountUp } from '../hooks/useCountUp'
+import { ChevronRight, Clock } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { RankShield } from '../components/RankShield'
 import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
@@ -1237,6 +1238,37 @@ export function Profile() {
                 </div>
                 <SectionHeadingRow>Account</SectionHeadingRow>
                 <div className="mt-4 flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/history')}
+                    className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-white/[0.04]"
+                    style={{
+                      backgroundColor: CARD_BG,
+                      borderColor: CARD_BORDER,
+                    }}
+                  >
+                    <Clock
+                      size={20}
+                      className="shrink-0 text-zinc-400"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-white">Mission History</p>
+                      <p
+                        className="mt-0.5 text-xs font-medium"
+                        style={{ color: MUTED_BODY }}
+                      >
+                        View your past missions
+                      </p>
+                    </div>
+                    <ChevronRight
+                      size={20}
+                      className="shrink-0 text-zinc-500"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                  </button>
                   <button
                     type="button"
                     onClick={() => navigate('/share')}

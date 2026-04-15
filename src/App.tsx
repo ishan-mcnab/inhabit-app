@@ -11,6 +11,7 @@ import { CreateHabit } from './pages/CreateHabit'
 import { GoalDetail } from './pages/GoalDetail'
 import { Goals } from './pages/Goals'
 import { Login } from './pages/Login'
+import { MissionHistory } from './pages/MissionHistory'
 import { Onboarding } from './pages/Onboarding'
 import { Profile } from './pages/Profile'
 import { Progress } from './pages/Progress'
@@ -65,6 +66,14 @@ function App() {
               element={
                 <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
                   <Today />
+                </PageErrorBoundary>
+              }
+            />
+            <Route
+              path="history"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <MissionHistory />
                 </PageErrorBoundary>
               }
             />

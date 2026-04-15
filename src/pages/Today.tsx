@@ -154,7 +154,7 @@ function formatTodayHeading(d: Date): string {
   })
 }
 
-type GoalEmbed = { title: string; category: string | null }
+type GoalEmbed = { title: string; category: string | null; status?: string | null }
 
 type MissionRow = {
   id: string
@@ -183,6 +183,14 @@ type TodayMission = {
   goal_id: string
   goalTitle: string
   category: string | null
+}
+
+function missionRowFromActiveGoal(row: MissionRow): boolean {
+  const g = pickGoalEmbed(row.goals)
+  if (!g) return false
+  const s = g.status
+  if (s === undefined || s === null || s === '') return true
+  return s === 'active'
 }
 
 function mapRowToMission(row: MissionRow): TodayMission {
@@ -923,7 +931,7 @@ export function Today() {
           xp_reward,
           due_date,
           goal_id,
-          goals ( title, category )
+          goals ( title, category, status )
         `,
         )
         .eq('user_id', uid)
@@ -934,7 +942,7 @@ export function Today() {
         return
       }
       const rows = (data ?? []) as unknown as MissionRow[]
-      const list = rows.map(mapRowToMission)
+      const list = rows.filter(missionRowFromActiveGoal).map(mapRowToMission)
       setMissions(list)
       const prevM = appCache.get<MissionsDayCache>(
         missionsCacheKey(uid, todayStr),
@@ -1067,7 +1075,7 @@ export function Today() {
           xp_reward,
           due_date,
           goal_id,
-          goals ( title, category )
+          goals ( title, category, status )
         `,
         )
         .eq('user_id', user.id)
@@ -1224,7 +1232,9 @@ export function Today() {
       setMissions([])
     } else if (!goalsRes.error) {
       const rows = (missionsRes.data ?? []) as unknown as MissionRow[]
-      const list = rows.map(mapRowToMission)
+      const list = rows
+        .filter(missionRowFromActiveGoal)
+        .map(mapRowToMission)
       setMissions(list)
     } else {
       setMissions([])
@@ -1372,7 +1382,9 @@ export function Today() {
           ? Math.max(0, Math.floor(d.grace_passes_remaining))
           : 0
       const missionRows = (missionsRes.data ?? []) as unknown as MissionRow[]
-      const missionsList = missionRows.map(mapRowToMission)
+      const missionsList = missionRows
+        .filter(missionRowFromActiveGoal)
+        .map(mapRowToMission)
       const gCount = goalsRes.error ? 0 : (goalsRes.count ?? 0)
       const hg = gCount > 0
       const doneIds = new Set<string>(

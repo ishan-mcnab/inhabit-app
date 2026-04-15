@@ -80,12 +80,14 @@ function clampPercent(n: number): number {
 const CARD_SURFACE = '#141418'
 const CARD_BORDER = 'rgba(255,255,255,0.08)'
 const MUTED_BODY = '#888780'
+const PAUSED_AMBER = '#BA7517'
 
 const TAB_REFRESH_STALE_MS = 30_000
 const SKELETON_DELAY_MS = 200
 
 type GoalsCachePayload = {
   goals: GoalRow[]
+  pausedGoals: GoalRow[]
   completedGoals: CompletedGoalRow[]
   questPreviewByGoalId: Record<string, string>
   fitnessTitles: string[]
@@ -132,6 +134,7 @@ export function Goals() {
   const navigate = useNavigate()
   const location = useLocation()
   const [goals, setGoals] = useState<GoalRow[]>([])
+  const [pausedGoals, setPausedGoals] = useState<GoalRow[]>([])
   const [completedGoals, setCompletedGoals] = useState<CompletedGoalRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -202,6 +205,7 @@ export function Goals() {
         const cached = appCache.get<GoalsCachePayload>(goalsCacheKey(user.id))
         if (cached) {
           setGoals(cached.goals)
+          setPausedGoals(cached.pausedGoals ?? [])
           setCompletedGoals(cached.completedGoals)
           setQuestPreviewByGoalId(cached.questPreviewByGoalId)
           setFitnessHabitTitles(new Set(cached.fitnessTitles))
@@ -218,7 +222,8 @@ export function Goals() {
         }
       }
 
-      const [activeRes, completedRes, habitsRes, prefsRes] = await Promise.all([
+      const [activeRes, pausedRes, completedRes, habitsRes, prefsRes] =
+        await Promise.all([
       supabase
         .from('goals')
         .select(
@@ -226,6 +231,14 @@ export function Goals() {
         )
         .eq('user_id', user.id)
         .eq('status', 'active')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('goals')
+        .select(
+          'id,title,category,target_date,progress_percent,status,created_at',
+        )
+        .eq('user_id', user.id)
+        .eq('status', 'paused')
         .order('created_at', { ascending: false }),
       supabase
         .from('goals')
@@ -251,6 +264,7 @@ export function Goals() {
       if (loadGenRef.current !== gen) return
       setError(activeRes.error.message)
       setGoals([])
+      setPausedGoals([])
       setCompletedGoals([])
       setQuestPreviewByGoalId({})
       setGoalsNeedingAttention(0)
@@ -263,6 +277,14 @@ export function Goals() {
     const goalsList = (activeRes.data ?? []) as GoalRow[]
     if (loadGenRef.current !== gen) return
     setGoals(goalsList)
+
+    const pausedList = pausedRes.error
+      ? []
+      : ((pausedRes.data ?? []) as GoalRow[])
+    if (pausedRes.error) {
+      console.error('Goals: paused goals fetch failed:', pausedRes.error)
+    }
+    setPausedGoals(pausedList)
 
     const goalIds = goalsList.map((g) => g.id)
 
@@ -363,6 +385,7 @@ export function Goals() {
       goalsCacheKey(user.id),
       {
         goals: goalsList,
+        pausedGoals: pausedList,
         completedGoals: completedRows,
         questPreviewByGoalId: nextPreviews,
         fitnessTitles: Array.from(titles),
@@ -579,7 +602,7 @@ export function Goals() {
         ) : loading ? null : (
           <>
             {goals.length === 0 ? (
-              completedGoals.length === 0 ? (
+              completedGoals.length === 0 && pausedGoals.length === 0 ? (
                 <div className="flex min-h-[min(60vh,28rem)] flex-1 flex-col items-center justify-center px-4 py-12 text-center">
                   <Flag
                     size={40}
@@ -696,6 +719,111 @@ export function Goals() {
                 })}
               </ul>
             )}
+
+            {pausedGoals.length > 0 ? (
+              <section className="mx-auto mt-8 max-w-lg border-t border-zinc-800/60 pt-8">
+                <h2
+                  className="text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-500"
+                >
+                  Paused
+                </h2>
+                <ul className="mt-3 flex flex-col gap-2.5">
+                  {pausedGoals.map((goal) => {
+                    const { label, emoji } = getGoalCategoryDisplay(goal.category)
+                    const pct = clampPercent(goal.progress_percent)
+                    const totalW = goal.target_date
+                      ? calculateTotalWeeks(goal.target_date)
+                      : 1
+                    const currentW = goal.created_at
+                      ? calculateCurrentWeekFromGoalStart(goal.created_at)
+                      : 1
+                    const targetCls = targetDateClass(goal.target_date)
+                    return (
+                      <li key={goal.id}>
+                        <Link
+                          to={`/goals/${goal.id}`}
+                          className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
+                        >
+                          <article
+                            className="card-interactive flex min-h-[90px] gap-3 rounded-2xl border p-4 opacity-60 shadow-sm transition-colors hover:bg-white/[0.04]"
+                            style={{
+                              backgroundColor: CARD_SURFACE,
+                              borderColor: CARD_BORDER,
+                            }}
+                          >
+                            <div
+                              className="w-[3px] shrink-0 self-stretch rounded-full"
+                              style={{ backgroundColor: PAUSED_AMBER }}
+                              aria-hidden
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h2 className="text-[15px] font-semibold leading-snug text-white">
+                                  {goal.title}
+                                </h2>
+                                <span
+                                  className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ring-1"
+                                  style={{
+                                    backgroundColor: `${PAUSED_AMBER}33`,
+                                    color: PAUSED_AMBER,
+                                    borderColor: `${PAUSED_AMBER}55`,
+                                  }}
+                                >
+                                  Paused
+                                </span>
+                              </div>
+                              <p
+                                className="mt-2 text-xs font-medium"
+                                style={{ color: MUTED_BODY }}
+                              >
+                                <span aria-hidden>{emoji}</span> {label}
+                              </p>
+                              <p
+                                className={`mt-1 text-xs font-medium ${targetCls}`}
+                              >
+                                Target {formatTargetDate(goal.target_date)}
+                              </p>
+                              <div className="mt-4">
+                                <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
+                                  <span>Progress</span>
+                                  <span className="tabular-nums text-zinc-500">
+                                    {pct}%
+                                  </span>
+                                </div>
+                                <div
+                                  className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-800"
+                                  role="progressbar"
+                                  aria-valuenow={pct}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-label="Goal progress"
+                                >
+                                  <div
+                                    className="h-full rounded-full bg-zinc-600 transition-[width] duration-300"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <p
+                                  className="mt-2 text-[11px] font-medium italic text-zinc-500"
+                                >
+                                  Tap to resume
+                                </p>
+                                <p
+                                  className="mt-1 text-[11px] font-medium"
+                                  style={{ color: MUTED_BODY }}
+                                >
+                                  Week {currentW} of {totalW} · {pct}% complete
+                                </p>
+                              </div>
+                            </div>
+                          </article>
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            ) : null}
 
             {completedGoalsError ? (
               <section className="mx-auto mt-10 max-w-lg border-t border-zinc-800/60 pt-8">

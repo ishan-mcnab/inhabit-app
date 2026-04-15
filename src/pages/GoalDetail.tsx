@@ -23,7 +23,9 @@ import {
   generateOneWeeklyQuestTitle,
 } from '../lib/openRouterSingle'
 import { formatIsoWeekRangeLabel, getLocalISOWeekYear } from '../lib/isoWeek'
+import { ensureCurrentWeekMissionsForResumedGoal } from '../lib/weeklyMissionReset'
 import { awardXP, localWeekStartEndIso } from '../lib/xp'
+import { appCache, goalsCacheKey, missionsCacheKey } from '../lib/cache'
 import {
   formatUnlocksLabel,
   isQuestLockedForMode,
@@ -193,8 +195,11 @@ export function GoalDetail() {
 
   const [confirmRegenerateOpen, setConfirmRegenerateOpen] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [confirmPauseOpen, setConfirmPauseOpen] = useState(false)
   const [regeneratingPlan, setRegeneratingPlan] = useState(false)
   const [deletingGoal, setDeletingGoal] = useState(false)
+  const [pausingGoal, setPausingGoal] = useState(false)
+  const [resumingGoal, setResumingGoal] = useState(false)
 
   const [questMenuOpenId, setQuestMenuOpenId] = useState<string | null>(null)
   const [editingQuestId, setEditingQuestId] = useState<string | null>(null)
@@ -345,6 +350,7 @@ export function GoalDetail() {
 
   const generateNextBatch = useCallback(async () => {
     if (!goal || !userId || !goalId) return
+    if (goal.status === 'paused' || goal.status === 'completed') return
     if (!goal.target_date || !goal.created_at) return
     if (batchGenInFlight.current) return
 
@@ -566,8 +572,57 @@ export function GoalDetail() {
     setGoalToast('Target date updated')
   }
 
+  async function handlePauseGoal() {
+    if (!goal || !userId || !goalId) return
+    setConfirmPauseOpen(false)
+    setPausingGoal(true)
+    setError(null)
+    const { error: uErr } = await supabase
+      .from('goals')
+      .update({ status: 'paused' })
+      .eq('id', goalId)
+      .eq('user_id', userId)
+    setPausingGoal(false)
+    if (uErr) {
+      setError(uErr.message)
+      return
+    }
+    appCache.invalidate(goalsCacheKey(userId))
+    appCache.invalidate(missionsCacheKey(userId, formatLocalDate(new Date())))
+    void navigate('/goals', { state: { toast: 'Goal paused' } })
+  }
+
+  async function handleResumeGoal() {
+    if (!goal || !userId || !goalId) return
+    setGoalMenuOpen(false)
+    setResumingGoal(true)
+    setError(null)
+    const { error: uErr } = await supabase
+      .from('goals')
+      .update({ status: 'active' })
+      .eq('id', goalId)
+      .eq('user_id', userId)
+    if (uErr) {
+      setResumingGoal(false)
+      setError(uErr.message)
+      return
+    }
+    setGoal((g) => (g ? { ...g, status: 'active' } : g))
+    appCache.invalidate(goalsCacheKey(userId))
+    appCache.invalidate(missionsCacheKey(userId, formatLocalDate(new Date())))
+    try {
+      await ensureCurrentWeekMissionsForResumedGoal(userId, goalId)
+    } catch (e) {
+      console.error('ensureCurrentWeekMissionsForResumedGoal failed:', e)
+    }
+    setResumingGoal(false)
+    setGoalToast('Goal resumed!')
+    await load()
+  }
+
   async function handleRegenerateAllMissions() {
     if (!goal || !userId || !goalId) return
+    if (goal.status === 'paused') return
     if (!goal.target_date) {
       setError('This goal has no target date to regenerate against')
       return
@@ -821,7 +876,7 @@ export function GoalDetail() {
 
   useEffect(() => {
     if (loading || !goal || !userId || !goalId) return
-    if (goal.status === 'completed') return
+    if (goal.status === 'completed' || goal.status === 'paused') return
     if (!goal.target_date || !goal.created_at) return
 
     const totalW = calculateTotalWeeks(goal.target_date)
@@ -843,7 +898,8 @@ export function GoalDetail() {
       !goal ||
       quest.completed ||
       markingId ||
-      goal.status === 'completed'
+      goal.status === 'completed' ||
+      goal.status === 'paused'
     ) {
       return
     }
@@ -1091,6 +1147,7 @@ export function GoalDetail() {
 
   async function regenerateQuest(q: WeeklyQuestRow) {
     if (!goal || !userId || !goalId) return
+    if (goal.status === 'paused') return
     closeQuestMenu()
     setRegeneratingQuestId(q.id)
     setRegenerateErrorByQuestId((prev) => {
@@ -1194,7 +1251,13 @@ export function GoalDetail() {
           type="button"
           aria-label="Goal options"
           aria-expanded={goalMenuOpen}
-          disabled={loading || deletingGoal || regeneratingPlan}
+          disabled={
+            loading ||
+            deletingGoal ||
+            regeneratingPlan ||
+            pausingGoal ||
+            resumingGoal
+          }
           onClick={() => setGoalMenuOpen((v) => !v)}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-800/80 hover:text-white disabled:opacity-50"
         >
@@ -1228,16 +1291,40 @@ export function GoalDetail() {
               >
                 Change Target Date
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setGoalMenuOpen(false)
-                  setConfirmRegenerateOpen(true)
-                }}
-                className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-4 text-left text-sm font-bold text-white"
-              >
-                Regenerate All Missions
-              </button>
+              {goal?.status === 'active' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoalMenuOpen(false)
+                    setConfirmRegenerateOpen(true)
+                  }}
+                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-4 text-left text-sm font-bold text-white"
+                >
+                  Regenerate All Missions
+                </button>
+              ) : null}
+              {goal?.status === 'active' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoalMenuOpen(false)
+                    setConfirmPauseOpen(true)
+                  }}
+                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-4 text-left text-sm font-bold text-white"
+                >
+                  Pause Goal
+                </button>
+              ) : null}
+              {goal?.status === 'paused' ? (
+                <button
+                  type="button"
+                  onClick={() => void handleResumeGoal()}
+                  disabled={resumingGoal}
+                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-4 text-left text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {resumingGoal ? 'Resuming…' : 'Resume Goal'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
@@ -1411,6 +1498,47 @@ export function GoalDetail() {
                 type="button"
                 onClick={() => setConfirmRegenerateOpen(false)}
                 disabled={regeneratingPlan}
+                className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800/40 py-3.5 text-sm font-bold text-zinc-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmPauseOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
+          <button
+            type="button"
+            className="absolute inset-0"
+            style={{ backgroundColor: OVERLAY_BG }}
+            aria-label="Close pause confirmation"
+            onClick={() => setConfirmPauseOpen(false)}
+            disabled={pausingGoal}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-800/80 bg-app-bg p-5 shadow-2xl">
+            <p className="text-base font-bold text-white">
+              Pause {goal ? `"${goal.title}"` : 'this goal'}?
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+              Your progress and missions will be saved. Paused goals don&apos;t
+              generate new missions until you resume them.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handlePauseGoal()}
+                disabled={pausingGoal}
+                className="flex-1 rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50"
+                style={{ backgroundColor: '#BA7517' }}
+              >
+                {pausingGoal ? 'Pausing…' : 'Pause Goal'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmPauseOpen(false)}
+                disabled={pausingGoal}
                 className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800/40 py-3.5 text-sm font-bold text-zinc-300 disabled:opacity-50"
               >
                 Cancel
@@ -1771,7 +1899,11 @@ export function GoalDetail() {
                           <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-bold text-emerald-400 ring-1 ring-emerald-500/40">
                             Completed
                           </span>
-                        ) : questLocked ? null : (
+                        ) : questLocked ? null : goal.status === 'paused' ? (
+                          <p className="max-w-[14rem] text-center text-sm font-medium leading-snug text-amber-200/90 sm:text-left">
+                            Resume this goal from the menu to continue quests.
+                          </p>
+                        ) : (
                           <button
                             type="button"
                             disabled={!!markingId}
@@ -1997,7 +2129,7 @@ export function GoalDetail() {
                             ) : null}
                           </div>
 
-                          {!q.completed && !isEditing ? (
+                          {!q.completed && !isEditing && goal.status !== 'paused' ? (
                             <div className="shrink-0">
                               <button
                                 type="button"
