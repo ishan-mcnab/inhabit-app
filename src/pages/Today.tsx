@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { Check, MoreVertical, Plus, Repeat, Target } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   getLocalISOWeek,
@@ -37,16 +38,17 @@ import {
   getWeeklyRankBandProgress,
   localDayStartEndIso,
   localWeekStartEndIso,
-  MAX_LEVEL,
-  nextRankNameFromWeeklyXp,
   rankColor,
-  weeklyXpRemainingToNextRank,
-  xpPercentToNextLevel,
-  xpProgressInCurrentLevel,
-  xpSpanInCurrentLevel,
   type AwardXpResult,
 } from '../lib/xp'
 import { checkAndRegenerateWeeklyMissions } from '../lib/weeklyMissionReset'
+import {
+  appCache,
+  habitsCacheKey,
+  missionsCacheKey,
+  profileCacheKey,
+} from '../lib/cache'
+import { useCountUp } from '../hooks/useCountUp'
 import { useNotificationPrefs } from '../hooks/useNotificationPrefs'
 import { supabase } from '../supabase'
 
@@ -145,6 +147,8 @@ type MissionRow = {
   title: string
   completed: boolean
   completed_at: string | null
+  xp_reward: number | null
+  due_date: string | null
   goal_id: string
   goals: GoalEmbed | GoalEmbed[] | null
 }
@@ -217,21 +221,6 @@ function MissionSkeleton() {
   )
 }
 
-function CheckIcon({ small }: { small?: boolean }) {
-  return (
-    <svg
-      className={small ? 'h-3.5 w-3.5 text-white' : 'h-5 w-5 text-white'}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      aria-hidden
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-  )
-}
-
 function StateCard({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl border border-zinc-800/80 bg-app-surface px-6 py-9 text-center shadow-lg shadow-black/25 ring-1 ring-zinc-800/40 transition-opacity duration-300">
@@ -248,6 +237,37 @@ const LEVEL_UP_PURPLE = '#534AB7'
 const MUTED_HEADING = '#888780'
 const CARD_SURFACE = '#141418'
 const CARD_BORDER = 'rgba(255,255,255,0.08)'
+
+function AnimatedMissionProgress({
+  done,
+  total,
+}: {
+  done: number
+  total: number
+}) {
+  const d = useCountUp(done)
+  const t = useCountUp(total)
+  return (
+    <p
+      className="mt-1 text-[13px] font-medium"
+      style={{ color: MUTED_HEADING }}
+    >
+      {d} / {t} missions done today
+    </p>
+  )
+}
+
+function AnimatedStreak({ streak }: { streak: number }) {
+  const v = useCountUp(streak)
+  return (
+    <p
+      className="shrink-0 pt-0.5 text-base font-bold tabular-nums"
+      style={streakTierTextStyle(streak)}
+    >
+      🔥 {v} day streak
+    </p>
+  )
+}
 
 /** Rank pill background — slightly stronger for readability on dark cards */
 function rankBadgeBackground(hex: string): string {
@@ -302,6 +322,22 @@ type XpProfileRow = {
   rank: string
 }
 
+type ProfileCachePayload = {
+  xpProfile: XpProfileRow
+  displayName: string
+  streakCurrent: number
+  streakLongest: number
+  gracePassesRemaining: number
+}
+
+type MissionsDayCache = {
+  missions: TodayMission[]
+  hasGoals: boolean
+}
+
+const TAB_REFRESH_STALE_MS = 30_000
+const SKELETON_DELAY_MS = 200
+
 function normalizeRank(rankInput: unknown): string {
   if (typeof rankInput === 'string' && rankInput.trim().length > 0) {
     return rankInput.trim()
@@ -330,7 +366,7 @@ function LevelProgressCard({
   barFlash: boolean
   levelUpBannerLevel: number | null
 }) {
-  const { total_xp: total, level, weekly_xp: profileWeeklyXp } = profile
+  const { level, weekly_xp: profileWeeklyXp } = profile
   const weeklyXpVal = Math.max(0, Math.floor(profileWeeklyXp))
   const effectiveRank = calculateRank(weeklyXpVal)
   const weeklyBand = getWeeklyRankBandProgress(weeklyXpVal)
@@ -351,24 +387,15 @@ function LevelProgressCard({
 
   const rc = rankColor(effectiveRank)
   const fillPct =
-    level >= MAX_LEVEL
+    weeklyBand.kind === 'legend'
       ? 100
       : barOverridePct !== null
         ? barOverridePct
-        : xpPercentToNextLevel(total)
-  const progIn = xpProgressInCurrentLevel(total)
-  const span = xpSpanInCurrentLevel(level)
+        : weeklyBand.percent
   const xpRight =
-    level >= MAX_LEVEL
-      ? `${total.toLocaleString()} XP`
-      : `${progIn} / ${span} XP`
-
-  const weeklyRankMilestoneHint = useMemo(() => {
-    const need = weeklyXpRemainingToNextRank(weeklyXpVal)
-    const nextName = nextRankNameFromWeeklyXp(weeklyXpVal)
-    if (need === null || nextName === null || need <= 0) return null
-    return `${need.toLocaleString()} more XP to reach ${nextName}`
-  }, [weeklyXpVal])
+    weeklyBand.kind === 'legend'
+      ? 'MAX RANK'
+      : `${weeklyBand.progressInBand.toLocaleString()} / ${weeklyBand.bandSize.toLocaleString()} XP`
 
   return (
     <div className="shrink-0 px-4 pt-3">
@@ -405,7 +432,7 @@ function LevelProgressCard({
           </span>
         </div>
         <div
-          className="relative mt-2 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
+          className="relative mt-2 flex min-w-0 items-center justify-between gap-2"
           ref={rankPopoverRef}
         >
           <button
@@ -435,18 +462,14 @@ function LevelProgressCard({
           >
             {effectiveRank}
           </button>
-          {weeklyRankMilestoneHint ? (
-            <>
-              <span
-                className="shrink-0 text-[11px] font-medium text-zinc-500"
-                aria-hidden
-              >
-                ·
+          {weeklyBand.kind === 'band' ? (
+            <span className="min-w-0 flex-1 text-right text-[11px] font-medium leading-snug text-zinc-500">
+              {weeklyBand.progressInBand.toLocaleString()} /{' '}
+              {weeklyBand.bandSize.toLocaleString()} XP toward{' '}
+              <span style={{ color: rankColor(weeklyBand.nextRank) }}>
+                {weeklyBand.nextRank}
               </span>
-              <span className="min-w-0 text-[11px] font-medium leading-snug text-zinc-500">
-                {weeklyRankMilestoneHint}
-              </span>
-            </>
+            </span>
           ) : null}
           {rankInfoOpen ? (
             <div
@@ -570,6 +593,18 @@ export function Today() {
   const [missionRegenerateWorking, setMissionRegenerateWorking] =
     useState(false)
   const loadGenRef = useRef(0)
+  const lastFetchedAtRef = useRef<number | null>(null)
+  const skeletonDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
+  const [showDelayedSkeleton, setShowDelayedSkeleton] = useState(false)
+
+  const clearSkeletonDelayTimer = useCallback(() => {
+    if (skeletonDelayTimerRef.current !== null) {
+      window.clearTimeout(skeletonDelayTimerRef.current)
+      skeletonDelayTimerRef.current = null
+    }
+  }, [])
   const [hasGoals, setHasGoals] = useState(false)
   const [missions, setMissions] = useState<TodayMission[]>([])
   const [userId, setUserId] = useState<string | null>(null)
@@ -773,7 +808,8 @@ export function Today() {
       rank: nextRank,
     }
     setXpProfile(p)
-  }, [])
+    if (userId) appCache.invalidate(profileCacheKey(userId))
+  }, [userId])
 
   const runLevelUpSequence = useCallback(async (result: AwardXpResult) => {
     setBarOverridePct(100)
@@ -794,6 +830,7 @@ export function Today() {
       rank: nextRank,
     }
     setXpProfile(p)
+    if (userId) appCache.invalidate(profileCacheKey(userId))
 
     setBarOverridePct(0)
     setBarTransition('none')
@@ -803,10 +840,9 @@ export function Today() {
       })
     })
 
+    const endBand = getWeeklyRankBandProgress(result.newWeeklyXp)
     const endPct =
-      result.newLevel >= MAX_LEVEL
-        ? 100
-        : xpPercentToNextLevel(result.newTotalXp)
+      endBand.kind === 'legend' ? 100 : endBand.percent
     setBarOverridePct(endPct)
     setBarTransition('width 0.5s cubic-bezier(0.4, 0, 0.2, 1)')
     await sleep(520)
@@ -816,7 +852,7 @@ export function Today() {
     setLevelUpBannerLevel(result.newLevel)
     await sleep(2000)
     setLevelUpBannerLevel(null)
-  }, [])
+  }, [userId])
 
   const pumpAwardQueue = useCallback(async () => {
     if (pumpBusyRef.current) return
@@ -859,6 +895,8 @@ export function Today() {
           title,
           completed,
           completed_at,
+          xp_reward,
+          due_date,
           goal_id,
           goals ( title, category )
         `,
@@ -871,7 +909,19 @@ export function Today() {
         return
       }
       const rows = (data ?? []) as unknown as MissionRow[]
-      setMissions(rows.map(mapRowToMission))
+      const list = rows.map(mapRowToMission)
+      setMissions(list)
+      const prevM = appCache.get<MissionsDayCache>(
+        missionsCacheKey(uid, todayStr),
+      )
+      appCache.set(
+        missionsCacheKey(uid, todayStr),
+        {
+          missions: list,
+          hasGoals: prevM?.hasGoals ?? false,
+        },
+        30_000,
+      )
     },
     [todayStr],
   )
@@ -889,43 +939,82 @@ export function Today() {
     }
   }, [userId, reloadTodayMissions])
 
-  const load = useCallback(async () => {
-    const gen = ++loadGenRef.current
-    setLoading(true)
-    setLoadError(null)
-    setLoadStallMessage(null)
-    setMissionsLoadError(null)
-    setHabitsLoadError(null)
-    setXpProfileLoading(true)
-    setHabitsLoading(true)
-    setReflectionNudge('none')
-    setReflectionBannerName('—')
-    setReflectionWeekMissionRate(null)
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = Boolean(opts?.silent)
+      const gen = ++loadGenRef.current
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+      if (!silent) {
+        setLoadError(null)
+        setLoadStallMessage(null)
+        setMissionsLoadError(null)
+        setHabitsLoadError(null)
+        setReflectionNudge('none')
+        setReflectionBannerName('—')
+        setReflectionWeekMissionRate(null)
+      }
 
-    if (userError || !user) {
-      setLoading(false)
-      setXpProfileLoading(false)
-      setHabitsLoading(false)
-      setXpProfile(null)
-      setStreakCurrent(0)
-      setStreakLongest(0)
-      setGraceModalOpen(false)
-      setGraceStreakBeforeMiss(0)
-      setGracePassesRemaining(0)
-      setLoadError(userError?.message ?? 'Not signed in')
-      setUserId(null)
-      setHabits([])
-      return
-    }
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
 
-    setUserId(user.id)
+      if (userError || !user) {
+        if (!silent) {
+          clearSkeletonDelayTimer()
+          setShowDelayedSkeleton(false)
+          setLoading(false)
+          setXpProfileLoading(false)
+          setHabitsLoading(false)
+          setXpProfile(null)
+          setStreakCurrent(0)
+          setStreakLongest(0)
+          setGraceModalOpen(false)
+          setGraceStreakBeforeMiss(0)
+          setGracePassesRemaining(0)
+          setLoadError(userError?.message ?? 'Not signed in')
+          setUserId(null)
+          setHabits([])
+        }
+        return
+      }
 
-    await ensureMondayGraceReset(user.id)
+      setUserId(user.id)
+
+      if (!silent) {
+        const prof = appCache.get<ProfileCachePayload>(
+          profileCacheKey(user.id),
+        )
+        const m = appCache.get<MissionsDayCache>(
+          missionsCacheKey(user.id, todayStr),
+        )
+        const h = appCache.get<TodayHabit[]>(habitsCacheKey(user.id))
+        if (prof && m && Array.isArray(h)) {
+          setXpProfile(prof.xpProfile)
+          setReflectionBannerName(prof.displayName)
+          setStreakCurrent(prof.streakCurrent)
+          setStreakLongest(prof.streakLongest)
+          setGracePassesRemaining(prof.gracePassesRemaining)
+          setMissions(m.missions)
+          setHasGoals(m.hasGoals)
+          setHabits(h)
+          setLoading(false)
+          setXpProfileLoading(false)
+          setHabitsLoading(false)
+          setShowDelayedSkeleton(false)
+        } else {
+          setLoading(true)
+          setXpProfileLoading(true)
+          setHabitsLoading(true)
+          clearSkeletonDelayTimer()
+          skeletonDelayTimerRef.current = window.setTimeout(() => {
+            if (loadGenRef.current !== gen) return
+            setShowDelayedSkeleton(true)
+          }, SKELETON_DELAY_MS)
+        }
+      }
+
+      await ensureMondayGraceReset(user.id)
 
     try {
       await checkAndResetWeeklyXp(user.id)
@@ -950,6 +1039,8 @@ export function Today() {
           title,
           completed,
           completed_at,
+          xp_reward,
+          due_date,
           goal_id,
           goals ( title, category )
         `,
@@ -1208,20 +1299,110 @@ export function Today() {
     }
 
     if (loadGenRef.current !== gen) return
-    setLoading(false)
-    setXpProfileLoading(false)
-    setHabitsLoading(false)
-  }, [todayStr, reloadTodayMissions])
+
+    if (
+      !userXpRes.error &&
+      userXpRes.data &&
+      !missionsRes.error &&
+      !habitsRes.error
+    ) {
+      const d = userXpRes.data as Record<string, unknown>
+      const xpProf: XpProfileRow = {
+        total_xp:
+          typeof d.total_xp === 'number' && !Number.isNaN(d.total_xp)
+            ? d.total_xp
+            : 0,
+        level:
+          typeof d.level === 'number' && !Number.isNaN(d.level) ? d.level : 1,
+        weekly_xp:
+          typeof d.weekly_xp === 'number' && !Number.isNaN(d.weekly_xp)
+            ? d.weekly_xp
+            : 0,
+        rank: normalizeRank(d.rank),
+      }
+      const dn = typeof d.display_name === 'string' ? d.display_name.trim() : ''
+      const cs =
+        typeof d.current_streak === 'number' && !Number.isNaN(d.current_streak)
+          ? Math.max(0, Math.floor(d.current_streak))
+          : 0
+      const ls =
+        typeof d.longest_streak === 'number' && !Number.isNaN(d.longest_streak)
+          ? Math.max(0, Math.floor(d.longest_streak))
+          : 0
+      const gr =
+        typeof d.grace_passes_remaining === 'number' &&
+        !Number.isNaN(d.grace_passes_remaining)
+          ? Math.max(0, Math.floor(d.grace_passes_remaining))
+          : 0
+      const missionRows = (missionsRes.data ?? []) as unknown as MissionRow[]
+      const missionsList = missionRows.map(mapRowToMission)
+      const gCount = goalsRes.error ? 0 : (goalsRes.count ?? 0)
+      const hg = gCount > 0
+      const doneIds = new Set<string>(
+        ((habitLogsRes.data ?? []) as unknown as Record<string, unknown>[])
+          .map((r) => (typeof r.habit_id === 'string' ? r.habit_id : null))
+          .filter((x): x is string => !!x),
+      )
+      const hs = ((habitsRes.data ?? []) as unknown as HabitRow[]).map(
+        (row) => ({
+          ...row,
+          completedToday: doneIds.has(row.id),
+        }),
+      )
+      appCache.set(
+        profileCacheKey(user.id),
+        {
+          xpProfile: xpProf,
+          displayName: dn || '—',
+          streakCurrent: cs,
+          streakLongest: ls,
+          gracePassesRemaining: gr,
+        },
+        60_000,
+      )
+      appCache.set(
+        missionsCacheKey(user.id, todayStr),
+        { missions: missionsList, hasGoals: hg },
+        30_000,
+      )
+      appCache.set(habitsCacheKey(user.id), hs, 60_000)
+    }
+
+    clearSkeletonDelayTimer()
+    setShowDelayedSkeleton(false)
+    lastFetchedAtRef.current = Date.now()
+    if (!silent) {
+      setLoading(false)
+      setXpProfileLoading(false)
+      setHabitsLoading(false)
+    }
+  },
+    [
+      todayStr,
+      reloadTodayMissions,
+      clearSkeletonDelayTimer,
+    ],
+  )
+
+  const maybeRefreshToday = useCallback(() => {
+    const t = lastFetchedAtRef.current
+    if (t !== null && Date.now() - t < TAB_REFRESH_STALE_MS) return
+    const silent = t !== null
+    void load({ silent })
+  }, [load])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    if (location.pathname !== '/today') return
+    void maybeRefreshToday()
+  }, [location.pathname, maybeRefreshToday])
 
   useEffect(() => {
     if (!loading) return
     const gen = loadGenRef.current
     const t = window.setTimeout(() => {
       if (loadGenRef.current !== gen) return
+      clearSkeletonDelayTimer()
+      setShowDelayedSkeleton(false)
       setLoadStallMessage(
         'Taking longer than expected. Please check your connection and try again.',
       )
@@ -1230,7 +1411,7 @@ export function Today() {
       setHabitsLoading(false)
     }, 10_000)
     return () => window.clearTimeout(t)
-  }, [loading])
+  }, [loading, clearSkeletonDelayTimer])
 
   const dismissNewWeekMotivation = useCallback(() => {
     for (const id of newWeekBannerTimersRef.current) {
@@ -1303,9 +1484,11 @@ export function Today() {
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return
+      if (location.pathname === '/today') void maybeRefreshToday()
       void refreshReflectionStatus()
     }
     const onWindowFocus = () => {
+      if (location.pathname === '/today') void maybeRefreshToday()
       void refreshReflectionStatus()
     }
     document.addEventListener('visibilitychange', onVisibility)
@@ -1314,7 +1497,7 @@ export function Today() {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onWindowFocus)
     }
-  }, [refreshReflectionStatus])
+  }, [refreshReflectionStatus, location.pathname, maybeRefreshToday])
 
   // In-app navigation back from /reflection does not always fire focus/visibility.
   useEffect(() => {
@@ -1396,6 +1579,8 @@ export function Today() {
       setCompleteError(error.message)
       return
     }
+
+    appCache.invalidate(missionsCacheKey(userId, todayStr))
 
     void (async () => {
       try {
@@ -1876,7 +2061,7 @@ export function Today() {
     if (showStreak) {
       return (
         <div
-          className="inhabit-banner-fade-in mb-3 flex items-center gap-3 rounded-lg border border-[#EF9F27]/35 px-4 py-3"
+          className="inhabit-banner-fade-in flex items-center gap-3 rounded-lg border border-[#EF9F27]/35 px-4 py-3"
           style={{
             backgroundColor: 'rgba(239, 159, 39, 0.1)',
             borderLeftWidth: 4,
@@ -1914,7 +2099,7 @@ export function Today() {
       const severe = clockHour >= 21
       return (
         <div
-          className="inhabit-banner-fade-in mb-3 w-full rounded-lg border border-zinc-800/60 px-4 py-3"
+          className="inhabit-banner-fade-in w-full rounded-lg border border-zinc-800/60 px-4 py-3"
           style={{
             backgroundColor: CARD_SURFACE,
             borderLeftWidth: 4,
@@ -1947,7 +2132,7 @@ export function Today() {
       return (
         <div
           className={[
-            'inhabit-banner-fade-in mb-3 flex items-center justify-between gap-3 rounded-lg px-4 py-3',
+            'inhabit-banner-fade-in flex items-center justify-between gap-3 rounded-lg px-4 py-3',
             lastChance ? 'border-l-4 border-[#E24B4A]' : '',
           ].join(' ')}
           style={{ backgroundColor: '#534AB7' }}
@@ -1975,7 +2160,7 @@ export function Today() {
       const dayWord = d === 1 ? 'day' : 'days'
       return (
         <div
-          className="inhabit-banner-fade-in mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-500/25 border-l-4 border-l-amber-500 bg-zinc-900/50 px-4 py-3"
+          className="inhabit-banner-fade-in flex items-center justify-between gap-3 rounded-lg border border-amber-500/25 border-l-4 border-l-amber-500 bg-zinc-900/50 px-4 py-3"
           role="status"
         >
           <div className="min-w-0">
@@ -2000,7 +2185,7 @@ export function Today() {
       return (
         <div
           className={[
-            'inhabit-banner-fade-in relative mb-3 flex w-full items-start gap-3 rounded-lg border border-zinc-800/60 px-4 py-3 pr-10 transition-opacity duration-300',
+            'inhabit-banner-fade-in relative flex w-full items-start gap-3 rounded-lg border border-zinc-800/60 px-4 py-3 pr-10 transition-opacity duration-300',
             newWeekMotivationPhase === 'fading' ? 'opacity-0' : 'opacity-100',
           ].join(' ')}
           style={{
@@ -2033,10 +2218,10 @@ export function Today() {
       <header className="shrink-0 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] transition-opacity duration-300">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-white">
+            <h1 className="text-[24px] font-bold leading-tight tracking-tight text-white">
               {headingDate}
             </h1>
-            {loading ? (
+            {loading && showDelayedSkeleton ? (
               <div className="mt-2 h-4 w-40 rounded bg-[#1e1e22] mission-skeleton-shell" />
             ) : loadError || loadStallMessage ? null : total > 0 ? (
               allDone ? (
@@ -2044,22 +2229,12 @@ export function Today() {
                   All done today!
                 </p>
               ) : (
-                <p
-                  className="mt-1 text-[13px] font-medium"
-                  style={{ color: MUTED_HEADING }}
-                >
-                  {doneCount} / {total} missions done today
-                </p>
+                <AnimatedMissionProgress done={doneCount} total={total} />
               )
             ) : null}
           </div>
           {streakCurrent > 0 ? (
-            <p
-              className="shrink-0 pt-0.5 text-base font-bold tabular-nums"
-              style={streakTierTextStyle(streakCurrent)}
-            >
-              🔥 {streakCurrent} day streak
-            </p>
+            <AnimatedStreak streak={streakCurrent} />
           ) : null}
         </div>
       </header>
@@ -2115,7 +2290,7 @@ export function Today() {
       />
       <div
         className={[
-          'grid shrink-0 transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+          'mt-3 grid shrink-0 transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
           celebrationBannerOpen && celebrationBannerExpanded
             ? 'grid-rows-[1fr]'
             : 'grid-rows-[0fr]',
@@ -2133,23 +2308,28 @@ export function Today() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
-        {!loading && !loadError && !loadStallMessage ? todayPriorityBanner : null}
-        {!loading &&
-        !loadError &&
-        !loadStallMessage &&
-        weeklyNewMissionsBannerPhase !== 'off' &&
-        !todayPriorityBanner ? (
-          <div
-            className={[
-              'inhabit-banner-fade-in -mx-4 mb-3 w-[calc(100%+2rem)] rounded-lg px-4 py-3 text-center text-[13px] font-bold leading-snug text-white transition-opacity duration-300',
-              weeklyNewMissionsBannerPhase === 'fading' ? 'opacity-0' : 'opacity-100',
-            ].join(' ')}
-            style={{ backgroundColor: '#16a34a' }}
-            role="status"
-          >
-            🔄 New missions for this week are ready!
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-8">
+        {!loading && !loadError && !loadStallMessage ? (
+          todayPriorityBanner ||
+          (weeklyNewMissionsBannerPhase !== 'off' && !todayPriorityBanner) ? (
+            <div className="mt-2 mb-2 flex flex-col gap-2">
+              {todayPriorityBanner}
+              {weeklyNewMissionsBannerPhase !== 'off' && !todayPriorityBanner ? (
+                <div
+                  className={[
+                    'inhabit-banner-fade-in -mx-4 w-[calc(100%+2rem)] rounded-lg px-4 py-3 text-center text-[13px] font-bold leading-snug text-white transition-opacity duration-300',
+                    weeklyNewMissionsBannerPhase === 'fading'
+                      ? 'opacity-0'
+                      : 'opacity-100',
+                  ].join(' ')}
+                  style={{ backgroundColor: '#16a34a' }}
+                  role="status"
+                >
+                  🔄 New missions for this week are ready!
+                </div>
+              ) : null}
+            </div>
+          ) : null
         ) : null}
         {loadError || loadStallMessage ? (
           <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
@@ -2175,26 +2355,41 @@ export function Today() {
             </StateCard>
           </div>
         ) : loading ? (
-          <div className="mx-auto flex max-w-lg flex-col gap-3">
-            <MissionSkeleton />
-            <MissionSkeleton />
-            <MissionSkeleton />
-          </div>
+          showDelayedSkeleton ? (
+            <div className="mx-auto flex max-w-lg flex-col gap-3">
+              <MissionSkeleton />
+              <MissionSkeleton />
+              <MissionSkeleton />
+            </div>
+          ) : null
         ) : !hasGoals ? (
-          <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
-            <StateCard>
-              <p className="text-lg font-bold text-white">No goals yet</p>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                Create your first goal to get daily missions
-              </p>
-              <Link
-                to="/goals/new"
-                className="mt-6 block w-full rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity active:opacity-90"
-                style={{ backgroundColor: '#534AB7' }}
-              >
-                Create a Goal
-              </Link>
-            </StateCard>
+          <div className="flex min-h-[50vh] flex-1 flex-col items-center justify-center px-2">
+            <div className="mx-auto w-full max-w-[320px]">
+              <StateCard>
+                <Target
+                  size={40}
+                  strokeWidth={1.5}
+                  className="mx-auto text-[#444441]"
+                  aria-hidden
+                />
+                <p className="mt-5 text-base font-bold text-white">
+                  No missions yet
+                </p>
+                <p
+                  className="mt-2 max-w-[260px] text-[13px] font-medium leading-relaxed"
+                  style={{ color: MUTED_HEADING }}
+                >
+                  Create your first goal to unlock daily missions.
+                </p>
+                <Link
+                  to="/goals/new"
+                  className="btn-press mx-auto mt-6 block w-full max-w-[280px] rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity"
+                  style={{ backgroundColor: '#534AB7' }}
+                >
+                  Create a Goal →
+                </Link>
+              </StateCard>
+            </div>
           </div>
         ) : missionRegenerating ? (
           <div className="mx-auto flex max-w-lg flex-col gap-3">
@@ -2223,7 +2418,7 @@ export function Today() {
                 type="button"
                 disabled={missionRegenerateWorking}
                 onClick={() => void handleRegenerateMissionsTap()}
-                className="mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
+                className="btn-press mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: '#534AB7' }}
               >
                 {missionRegenerateWorking ? 'Regenerating…' : 'Regenerate'}
@@ -2273,7 +2468,7 @@ export function Today() {
                   ) : null}
                   <div
                     className={[
-                      'relative flex min-h-[64px] transform-gpu items-stretch gap-3 rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
+                      'card-interactive relative flex min-h-[64px] transform-gpu items-stretch gap-3 rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
                       m.completed ? 'opacity-[0.45]' : 'opacity-100',
                       removing ? 'opacity-0' : '',
                       isPressing
@@ -2402,9 +2597,7 @@ export function Today() {
                             }}
                             className="flex h-11 w-9 min-h-[44px] min-w-[36px] items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 active:scale-[0.98]"
                           >
-                            <span className="text-xl leading-none" aria-hidden>
-                              ⋯
-                            </span>
+                            <MoreVertical size={16} aria-hidden strokeWidth={2} />
                           </button>
                         </div>
                       ) : null}
@@ -2430,7 +2623,12 @@ export function Today() {
                       >
                         {m.completed ? (
                           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
-                            <CheckIcon small />
+                            <Check
+                              size={14}
+                              strokeWidth={2.5}
+                              className="text-white"
+                              aria-hidden
+                            />
                           </span>
                         ) : (
                           <span
@@ -2467,10 +2665,10 @@ export function Today() {
                     />
                     <Link
                       to="/habits/new"
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/40 text-lg font-bold text-white transition-colors hover:bg-zinc-900/60 active:scale-[0.98]"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/40 text-white transition-colors hover:bg-zinc-900/60 active:scale-[0.98]"
                       aria-label="Add habit"
                     >
-                      +
+                      <Plus size={18} aria-hidden strokeWidth={2.5} />
                     </Link>
                   </div>
 
@@ -2506,17 +2704,26 @@ export function Today() {
                     </div>
                   ) : sortedVisibleHabits.length === 0 ? (
                     <div
-                      className="mt-5 rounded-2xl border p-4"
+                      className="mt-5 flex flex-col items-center rounded-2xl border px-6 py-10 text-center"
                       style={{
                         backgroundColor: CARD_SURFACE,
                         borderColor: CARD_BORDER,
                       }}
                     >
+                      <Repeat
+                        size={40}
+                        strokeWidth={1.5}
+                        className="text-[#444441]"
+                        aria-hidden
+                      />
+                      <p className="mt-5 text-base font-bold text-white">
+                        No habits yet
+                      </p>
                       <p
-                        className="text-sm font-medium"
+                        className="mt-2 max-w-[260px] text-[13px] font-medium leading-relaxed"
                         style={{ color: MUTED_HEADING }}
                       >
-                        No habits yet
+                        Add daily habits to build consistency over time.
                       </p>
                     </div>
                   ) : (
@@ -2552,7 +2759,7 @@ export function Today() {
                             ) : null}
                           <div
                             className={[
-                              'relative flex min-h-[64px] transform-gpu items-stretch gap-3 rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
+                              'card-interactive relative flex min-h-[64px] transform-gpu items-stretch gap-3 rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
                               done ? 'opacity-[0.45]' : 'opacity-100',
                               isPressing
                                 ? 'scale-[0.98] transition-none'
@@ -2688,12 +2895,7 @@ export function Today() {
                                     }}
                                     className="flex h-11 w-9 min-h-[44px] min-w-[36px] items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 active:scale-[0.98]"
                                   >
-                                    <span
-                                      className="text-xl leading-none"
-                                      aria-hidden
-                                    >
-                                      ⋯
-                                    </span>
+                                    <MoreVertical size={16} aria-hidden strokeWidth={2} />
                                   </button>
                                   <button
                                     type="button"
@@ -2731,7 +2933,12 @@ export function Today() {
                                     ) : null}
                                     {done ? (
                                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
-                                        <CheckIcon small />
+                                        <Check
+                                          size={14}
+                                          strokeWidth={2.5}
+                                          className="text-white"
+                                          aria-hidden
+                                        />
                                       </span>
                                     ) : (
                                       <span
@@ -2752,7 +2959,7 @@ export function Today() {
 
                   <Link
                     to="/habits/new"
-                    className="mt-5 block w-full rounded-2xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95 active:scale-[0.98]"
+                    className="btn-press mt-5 block w-full rounded-2xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95"
                     style={{ backgroundColor: '#534AB7' }}
                   >
                     Add Habit

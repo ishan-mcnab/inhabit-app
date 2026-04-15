@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { ChevronLeft } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
 import { supabase } from '../supabase'
 
@@ -83,12 +84,21 @@ export function CreateHabit() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       <header className="shrink-0 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="flex items-baseline justify-between gap-4">
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            New habit
-          </h1>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-1">
+            <Link
+              to="/today"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-800/80 hover:text-white"
+              aria-label="Back to Today"
+            >
+              <ChevronLeft size={20} aria-hidden strokeWidth={2} />
+            </Link>
+            <h1 className="min-w-0 text-2xl font-bold tracking-tight text-white">
+              New habit
+            </h1>
+          </div>
           {displayCategory ? (
-            <span className="text-sm font-semibold text-zinc-500">
+            <span className="shrink-0 text-sm font-semibold text-zinc-500">
               {displayCategory.emoji} {displayCategory.label}
             </span>
           ) : null}
@@ -250,7 +260,7 @@ export function CreateHabit() {
             type="button"
             disabled={saving}
             onClick={() => void submit()}
-            className="w-full rounded-2xl py-4 text-center text-sm font-bold text-white transition-opacity active:opacity-90 disabled:opacity-50"
+            className="btn-press w-full rounded-2xl py-4 text-center text-sm font-bold text-white transition-opacity disabled:opacity-50"
             style={{ backgroundColor: PURPLE }}
           >
             {saving ? 'Creating…' : 'Create Habit'}

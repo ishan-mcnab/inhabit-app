@@ -8,6 +8,26 @@
   --color-tab-bar: #141418;
 }
 
+:root {
+  --font-display: 'DM Sans', sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-md: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 22px;
+  --font-size-2xl: 28px;
+  --font-size-3xl: 36px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
+
+* {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+}
+
 @layer base {
   html {
     color-scheme: dark;
@@ -20,6 +40,84 @@
   #root {
     @apply min-h-screen;
   }
+
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  a:focus-visible {
+    outline: 2px solid #534ab7;
+    outline-offset: 2px;
+  }
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: page-fade-in 0.18s ease-out forwards;
+}
+
+.btn-press {
+  transition:
+    transform 0.1s ease,
+    opacity 0.1s ease;
+}
+
+.btn-press:active {
+  transform: scale(0.96);
+  opacity: 0.85;
+}
+
+.card-interactive {
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.card-interactive:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+@keyframes rank-shield-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(200%);
+  }
+}
+
+.rank-shield-shimmer-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.rank-shield-shimmer-overlay::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: rank-shield-shimmer 1.2s ease-out 0.3s forwards;
 }
 
 @keyframes mission-skeleton-pulse {

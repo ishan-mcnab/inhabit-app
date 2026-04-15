@@ -203,7 +203,7 @@ export function OnboardingContextStep({
             type="button"
             disabled={!canContinue || submitting}
             onClick={onContinue}
-            className="h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn-press h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
             style={{ backgroundColor: GOAL_PURPLE }}
           >
             {submitting ? 'Saving…' : 'Continue'}

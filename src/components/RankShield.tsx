@@ -51,22 +51,27 @@ export function RankShield({ rankName, accentColor }: Props) {
         filter: `drop-shadow(${glow})`,
       }}
     >
-      <svg
-        width="120"
-        height="140"
-        viewBox="0 0 120 145"
-        className="absolute inset-0 block"
-        aria-hidden
-      >
-        <path
-          d={SHIELD_D}
-          fill={fillSoft}
-          stroke={accentColor}
-          strokeWidth={2.5}
-          strokeLinejoin="round"
+      <div className="relative h-full w-[120px] overflow-hidden">
+        <svg
+          width="120"
+          height="140"
+          viewBox="0 0 120 145"
+          className="absolute inset-0 z-0 block"
+          aria-hidden
+        >
+          <path
+            d={SHIELD_D}
+            fill={fillSoft}
+            stroke={accentColor}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+          />
+        </svg>
+        <div
+          className="rank-shield-shimmer-overlay absolute inset-0 z-[1]"
+          aria-hidden
         />
-      </svg>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center px-2 pt-[14px] text-center">
+        <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col items-center px-2 pt-[14px] text-center">
         <span className="text-[28px] leading-none" aria-hidden>
           {rankEmoji(rankName)}
         </span>
@@ -80,6 +85,7 @@ export function RankShield({ rankName, accentColor }: Props) {
         <span className="mt-2 text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">
           RANK
         </span>
+        </div>
       </div>
     </div>
   )

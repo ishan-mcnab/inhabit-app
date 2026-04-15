@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type TouchEvent,
 } from 'react'
+import { useCountUp } from '../hooks/useCountUp'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { RankShield } from '../components/RankShield'
 import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
@@ -259,6 +260,28 @@ function StatCard({
   )
 }
 
+function StatCardCount({
+  accent,
+  label,
+  valueNum,
+  sub,
+}: {
+  accent: string
+  label: string
+  valueNum: number
+  sub?: string | null
+}) {
+  const v = useCountUp(valueNum)
+  return (
+    <StatCard
+      accent={accent}
+      label={label}
+      value={v.toLocaleString()}
+      sub={sub}
+    />
+  )
+}
+
 export function Profile() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -301,6 +324,9 @@ export function Profile() {
   const pullStartY = useRef<number | null>(null)
   const pullDistance = useRef(0)
   const loadGenRef = useRef(0)
+  const lastFetchedAtRef = useRef<number | null>(null)
+
+  const TAB_REFRESH_STALE_MS = 30_000
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent)
@@ -367,12 +393,12 @@ export function Profile() {
         .eq('user_id', user.id),
       supabase
         .from('goals')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('status', 'completed'),
       supabase
         .from('daily_missions')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('completed', true),
     ])
@@ -477,12 +503,20 @@ export function Profile() {
         ? user.email.split('@')[0]!
         : 'User'
     setDisplayName(dn || fallback)
+    lastFetchedAtRef.current = Date.now()
   }, [])
+
+  const maybeRefreshProfile = useCallback(() => {
+    const t = lastFetchedAtRef.current
+    if (t !== null && Date.now() - t < TAB_REFRESH_STALE_MS) return
+    const silent = t !== null
+    void load({ silent })
+  }, [load])
 
   useEffect(() => {
     if (location.pathname !== '/profile') return
-    void load()
-  }, [location.pathname, load])
+    void maybeRefreshProfile()
+  }, [location.pathname, maybeRefreshProfile])
 
   useEffect(() => {
     if (!loading) return
@@ -501,11 +535,11 @@ export function Profile() {
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return
       if (location.pathname !== '/profile') return
-      void load({ silent: true })
+      void maybeRefreshProfile()
     }
     const onWindowFocus = () => {
       if (location.pathname !== '/profile') return
-      void load({ silent: true })
+      void maybeRefreshProfile()
     }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onWindowFocus)
@@ -513,7 +547,7 @@ export function Profile() {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onWindowFocus)
     }
-  }, [load, location.pathname])
+  }, [maybeRefreshProfile, location.pathname])
 
   function beginEditName() {
     setNameError(null)
@@ -858,15 +892,15 @@ export function Profile() {
                   </div>
                 ) : null}
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <StatCard
+                  <StatCardCount
                     accent={STAT_PURPLE}
                     label="Total XP"
-                    value={stats.total_xp.toLocaleString()}
+                    valueNum={stats.total_xp}
                   />
-                  <StatCard
+                  <StatCardCount
                     accent={STAT_AMBER}
                     label="Current Level"
-                    value={String(stats.level)}
+                    valueNum={stats.level}
                   />
                   <StatCard
                     accent={STAT_ORANGE}

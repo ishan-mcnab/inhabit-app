@@ -267,7 +267,7 @@ export function Onboarding() {
         <button
           type="button"
           onClick={() => setStep('name')}
-          className="mx-auto h-[52px] w-full max-w-[320px] rounded-xl text-base font-semibold text-white transition-opacity active:opacity-90"
+          className="btn-press mx-auto h-[52px] w-full max-w-[320px] rounded-xl text-base font-semibold text-white transition-opacity"
           style={{ backgroundColor: GOAL_PURPLE }}
         >
           Get Started
@@ -343,7 +343,7 @@ export function Onboarding() {
 
             <button
               type="submit"
-              className="mx-auto mt-2 h-[52px] w-full max-w-[320px] rounded-xl text-base font-semibold text-white transition-opacity disabled:opacity-50"
+              className="btn-press mx-auto mt-2 h-[52px] w-full max-w-[320px] rounded-xl text-base font-semibold text-white transition-opacity disabled:opacity-50"
               style={{ backgroundColor: GOAL_PURPLE }}
             >
               Continue
@@ -518,7 +518,7 @@ export function Onboarding() {
           <button
             type="button"
             onClick={handleGoalsContinue}
-            className="h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity active:opacity-90"
+            className="btn-press h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity"
             style={{ backgroundColor: GOAL_PURPLE }}
           >
             Let&apos;s go

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   GOAL_CATEGORY_PILLS,
@@ -7,6 +8,7 @@ import {
 } from '../constants/goalCategoryPills'
 import { generateMissions } from '../lib/generateMissions'
 import { calculateTotalWeeks } from '../lib/goalProgress'
+import { appCache, goalsCacheKey, missionsCacheKey } from '../lib/cache'
 import { supabase } from '../supabase'
 
 type DurationPresetId = '1m' | '3m' | '6m' | '1y'
@@ -399,6 +401,9 @@ export function CreateGoal() {
       return
     }
 
+    appCache.invalidate(goalsCacheKey(user.id))
+    appCache.invalidate(missionsCacheKey(user.id, formatLocalDate(new Date())))
+
     setSubmitPhase('success')
     scheduleNavigateGoals(900)
   }
@@ -409,10 +414,11 @@ export function CreateGoal() {
         <Link
           to="/goals"
           className={[
-            'text-sm font-semibold text-zinc-400 transition-colors hover:text-white',
+            'flex items-center gap-0.5 text-sm font-semibold text-zinc-400 transition-colors hover:text-white',
             formLocked ? 'pointer-events-none opacity-40' : '',
           ].join(' ')}
         >
+          <ChevronLeft size={20} aria-hidden strokeWidth={2} />
           Cancel
         </Link>
         <h1 className="text-lg font-bold tracking-tight text-white">
@@ -629,7 +635,7 @@ export function CreateGoal() {
             <button
               type="submit"
               disabled={formLocked}
-              className="w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity active:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-press w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitButtonLabel(submitPhase)}
             </button>

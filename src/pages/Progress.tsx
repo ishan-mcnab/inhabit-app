@@ -10,9 +10,11 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
+import { BarChart2, Flag, Repeat } from 'lucide-react'
 import { Bar } from 'react-chartjs-2'
 import { Link, useLocation } from 'react-router-dom'
 import { RankShield } from '../components/RankShield'
@@ -45,6 +47,7 @@ import {
   xpForNextLevel,
   MAX_LEVEL,
 } from '../lib/xp'
+import { useCountUp } from '../hooks/useCountUp'
 import { supabase } from '../supabase'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
@@ -88,6 +91,7 @@ type GoalRow = {
   category: string | null
   target_date: string | null
   progress_percent: number
+  status?: string
   created_at?: string
 }
 
@@ -301,6 +305,28 @@ function StatCard({
   )
 }
 
+function StatCardCount({
+  accent,
+  label,
+  valueNum,
+  sub,
+}: {
+  accent: string
+  label: string
+  valueNum: number
+  sub?: string | null
+}) {
+  const v = useCountUp(valueNum)
+  return (
+    <StatCard
+      accent={accent}
+      label={label}
+      value={v.toLocaleString()}
+      sub={sub}
+    />
+  )
+}
+
 function SectionHeadingRow({ children }: { children: ReactNode }) {
   return (
     <div className="-mx-4 flex items-center gap-3 px-4">
@@ -354,14 +380,20 @@ export function Progress() {
   )
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    setProfileLoadError(null)
-    setChartLoadError(null)
-    setGoalsLoadError(null)
-    setHabitsLoadError(null)
-    setReflectionsLoadError(null)
+  const lastFetchedAtRef = useRef<number | null>(null)
+  const TAB_REFRESH_STALE_MS = 30_000
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent)
+    if (!silent) {
+      setLoading(true)
+      setError(null)
+      setProfileLoadError(null)
+      setChartLoadError(null)
+      setGoalsLoadError(null)
+      setHabitsLoadError(null)
+      setReflectionsLoadError(null)
+    }
 
     const {
       data: { user },
@@ -369,7 +401,7 @@ export function Progress() {
     } = await supabase.auth.getUser()
 
     if (authErr || !user) {
-      setLoading(false)
+      if (!silent) setLoading(false)
       setError(authErr?.message ?? 'Not signed in')
       return
     }
@@ -398,6 +430,7 @@ export function Progress() {
       habitsRes,
       habitLogsRes,
       reflectionsRes,
+      weeklyQuestsRes,
     ] = await Promise.all([
       supabase
         .from('users')
@@ -413,12 +446,12 @@ export function Progress() {
         .gte('created_at', chartCutoff.toISOString()),
       supabase
         .from('daily_missions')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('completed', true),
       supabase
         .from('goals')
-        .select('id,title,category,target_date,progress_percent,created_at')
+        .select('id,title,category,target_date,progress_percent,status,created_at')
         .eq('user_id', user.id)
         .eq('status', 'active')
         .order('created_at', { ascending: false }),
@@ -439,10 +472,14 @@ export function Progress() {
         )
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(24),
+        .limit(4),
+      supabase
+        .from('weekly_quests')
+        .select('id,goal_id,title,week_number,completed')
+        .eq('user_id', user.id),
     ])
 
-    setLoading(false)
+    if (!silent) setLoading(false)
 
     if (userRes.error || !userRes.data) {
       setProfileLoadError(userRes.error?.message ?? 'No profile found')
@@ -515,42 +552,36 @@ export function Progress() {
       const goalsList = (goalsRes.data ?? []) as GoalRow[]
       setGoals(goalsList)
 
-      const goalIds = goalsList.map((g) => g.id)
+      const goalIdSet = new Set(goalsList.map((g) => g.id))
       const nextPreviews: Record<string, string> = {}
-      if (goalIds.length > 0) {
-        const wqRes = await supabase
-          .from('weekly_quests')
-          .select('id,goal_id,title,week_number,completed')
-          .eq('user_id', user.id)
-          .in('goal_id', goalIds)
-
-        if (!wqRes.error && wqRes.data) {
-          const byGoal: Record<string, PickableQuest[]> = {}
-          for (const r of wqRes.data) {
-            const gid = String(r.goal_id ?? '')
-            if (!gid) continue
-            if (!byGoal[gid]) byGoal[gid] = []
-            byGoal[gid].push({
-              id: String(r.id ?? ''),
-              week_number:
-                typeof r.week_number === 'number' && !Number.isNaN(r.week_number)
-                  ? r.week_number
-                  : 0,
-              completed: Boolean(r.completed),
-              title: typeof r.title === 'string' ? r.title : '',
-            })
-          }
-          for (const g of goalsList) {
-            const list = byGoal[g.id] ?? []
-            const currentW = g.created_at
-              ? calculateCurrentWeekFromGoalStart(g.created_at)
-              : 1
-            const active = pickActiveQuest(list, currentW, questMode)
-            if (active && !active.completed) {
-              nextPreviews[g.id] = active.title
-            }
+      if (goalIdSet.size > 0 && !weeklyQuestsRes.error && weeklyQuestsRes.data) {
+        const byGoal: Record<string, PickableQuest[]> = {}
+        for (const r of weeklyQuestsRes.data) {
+          const gid = String(r.goal_id ?? '')
+          if (!gid || !goalIdSet.has(gid)) continue
+          if (!byGoal[gid]) byGoal[gid] = []
+          byGoal[gid].push({
+            id: String(r.id ?? ''),
+            week_number:
+              typeof r.week_number === 'number' && !Number.isNaN(r.week_number)
+                ? r.week_number
+                : 0,
+            completed: Boolean(r.completed),
+            title: typeof r.title === 'string' ? r.title : '',
+          })
+        }
+        for (const g of goalsList) {
+          const list = byGoal[g.id] ?? []
+          const currentW = g.created_at
+            ? calculateCurrentWeekFromGoalStart(g.created_at)
+            : 1
+          const active = pickActiveQuest(list, currentW, questMode)
+          if (active && !active.completed) {
+            nextPreviews[g.id] = active.title
           }
         }
+      } else if (weeklyQuestsRes.error) {
+        console.error('Progress weekly_quests:', weeklyQuestsRes.error)
       }
       setQuestPreviewByGoalId(nextPreviews)
     }
@@ -622,22 +653,31 @@ export function Progress() {
       setReflectionsLoadError(null)
       setReflectionRows((reflectionsRes.data ?? []) as ReflectionHistoryRow[])
     }
+
+    lastFetchedAtRef.current = Date.now()
   }, [])
+
+  const maybeRefreshProgress = useCallback(() => {
+    const t = lastFetchedAtRef.current
+    if (t !== null && Date.now() - t < TAB_REFRESH_STALE_MS) return
+    const silent = t !== null
+    void load({ silent })
+  }, [load])
 
   useEffect(() => {
     if (location.pathname !== '/progress') return
-    void load()
-  }, [location.pathname, load])
+    void maybeRefreshProgress()
+  }, [location.pathname, maybeRefreshProgress])
 
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return
       if (location.pathname !== '/progress') return
-      void load()
+      void maybeRefreshProgress()
     }
     const onWindowFocus = () => {
       if (location.pathname !== '/progress') return
-      void load()
+      void maybeRefreshProgress()
     }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onWindowFocus)
@@ -645,7 +685,7 @@ export function Progress() {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onWindowFocus)
     }
-  }, [load, location.pathname])
+  }, [maybeRefreshProgress, location.pathname])
 
   const displayRank = calculateRank(weeklyXp)
   const rankHue = rankColor(displayRank)
@@ -821,11 +861,23 @@ export function Progress() {
                     />
                   ) : chartValues.length > 0 &&
                     chartValues.every((v) => v === 0) ? (
-                    <div
-                      className="flex h-[160px] items-center justify-center px-4 text-center text-[13px] font-medium"
-                      style={{ color: MUTED_BODY }}
-                    >
-                      Complete missions to start earning XP
+                    <div className="flex h-[160px] flex-col items-center justify-center gap-3 px-4 text-center">
+                      <BarChart2
+                        size={40}
+                        strokeWidth={1.5}
+                        className="text-[#444441]"
+                        aria-hidden
+                      />
+                      <p className="text-base font-bold text-white">
+                        Nothing to show yet
+                      </p>
+                      <p
+                        className="max-w-[260px] text-[13px] font-medium leading-snug"
+                        style={{ color: MUTED_BODY }}
+                      >
+                        Complete missions and reflections to see your progress
+                        here.
+                      </p>
                     </div>
                   ) : (
                     <WeeklyXpBarChart
@@ -839,15 +891,15 @@ export function Progress() {
               <section aria-label="Stats">
                 <SectionHeadingRow>Stats</SectionHeadingRow>
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <StatCard
+                  <StatCardCount
                     accent={STAT_PURPLE}
                     label="Total XP"
-                    value={totalXp.toLocaleString()}
+                    valueNum={totalXp}
                   />
-                  <StatCard
+                  <StatCardCount
                     accent={STAT_AMBER}
                     label="Level"
-                    value={String(level)}
+                    valueNum={level}
                     sub={
                       xpToNext == null
                         ? 'Max level'
@@ -886,12 +938,30 @@ export function Progress() {
                     />
                   </div>
                 ) : goals.length === 0 ? (
-                  <p
-                    className="mt-4 text-sm font-medium"
-                    style={{ color: MUTED_BODY }}
-                  >
-                    No active goals — create one on the Goals tab
-                  </p>
+                  <div className="mt-4 flex flex-col items-center py-8 text-center">
+                    <Flag
+                      size={40}
+                      strokeWidth={1.5}
+                      className="text-[#444441]"
+                      aria-hidden
+                    />
+                    <p className="mt-5 text-base font-bold text-white">
+                      No goals yet
+                    </p>
+                    <p
+                      className="mt-2 max-w-[260px] text-[13px] font-medium leading-snug"
+                      style={{ color: MUTED_BODY }}
+                    >
+                      Set a goal and InHabit will build your daily plan.
+                    </p>
+                    <Link
+                      to="/goals/new"
+                      className="btn-press mt-6 w-full max-w-[280px] rounded-xl py-3.5 text-center text-sm font-bold text-white"
+                      style={{ backgroundColor: BAR_PURPLE }}
+                    >
+                      Set your first goal →
+                    </Link>
+                  </div>
                 ) : (
                   <ul className="mt-4 flex flex-col gap-2.5">
                     {goals.map((goal) => {
@@ -914,7 +984,7 @@ export function Progress() {
                             className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
                           >
                             <article
-                              className="flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
+                              className="card-interactive flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
                               style={{
                                 backgroundColor: CARD_BG,
                                 borderColor: CARD_BORDER,
@@ -1000,12 +1070,23 @@ export function Progress() {
                     />
                   </div>
                 ) : habits.length === 0 ? (
-                  <p
-                    className="mt-4 text-sm font-medium"
-                    style={{ color: MUTED_BODY }}
-                  >
-                    No habits yet — add them on the Today tab
-                  </p>
+                  <div className="mt-4 flex flex-col items-center py-8 text-center">
+                    <Repeat
+                      size={40}
+                      strokeWidth={1.5}
+                      className="text-[#444441]"
+                      aria-hidden
+                    />
+                    <p className="mt-5 text-base font-bold text-white">
+                      No habits yet
+                    </p>
+                    <p
+                      className="mt-2 max-w-[260px] text-[13px] font-medium leading-snug"
+                      style={{ color: MUTED_BODY }}
+                    >
+                      Add daily habits to build consistency over time.
+                    </p>
+                  </div>
                 ) : (
                   <ul className="mt-4 flex flex-col gap-3">
                     {habits.map((h) => {
@@ -1014,7 +1095,7 @@ export function Progress() {
                       return (
                         <li
                           key={h.id}
-                          className="rounded-lg border px-4 py-3"
+                          className="card-interactive rounded-lg border px-4 py-3"
                           style={{
                             backgroundColor: CARD_BG,
                             borderColor: CARD_BORDER,
@@ -1101,10 +1182,10 @@ export function Progress() {
                   </div>
                 ) : reflectionRows.length === 0 ? (
                   <p
-                    className="mt-4 text-sm font-medium"
+                    className="mt-4 max-w-[260px] text-[13px] font-medium leading-snug"
                     style={{ color: MUTED_BODY }}
                   >
-                    No reflections yet — complete your first one on Sunday
+                    Complete your first weekly reflection to see it here.
                   </p>
                 ) : (
                   <ul className="mt-4 flex flex-col gap-3">
@@ -1129,7 +1210,7 @@ export function Progress() {
                       return (
                         <li
                           key={r.id}
-                          className="rounded-xl border p-4"
+                          className="card-interactive rounded-xl border p-4"
                           style={{
                             backgroundColor: CARD_BG,
                             borderColor: CARD_BORDER,

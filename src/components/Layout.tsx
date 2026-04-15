@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 
@@ -11,6 +11,7 @@ const tabs = [
 ] as const
 
 export function Layout() {
+  const location = useLocation()
   const {
     incompleteMissionsCount,
     reflectionDue,
@@ -48,7 +49,12 @@ export function Layout() {
         You&apos;re offline — changes will sync when you reconnect
       </div>
       <main className="flex min-h-0 flex-1 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))]">
-        <Outlet />
+        <div
+          key={location.pathname}
+          className="page-enter flex min-h-0 flex-1 flex-col"
+        >
+          <Outlet />
+        </div>
       </main>
       <nav
         className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-zinc-800/60 bg-tab-bar pb-[env(safe-area-inset-bottom,0px)]"

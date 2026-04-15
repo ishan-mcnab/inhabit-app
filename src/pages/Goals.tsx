@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Flag, Plus, Sparkles } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
 import {
@@ -18,6 +19,7 @@ import {
   type QuestProgressionMode,
 } from '../lib/weeklyQuestPick'
 import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
+import { appCache, goalsCacheKey, habitsCacheKey } from '../lib/cache'
 import { supabase } from '../supabase'
 
 type GoalRow = {
@@ -26,6 +28,7 @@ type GoalRow = {
   category: string | null
   target_date: string | null
   progress_percent: number
+  status?: string
   created_at?: string
 }
 
@@ -77,6 +80,17 @@ function clampPercent(n: number): number {
 const CARD_SURFACE = '#141418'
 const CARD_BORDER = 'rgba(255,255,255,0.08)'
 const MUTED_BODY = '#888780'
+
+const TAB_REFRESH_STALE_MS = 30_000
+const SKELETON_DELAY_MS = 200
+
+type GoalsCachePayload = {
+  goals: GoalRow[]
+  completedGoals: CompletedGoalRow[]
+  questPreviewByGoalId: Record<string, string>
+  fitnessTitles: string[]
+  goalsNeedingAttention: number
+}
 
 function localDayStart(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -143,38 +157,80 @@ export function Goals() {
   >({})
 
   const loadGenRef = useRef(0)
+  const lastFetchedAtRef = useRef<number | null>(null)
+  const skeletonDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
+  const [showDelayedSkeleton, setShowDelayedSkeleton] = useState(false)
 
-  const load = useCallback(async () => {
-    const gen = ++loadGenRef.current
-    setLoading(true)
-    setError(null)
-    setLoadStallMessage(null)
-    setCompletedGoalsError(null)
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      if (loadGenRef.current !== gen) return
-      setLoading(false)
-      setGoalsNeedingAttention(0)
-      setError(userError?.message ?? 'Not signed in')
-      return
+  const clearSkeletonDelayTimer = useCallback(() => {
+    if (skeletonDelayTimerRef.current !== null) {
+      window.clearTimeout(skeletonDelayTimerRef.current)
+      skeletonDelayTimerRef.current = null
     }
+  }, [])
 
-    const [activeRes, completedRes, habitsRes, prefsRes] = await Promise.all([
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = Boolean(opts?.silent)
+      const gen = ++loadGenRef.current
+
+      if (!silent) {
+        setError(null)
+        setLoadStallMessage(null)
+        setCompletedGoalsError(null)
+      }
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        if (loadGenRef.current !== gen) return
+        if (!silent) {
+          clearSkeletonDelayTimer()
+          setShowDelayedSkeleton(false)
+          setLoading(false)
+          setGoalsNeedingAttention(0)
+          setError(userError?.message ?? 'Not signed in')
+        }
+        return
+      }
+
+      if (!silent) {
+        const cached = appCache.get<GoalsCachePayload>(goalsCacheKey(user.id))
+        if (cached) {
+          setGoals(cached.goals)
+          setCompletedGoals(cached.completedGoals)
+          setQuestPreviewByGoalId(cached.questPreviewByGoalId)
+          setFitnessHabitTitles(new Set(cached.fitnessTitles))
+          setGoalsNeedingAttention(cached.goalsNeedingAttention)
+          setLoading(false)
+          setShowDelayedSkeleton(false)
+        } else {
+          setLoading(true)
+          clearSkeletonDelayTimer()
+          skeletonDelayTimerRef.current = window.setTimeout(() => {
+            if (loadGenRef.current !== gen) return
+            setShowDelayedSkeleton(true)
+          }, SKELETON_DELAY_MS)
+        }
+      }
+
+      const [activeRes, completedRes, habitsRes, prefsRes] = await Promise.all([
       supabase
         .from('goals')
-        .select('id,title,category,target_date,progress_percent,created_at')
+        .select(
+          'id,title,category,target_date,progress_percent,status,created_at',
+        )
         .eq('user_id', user.id)
         .eq('status', 'active')
         .order('created_at', { ascending: false }),
       supabase
         .from('goals')
         .select(
-          'id,title,category,target_date,progress_percent,completed_at',
+          'id,title,category,target_date,progress_percent,status,completed_at',
         )
         .eq('user_id', user.id)
         .eq('status', 'completed')
@@ -198,7 +254,9 @@ export function Goals() {
       setCompletedGoals([])
       setQuestPreviewByGoalId({})
       setGoalsNeedingAttention(0)
-      setLoading(false)
+      clearSkeletonDelayTimer()
+      setShowDelayedSkeleton(false)
+      if (!silent) setLoading(false)
       return
     }
 
@@ -207,32 +265,6 @@ export function Goals() {
     setGoals(goalsList)
 
     const goalIds = goalsList.map((g) => g.id)
-    if (goalIds.length === 0) {
-      setGoalsNeedingAttention(0)
-    } else {
-      const { mon, sun } = localWeekMondaySundayYmd(new Date())
-      const dmRes = await supabase
-        .from('daily_missions')
-        .select('goal_id')
-        .eq('user_id', user.id)
-        .in('goal_id', goalIds)
-        .gte('due_date', mon)
-        .lte('due_date', sun)
-      if (dmRes.error) {
-        console.error('Goals: weekly missions check failed:', dmRes.error)
-        setGoalsNeedingAttention(0)
-      } else {
-        const withMissions = new Set(
-          (dmRes.data ?? [])
-            .map((r) => (typeof r.goal_id === 'string' ? r.goal_id : ''))
-            .filter(Boolean),
-        )
-        const need = goalsList.filter((g) => !withMissions.has(g.id)).length
-        setGoalsNeedingAttention(need)
-      }
-    }
-
-    if (loadGenRef.current !== gen) return
 
     const questMode: QuestProgressionMode =
       prefsRes.data?.quest_progression === 'completion'
@@ -240,12 +272,37 @@ export function Goals() {
         : 'weekly'
 
     const nextPreviews: Record<string, string> = {}
+    let attentionCount = 0
+
     if (goalIds.length > 0) {
-      const wqRes = await supabase
-        .from('weekly_quests')
-        .select('id,goal_id,title,week_number,completed')
-        .eq('user_id', user.id)
-        .in('goal_id', goalIds)
+      const { mon, sun } = localWeekMondaySundayYmd(new Date())
+      const [dmRes, wqRes] = await Promise.all([
+        supabase
+          .from('daily_missions')
+          .select('goal_id')
+          .eq('user_id', user.id)
+          .in('goal_id', goalIds)
+          .gte('due_date', mon)
+          .lte('due_date', sun),
+        supabase
+          .from('weekly_quests')
+          .select('id,goal_id,title,week_number,completed')
+          .eq('user_id', user.id)
+          .in('goal_id', goalIds),
+      ])
+
+      if (dmRes.error) {
+        console.error('Goals: weekly missions check failed:', dmRes.error)
+        attentionCount = 0
+      } else {
+        const withMissions = new Set(
+          (dmRes.data ?? [])
+            .map((r) => (typeof r.goal_id === 'string' ? r.goal_id : ''))
+            .filter(Boolean),
+        )
+        attentionCount = goalsList.filter((g) => !withMissions.has(g.id)).length
+      }
+      setGoalsNeedingAttention(attentionCount)
 
       if (!wqRes.error && wqRes.data) {
         const byGoal: Record<string, PickableQuest[]> = {}
@@ -274,15 +331,20 @@ export function Goals() {
           }
         }
       }
+    } else {
+      setGoalsNeedingAttention(0)
     }
+
     if (loadGenRef.current !== gen) return
     setQuestPreviewByGoalId(nextPreviews)
 
+    let completedRows: CompletedGoalRow[] = []
     if (completedRes.error) {
       setCompletedGoalsError(completedRes.error.message)
       setCompletedGoals([])
     } else {
-      setCompletedGoals((completedRes.data ?? []) as CompletedGoalRow[])
+      completedRows = (completedRes.data ?? []) as CompletedGoalRow[]
+      setCompletedGoals(completedRows)
     }
 
     const titles = new Set<string>()
@@ -296,26 +358,53 @@ export function Goals() {
     }
 
     if (loadGenRef.current !== gen) return
-    setLoading(false)
-  }, [setGoalsNeedingAttention])
+
+    appCache.set(
+      goalsCacheKey(user.id),
+      {
+        goals: goalsList,
+        completedGoals: completedRows,
+        questPreviewByGoalId: nextPreviews,
+        fitnessTitles: Array.from(titles),
+        goalsNeedingAttention: attentionCount,
+      },
+      30_000,
+    )
+
+    clearSkeletonDelayTimer()
+    setShowDelayedSkeleton(false)
+    lastFetchedAtRef.current = Date.now()
+    if (!silent) {
+      setLoading(false)
+    }
+  }, [setGoalsNeedingAttention, clearSkeletonDelayTimer])
+
+  const maybeRefreshGoals = useCallback(() => {
+    const t = lastFetchedAtRef.current
+    if (t !== null && Date.now() - t < TAB_REFRESH_STALE_MS) return
+    const silent = t !== null
+    void load({ silent })
+  }, [load])
 
   useEffect(() => {
     if (location.pathname !== '/goals') return
-    void load()
-  }, [location.pathname, load])
+    void maybeRefreshGoals()
+  }, [location.pathname, maybeRefreshGoals])
 
   useEffect(() => {
     if (!loading) return
     const gen = loadGenRef.current
     const t = window.setTimeout(() => {
       if (loadGenRef.current !== gen) return
+      clearSkeletonDelayTimer()
+      setShowDelayedSkeleton(false)
       setLoadStallMessage(
         'Taking longer than expected. Please check your connection and try again.',
       )
       setLoading(false)
     }, 10_000)
     return () => window.clearTimeout(t)
-  }, [loading])
+  }, [loading, clearSkeletonDelayTimer])
 
   useEffect(() => {
     if (location.pathname !== '/goals') return
@@ -332,11 +421,11 @@ export function Goals() {
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return
       if (location.pathname !== '/goals') return
-      void load()
+      void maybeRefreshGoals()
     }
     const onWindowFocus = () => {
       if (location.pathname !== '/goals') return
-      void load()
+      void maybeRefreshGoals()
     }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onWindowFocus)
@@ -344,7 +433,7 @@ export function Goals() {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onWindowFocus)
     }
-  }, [load, location.pathname])
+  }, [maybeRefreshGoals, location.pathname])
 
   async function handleQuickFitnessHabit(title: string) {
     if (fitnessQuickHabitAlreadyAdded(title, fitnessHabitTitles)) return
@@ -365,6 +454,7 @@ export function Goals() {
     })
     setAddingHabitKey(null)
     if (!insertError) {
+      appCache.invalidate(habitsCacheKey(user.id))
       setFitnessHabitTitles((prev) => new Set(prev).add(title))
       void navigate('/today')
     }
@@ -440,26 +530,27 @@ export function Goals() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <h1 className="min-w-0 flex-1 text-[22px] font-semibold tracking-tight text-white">
-          Goals
-        </h1>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[22px] font-semibold tracking-tight text-white">
+            Goals
+          </h1>
+        </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={() => void openSuggestions()}
-            className="rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-2 text-sm font-bold text-[#534AB7] transition-colors hover:bg-white/5 active:scale-[0.98]"
+            className="btn-press flex items-center gap-1.5 rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-2 text-sm font-bold text-[#534AB7] transition-colors hover:bg-white/5"
           >
-            ✨ Suggest goals
+            <Sparkles size={14} aria-hidden strokeWidth={2} />
+            Suggest goals
           </button>
           <Link
             to="/goals/new"
             aria-label="Create new goal"
-            className="flex size-9 items-center justify-center rounded-lg text-xl font-light leading-none text-white shadow-md transition-colors hover:opacity-90 active:scale-[0.98]"
+            className="btn-press flex size-9 items-center justify-center rounded-lg text-white shadow-md transition-colors hover:opacity-90"
             style={{ backgroundColor: GOAL_PURPLE }}
           >
-            <span aria-hidden className="-mt-0.5">
-              +
-            </span>
+            <Plus size={18} aria-hidden strokeWidth={2.5} />
           </Link>
         </div>
       </header>
@@ -470,7 +561,7 @@ export function Goals() {
             {toast}
           </div>
         ) : null}
-        {loading ? (
+        {loading && showDelayedSkeleton ? (
           <div className="flex flex-1 flex-col items-center justify-center py-16">
             <p className="text-sm font-medium text-zinc-500">Loading goals…</p>
           </div>
@@ -481,33 +572,36 @@ export function Goals() {
               message={loadStallMessage ?? error ?? 'Unknown error'}
               onRetry={() => {
                 setLoadStallMessage(null)
-                void load()
+                void load({ silent: false })
               }}
             />
           </div>
-        ) : (
+        ) : loading ? null : (
           <>
             {goals.length === 0 ? (
               completedGoals.length === 0 ? (
-                <div className="flex min-h-[min(60vh,28rem)] flex-1 flex-col items-center justify-center px-4 py-12">
-                  <span className="text-5xl" aria-hidden>
-                    🎯
-                  </span>
-                  <p className="mt-5 text-center text-base font-bold text-white">
+                <div className="flex min-h-[min(60vh,28rem)] flex-1 flex-col items-center justify-center px-4 py-12 text-center">
+                  <Flag
+                    size={40}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-[#444441]"
+                    aria-hidden
+                  />
+                  <p className="mt-5 text-base font-bold text-white">
                     No goals yet
                   </p>
                   <p
-                    className="mt-2 max-w-xs text-center text-[13px] font-medium leading-snug"
+                    className="mt-2 max-w-[260px] text-[13px] font-medium leading-snug"
                     style={{ color: MUTED_BODY }}
                   >
-                    Create your first goal to get daily missions
+                    Set a goal and InHabit will build your daily plan.
                   </p>
                   <Link
                     to="/goals/new"
-                    className="mt-8 w-full max-w-sm rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95 active:scale-[0.98]"
+                    className="btn-press mt-8 w-full max-w-[280px] rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95"
                     style={{ backgroundColor: GOAL_PURPLE }}
                   >
-                    Create a Goal
+                    Set your first goal →
                   </Link>
                 </div>
               ) : (
@@ -535,7 +629,7 @@ export function Goals() {
                         className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
                       >
                         <article
-                          className="flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
+                          className="card-interactive flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
                           style={{
                             backgroundColor: CARD_SURFACE,
                             borderColor: CARD_BORDER,
@@ -630,7 +724,7 @@ export function Goals() {
                           className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
                         >
                           <article
-                            className="flex gap-3 rounded-2xl border p-4 opacity-90 shadow-sm transition-colors hover:bg-white/[0.04]"
+                            className="card-interactive flex gap-3 rounded-2xl border p-4 opacity-90 shadow-sm transition-colors hover:bg-white/[0.04]"
                             style={{
                               backgroundColor: CARD_SURFACE,
                               borderColor: CARD_BORDER,

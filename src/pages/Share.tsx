@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { rankEmoji } from '../components/RankShield'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
@@ -263,19 +264,7 @@ export function Share() {
           className="absolute left-2 top-[max(0.75rem,env(safe-area-inset-top))] flex h-10 w-10 items-center justify-center rounded-full text-zinc-300 transition-colors hover:bg-zinc-800/80 hover:text-white"
           aria-label="Back to Profile"
         >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <ChevronLeft size={20} aria-hidden strokeWidth={2} />
         </button>
         <div className="mx-auto max-w-[min(100%,24rem)] px-10 text-center">
           <h1 className="text-lg font-bold tracking-tight text-white">

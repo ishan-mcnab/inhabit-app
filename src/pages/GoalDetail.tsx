@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  CheckCircle2,
+  ChevronLeft,
+  Lock,
+  MoreVertical,
+} from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
 import { XPToast } from '../components/XPToast'
@@ -148,44 +154,6 @@ function DetailSkeleton() {
         </div>
       </div>
     </div>
-  )
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M5 13l4 4L19 7"
-      />
-    </svg>
-  )
-}
-
-function LockIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M7 11V8a5 5 0 0110 0v3M6 11h12v10H6V11z"
-      />
-    </svg>
   )
 }
 
@@ -1219,20 +1187,7 @@ export function GoalDetail() {
           aria-label="Back to goals"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-800/80 hover:text-white"
         >
-          <svg
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
+          <ChevronLeft size={20} aria-hidden strokeWidth={2} />
         </Link>
 
         <button
@@ -1243,9 +1198,7 @@ export function GoalDetail() {
           onClick={() => setGoalMenuOpen((v) => !v)}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-800/80 hover:text-white disabled:opacity-50"
         >
-          <span className="text-2xl leading-none" aria-hidden>
-            ⋯
-          </span>
+          <MoreVertical size={16} aria-hidden strokeWidth={2} />
         </button>
       </header>
 
@@ -1764,7 +1717,12 @@ export function GoalDetail() {
                         ) : null}
                         {questLocked ? (
                           <p className="mt-3 flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm font-semibold text-amber-100/90">
-                            <LockIcon className="h-4 w-4 shrink-0 text-amber-400/90" />
+                            <Lock
+                              size={14}
+                              className="shrink-0 text-amber-400/90"
+                              strokeWidth={2}
+                              aria-hidden
+                            />
                             <span>
                               {questProgression === 'weekly'
                                 ? formatUnlocksLabel(
@@ -1820,7 +1778,7 @@ export function GoalDetail() {
                             onClick={() =>
                               void handleMarkQuestComplete(currentQuest)
                             }
-                            className="w-full rounded-xl px-5 py-3 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                            className="btn-press w-full rounded-xl px-5 py-3 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                             style={{ backgroundColor: QUEST_PURPLE }}
                           >
                             {markingId === currentQuest.id
@@ -1916,7 +1874,7 @@ export function GoalDetail() {
                         <li
                           key={q.id}
                           className={[
-                            'relative flex items-start gap-3 rounded-xl border bg-app-surface px-4 py-3 transition-opacity',
+                            'card-interactive relative flex items-start gap-3 rounded-xl border bg-app-surface px-4 py-3 transition-opacity',
                             questLocked
                               ? 'border-amber-500/20 bg-zinc-900/40 opacity-90'
                               : q.completed
@@ -1930,11 +1888,11 @@ export function GoalDetail() {
                           <span className="mt-0.5 shrink-0 text-zinc-500">
                             {q.completed ? (
                               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-                                <CheckIcon className="h-4 w-4" />
+                                <CheckCircle2 size={16} strokeWidth={2} aria-hidden />
                               </span>
                             ) : questLocked ? (
                               <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-600 text-zinc-500">
-                                <LockIcon className="h-3.5 w-3.5" />
+                                <Lock size={14} strokeWidth={2} aria-hidden />
                               </span>
                             ) : (
                               <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-600" />
@@ -2007,7 +1965,12 @@ export function GoalDetail() {
                             ) : null}
                             {questLocked ? (
                               <p className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-2 text-xs font-semibold text-amber-100/90">
-                                <LockIcon className="h-3.5 w-3.5 shrink-0 text-amber-400/90" />
+                                <Lock
+                                  size={14}
+                                  className="shrink-0 text-amber-400/90"
+                                  strokeWidth={2}
+                                  aria-hidden
+                                />
                                 <span>
                                   {questProgression === 'weekly'
                                     ? formatUnlocksLabel(
@@ -2048,9 +2011,7 @@ export function GoalDetail() {
                                 }
                                 className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200 disabled:opacity-50"
                               >
-                                <span className="text-xl leading-none" aria-hidden>
-                                  ⋯
-                                </span>
+                                <MoreVertical size={16} aria-hidden strokeWidth={2} />
                               </button>
 
                               {menuOpen ? (

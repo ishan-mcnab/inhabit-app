@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { SectionLoadErrorCard } from '../components/SectionLoadErrorCard'
 import { XPToast } from '../components/XPToast'
@@ -231,7 +232,7 @@ export function WeeklyReflection() {
       return
     }
 
-    const [curRes, prevRes] = await Promise.all([
+    const [curRes, prevRes, userResEarly] = await Promise.all([
       supabase
         .from('reflections')
         .select(
@@ -249,6 +250,13 @@ export function WeeklyReflection() {
         .eq('user_id', user.id)
         .eq('iso_week_year', py)
         .eq('week_number', pw)
+        .maybeSingle(),
+      supabase
+        .from('users')
+        .select(
+          'weekly_xp, current_streak, display_name, goal_categories, goal_context',
+        )
+        .eq('id', user.id)
         .maybeSingle(),
     ])
 
@@ -291,12 +299,7 @@ export function WeeklyReflection() {
     const { mon, sun } = localWeekMondaySundayYmd(anchor)
     const { startIso, endIso } = localWeekStartEndIso(anchor)
 
-    const [
-      totalMRes,
-      doneMRes,
-      habitsRes,
-      userRes,
-    ] = await Promise.all([
+    const [totalMRes, doneMRes, habitsRes] = await Promise.all([
       supabase
         .from('daily_missions')
         .select('id', { count: 'exact', head: true })
@@ -318,12 +321,9 @@ export function WeeklyReflection() {
         .eq('user_id', user.id)
         .gte('completed_at', startIso)
         .lte('completed_at', endIso),
-      supabase
-        .from('users')
-        .select('weekly_xp, current_streak, display_name, goal_categories, goal_context')
-        .eq('id', user.id)
-        .maybeSingle(),
     ])
+
+    const userRes = userResEarly
 
     const missionsTotal = totalMRes.error ? 0 : (totalMRes.count ?? 0)
     const missionsCompleted = doneMRes.error ? 0 : (doneMRes.count ?? 0)
@@ -552,20 +552,7 @@ export function WeeklyReflection() {
           aria-label="Back to Today"
           className="absolute left-2 flex h-10 w-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-800/80 hover:text-white"
         >
-          <svg
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
+          <ChevronLeft size={20} aria-hidden strokeWidth={2} />
         </Link>
         <div className="max-w-[70%] text-center">
           <h1 className="text-lg font-bold text-white sm:text-xl">
@@ -693,7 +680,7 @@ export function WeeklyReflection() {
               type="button"
               disabled={!canSubmit || phase === 'submitting'}
               onClick={() => void handleSubmit()}
-              className="mt-10 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
+              className="btn-press mt-10 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
               style={{ backgroundColor: REFLECTION_PURPLE }}
             >
               {phase === 'submitting' ? 'Saving...' : 'Submit Reflection'}
