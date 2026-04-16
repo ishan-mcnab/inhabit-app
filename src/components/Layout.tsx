@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
+import { PWAInstallPrompt } from './PWAInstallPrompt'
 
 const TAB_MUTED = '#888780'
 
@@ -45,6 +46,7 @@ export function Layout() {
 
   return (
     <div className="flex h-[100dvh] min-h-0 flex-col bg-app-bg">
+      <PWAInstallPrompt />
       <div
         className={[
           'fixed left-0 right-0 z-[9999] border-l-4 py-2.5 pl-3 pr-4 text-[13px] font-medium text-white transition-opacity duration-300 ease-out',

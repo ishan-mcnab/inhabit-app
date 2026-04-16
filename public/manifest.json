@@ -1,0 +1,10 @@
+{
+  "name": "InHabit",
+  "short_name": "InHabit",
+  "description": "Build the life you keep promising yourself.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0D0F",
+  "theme_color": "#534AB7",
+  "orientation": "portrait"
+}

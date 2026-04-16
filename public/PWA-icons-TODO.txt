@@ -1,0 +1,5 @@
+TODO: Add install icons for a richer PWA install UI:
+- public/icon-192.png (192x192 pixels, PNG)
+- public/icon-512.png (512x512 pixels, PNG)
+
+Then add an "icons" array to public/manifest.json (see MDN: Web App Manifest / icons).
