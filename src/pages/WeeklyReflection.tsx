@@ -603,7 +603,7 @@ export function WeeklyReflection() {
       ) : null}
 
       {phase === 'form' || phase === 'submitting' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-12 pt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4">
           <div className="mx-auto max-w-lg">
             {statsLineDisplay ? (
               <div className="rounded-2xl border border-zinc-800/80 bg-app-surface px-4 py-3 ring-1 ring-zinc-800/40">

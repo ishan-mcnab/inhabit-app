@@ -67,10 +67,7 @@ export function RankShield({ rankName, accentColor }: Props) {
             strokeLinejoin="round"
           />
         </svg>
-        <div
-          className="rank-shield-shimmer-overlay absolute inset-0 z-[1]"
-          aria-hidden
-        />
+        <div className="rank-shield-shimmer-overlay z-[1]" aria-hidden />
         <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col items-center px-2 pt-[14px] text-center">
         <span className="text-[28px] leading-none" aria-hidden>
           {rankEmoji(rankName)}

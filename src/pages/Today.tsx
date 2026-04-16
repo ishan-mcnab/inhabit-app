@@ -2357,7 +2357,7 @@ export function Today() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-8">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-28">
         {!loading && !loadError && !loadStallMessage ? (
           todayPriorityBanner ||
           (weeklyNewMissionsBannerPhase !== 'off' && !todayPriorityBanner) ? (

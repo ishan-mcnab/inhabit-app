@@ -135,7 +135,7 @@ function formatQuestCompletedLine(iso: string | null): string {
 
 function DetailSkeleton() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 px-4 pb-10 pt-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 px-4 pb-28 pt-2">
       <div className="mission-skeleton-shell h-8 w-[75%] max-w-md rounded-lg" />
       <div className="h-4 w-40 rounded-lg bg-[#1e1e22] mission-skeleton-shell" />
       <div className="h-4 w-56 rounded-lg bg-[#1e1e22] mission-skeleton-shell" />
@@ -1640,7 +1640,7 @@ export function GoalDetail() {
           </div>
         </div>
       ) : goal ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
           {error ? (
             <div className="mb-4 flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-medium text-amber-100/90">{error}</p>

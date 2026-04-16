@@ -89,32 +89,19 @@
 
 @keyframes rank-shield-shimmer {
   0% {
-    transform: translateX(-100%);
-    opacity: 1;
-  }
-  28% {
-    transform: translateX(200%);
-    opacity: 1;
-  }
-  28.1% {
-    opacity: 0;
-  }
-  99% {
-    opacity: 0;
-    transform: translateX(-100%);
+    transform: translateX(-150%);
   }
   100% {
-    opacity: 0;
-    transform: translateX(-100%);
+    transform: translateX(250%);
   }
 }
 
 .rank-shield-shimmer-overlay {
-  pointer-events: none;
   position: absolute;
   inset: 0;
   overflow: hidden;
   border-radius: inherit;
+  pointer-events: none;
 }
 
 .rank-shield-shimmer-overlay::after {
@@ -122,15 +109,16 @@
   position: absolute;
   top: 0;
   left: 0;
+  width: 60%;
   height: 100%;
-  width: 50%;
   background: linear-gradient(
     90deg,
     transparent,
     rgba(255, 255, 255, 0.08),
     transparent
   );
-  animation: rank-shield-shimmer 4.2s ease-out 0.5s infinite;
+  transform: translateX(-150%);
+  animation: rank-shield-shimmer 3.5s ease-in-out 0.5s infinite;
 }
 
 @keyframes mission-skeleton-pulse {

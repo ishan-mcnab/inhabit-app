@@ -105,7 +105,7 @@ export function CreateHabit() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-6">
         <div className="mx-auto max-w-lg space-y-8">
           {error ? (
             <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">

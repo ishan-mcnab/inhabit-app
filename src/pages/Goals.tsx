@@ -578,7 +578,7 @@ export function Goals() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-8 pt-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-28 pt-4">
         {toast ? (
           <div className="mx-auto mb-4 max-w-lg rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/25">
             {toast}

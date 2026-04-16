@@ -759,7 +759,7 @@ export function Progress() {
         </p>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-12 pt-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-6">
         <div className="mx-auto max-w-lg space-y-6">
           {error ? (
             <div className="space-y-3">

@@ -432,7 +432,7 @@ export function CreateGoal() {
         onSubmit={handleSubmit}
         noValidate
       >
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6">
           <div className="mx-auto max-w-lg">
             <label
               htmlFor="goal-title"

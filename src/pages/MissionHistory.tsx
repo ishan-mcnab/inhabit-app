@@ -179,7 +179,7 @@ export function MissionHistory() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-10 pt-5">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-28 pt-5">
         <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button

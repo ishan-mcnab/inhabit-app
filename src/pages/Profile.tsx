@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type TouchEvent,
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useCountUp } from '../hooks/useCountUp'
 import { ChevronRight, Clock } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -53,8 +46,6 @@ const STAT_GREEN_MUTED = 'rgba(52, 211, 153, 0.45)'
 const SIGN_OUT_RED = '#E24B4A'
 
 const STREAK_MILESTONES = [7, 14, 21, 30, 60, 100] as const
-
-const PULL_THRESHOLD_PX = 60
 
 type QuestProgressionMode = 'weekly' | 'completion'
 
@@ -288,7 +279,6 @@ export function Profile() {
   const location = useLocation()
   const [notificationPrefs, setNotificationPrefsPatch] = useNotificationPrefs()
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadStallMessage, setLoadStallMessage] = useState<string | null>(null)
   const [habitsSectionError, setHabitsSectionError] = useState<string | null>(
@@ -321,9 +311,6 @@ export function Profile() {
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false)
 
   const nameBlockRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const pullStartY = useRef<number | null>(null)
-  const pullDistance = useRef(0)
   const loadGenRef = useRef(0)
   const lastFetchedAtRef = useRef<number | null>(null)
 
@@ -639,40 +626,6 @@ export function Profile() {
     window.setTimeout(() => setSavedFlash(false), 2000)
   }
 
-  async function runPullRefresh() {
-    if (refreshing || loading || editingName) return
-    setRefreshing(true)
-    try {
-      await load({ silent: true })
-    } finally {
-      setRefreshing(false)
-    }
-  }
-
-  function handleTouchStart(e: TouchEvent<HTMLDivElement>) {
-    const el = scrollRef.current
-    if (!el || el.scrollTop > 0 || editingName) return
-    pullStartY.current = e.touches[0].clientY
-    pullDistance.current = 0
-  }
-
-  function handleTouchMove(e: TouchEvent<HTMLDivElement>) {
-    const el = scrollRef.current
-    if (pullStartY.current == null || !el || el.scrollTop > 0) return
-    pullDistance.current = Math.max(
-      0,
-      e.touches[0].clientY - pullStartY.current,
-    )
-  }
-
-  function handleTouchEnd() {
-    if (pullDistance.current >= PULL_THRESHOLD_PX) {
-      void runPullRefresh()
-    }
-    pullStartY.current = null
-    pullDistance.current = 0
-  }
-
   async function confirmSignOut() {
     setSignOutConfirmOpen(false)
     setStats(null)
@@ -698,31 +651,14 @@ export function Profile() {
   const avatarInitials = initialsFromDisplayName(displayName)
 
   return (
-    <div
-      ref={scrollRef}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain bg-app-bg [-webkit-overflow-scrolling:touch]"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      <header className="shrink-0 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+    <div className="flex flex-col min-h-screen overflow-y-auto bg-app-bg px-4 pb-28">
+      <header className="shrink-0 border-b border-zinc-800/60 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <h1 className="text-2xl font-bold tracking-tight text-white">
           Profile
         </h1>
       </header>
 
-      <div className="min-h-0 flex-1 px-4 pb-10 pt-0">
-        {refreshing ? (
-          <div
-            className="sticky top-0 z-10 -mx-4 mb-2 h-0.5 overflow-hidden bg-zinc-800/50"
-            role="status"
-            aria-label="Refreshing"
-          >
-            <div className="h-full w-full origin-left animate-pulse bg-[#534AB7]/70" />
-          </div>
-        ) : null}
-
-        <div className="mx-auto max-w-lg space-y-6">
+      <div className="mx-auto w-full max-w-lg space-y-6 pb-6 pt-0">
           {loading ? (
             <div className="space-y-6 pb-8">
               <div className="flex flex-col items-center pt-8">
@@ -1300,7 +1236,6 @@ export function Profile() {
             </>
           ) : null}
         </div>
-      </div>
 
       {signOutConfirmOpen ? (
         <div
