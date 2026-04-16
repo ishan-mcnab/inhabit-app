@@ -92,6 +92,7 @@ type GoalsCachePayload = {
   questPreviewByGoalId: Record<string, string>
   fitnessTitles: string[]
   goalsNeedingAttention: number
+  hasFitnessCategory: boolean
 }
 
 function localDayStart(d: Date): Date {
@@ -148,6 +149,7 @@ export function Goals() {
   )
   const [addingHabitKey, setAddingHabitKey] = useState<string | null>(null)
   const [fitnessInfoOpen, setFitnessInfoOpen] = useState(false)
+  const [hasFitnessCategory, setHasFitnessCategory] = useState(false)
 
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [suggestPhase, setSuggestPhase] = useState<
@@ -209,6 +211,7 @@ export function Goals() {
           setCompletedGoals(cached.completedGoals)
           setQuestPreviewByGoalId(cached.questPreviewByGoalId)
           setFitnessHabitTitles(new Set(cached.fitnessTitles))
+          setHasFitnessCategory(Boolean(cached.hasFitnessCategory))
           setGoalsNeedingAttention(cached.goalsNeedingAttention)
           setLoading(false)
           setShowDelayedSkeleton(false)
@@ -255,7 +258,7 @@ export function Goals() {
         .eq('category', 'fitness_consistency'),
       supabase
         .from('users')
-        .select('quest_progression')
+        .select('quest_progression, goal_categories')
         .eq('id', user.id)
         .maybeSingle(),
     ])
@@ -268,6 +271,7 @@ export function Goals() {
       setCompletedGoals([])
       setQuestPreviewByGoalId({})
       setGoalsNeedingAttention(0)
+      setHasFitnessCategory(false)
       clearSkeletonDelayTimer()
       setShowDelayedSkeleton(false)
       if (!silent) setLoading(false)
@@ -292,6 +296,11 @@ export function Goals() {
       prefsRes.data?.quest_progression === 'completion'
         ? 'completion'
         : 'weekly'
+
+    const rawCats = prefsRes.data?.goal_categories
+    const hasFitness =
+      Array.isArray(rawCats) && rawCats.includes('fitness_consistency')
+    setHasFitnessCategory(hasFitness)
 
     const nextPreviews: Record<string, string> = {}
     let attentionCount = 0
@@ -390,6 +399,7 @@ export function Goals() {
         questPreviewByGoalId: nextPreviews,
         fitnessTitles: Array.from(titles),
         goalsNeedingAttention: attentionCount,
+        hasFitnessCategory: hasFitness,
       },
       30_000,
     )
@@ -895,6 +905,7 @@ export function Goals() {
           </>
         )}
 
+        {hasFitnessCategory ? (
         <section className="mx-auto mt-12 max-w-lg border-t border-zinc-800/50 pt-10">
           <div className="flex items-start justify-between gap-3">
             <h2 className="text-lg font-bold text-white">Fitness Habits</h2>
@@ -978,6 +989,7 @@ export function Goals() {
             })}
           </div>
         </section>
+        ) : null}
       </div>
 
       {suggestOpen ? (

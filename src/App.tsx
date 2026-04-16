@@ -1,5 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { SplashScreen } from './components/SplashScreen'
+import { useAuth } from './context/AuthContext'
 import { Layout } from './components/Layout'
 import { PageErrorBoundary } from './components/PageErrorBoundary'
 import { NotificationProvider } from './context/NotificationContext'
@@ -23,6 +25,16 @@ import { supabase } from './supabase'
 
 function App() {
   const location = useLocation()
+  const { loading: authLoading } = useAuth()
+  const [minSplashMsElapsed, setMinSplashMsElapsed] = useState(false)
+  const [splashMounted, setSplashMounted] = useState(true)
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setMinSplashMsElapsed(true), 1500)
+    return () => window.clearTimeout(t)
+  }, [])
+
+  const showAuthSplash = authLoading || !minSplashMsElapsed
 
   useEffect(() => {
     void supabase
@@ -45,6 +57,7 @@ function App() {
   }, [])
 
   return (
+    <>
     <Routes>
       <Route element={<RequireGuest />}>
         <Route path="login" element={<Login />} />
@@ -125,6 +138,13 @@ function App() {
         </Route>
       </Route>
     </Routes>
+    {splashMounted ? (
+      <SplashScreen
+        show={showAuthSplash}
+        onFadeComplete={() => setSplashMounted(false)}
+      />
+    ) : null}
+    </>
   )
 }
 

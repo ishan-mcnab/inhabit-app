@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { OnboardingContextStep } from '../components/onboarding/OnboardingContextStep'
 import { ONBOARDING_CONTEXT_FIELDS } from '../constants/onboardingContextConfig'
 import type { GoalContextCategoryId } from '../types/goalContext'
+import { SplashScreen } from '../components/SplashScreen'
 import { supabase } from '../supabase'
 
 type Step = 'welcome' | 'name' | 'goals' | 'context'
@@ -252,11 +253,7 @@ export function Onboarding() {
   }
 
   if (checking) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-app-bg">
-        <p className="text-sm font-medium text-zinc-500">Loading…</p>
-      </div>
-    )
+    return <SplashScreen show />
   }
 
   if (bootError) {
@@ -289,12 +286,28 @@ export function Onboarding() {
         }}
       >
         <div className="flex flex-1 flex-col items-center justify-center px-2 text-center">
-          <h1
-            className="text-[56px] font-bold leading-none tracking-tight text-white"
-            style={{ textShadow: '0 0 40px rgba(83,74,183,0.6)' }}
+          <div
+            style={{ position: 'relative', display: 'inline-block' }}
           >
-            InHabit
-          </h1>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background:
+                  'radial-gradient(ellipse at center, rgba(83,74,183,0.5) 0%, transparent 70%)',
+                filter: 'blur(16px)',
+                transform: 'scale(1.4)',
+                zIndex: 0,
+              }}
+              aria-hidden
+            />
+            <h1
+              className="text-[56px] font-bold leading-none tracking-tight text-white"
+              style={{ position: 'relative', zIndex: 1 }}
+            >
+              InHabit
+            </h1>
+          </div>
           <p
             className="mx-auto mt-6 max-w-[280px] text-base font-medium leading-[1.6]"
             style={{ color: '#888780' }}

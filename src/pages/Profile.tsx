@@ -651,7 +651,7 @@ export function Profile() {
   const avatarInitials = initialsFromDisplayName(displayName)
 
   return (
-    <div className="flex flex-col min-h-screen overflow-y-auto bg-app-bg px-4 pb-28">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-app-bg px-4 pb-28">
       <header className="shrink-0 border-b border-zinc-800/60 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <h1 className="text-2xl font-bold tracking-tight text-white">
           Profile

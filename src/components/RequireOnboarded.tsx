@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
+import { SplashScreen } from './SplashScreen'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
 
@@ -11,6 +12,7 @@ type GateState =
 export function RequireOnboarded() {
   const { session } = useAuth()
   const [state, setState] = useState<GateState>({ status: 'loading' })
+  const [gateSplashMounted, setGateSplashMounted] = useState(true)
 
   const load = useCallback(async () => {
     const userId = session?.user.id
@@ -45,14 +47,6 @@ export function RequireOnboarded() {
     void load()
   }, [load])
 
-  if (state.status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-app-bg">
-        <p className="text-sm font-medium text-zinc-500">Loading…</p>
-      </div>
-    )
-  }
-
   if (state.status === 'error') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-app-bg px-6">
@@ -70,9 +64,19 @@ export function RequireOnboarded() {
     )
   }
 
-  if (!state.onboarded) {
+  if (state.status === 'ready' && !state.onboarded) {
     return <Navigate to="/onboarding" replace />
   }
 
-  return <Outlet />
+  return (
+    <>
+      {state.status === 'ready' && state.onboarded ? <Outlet /> : null}
+      {gateSplashMounted ? (
+        <SplashScreen
+          show={state.status === 'loading'}
+          onFadeComplete={() => setGateSplashMounted(false)}
+        />
+      ) : null}
+    </>
+  )
 }
