@@ -63,10 +63,10 @@ export function Layout() {
       >
         You&apos;re offline — changes will sync when you reconnect
       </div>
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] [-webkit-overflow-scrolling:touch]">
+      <main className="flex min-h-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] [-webkit-overflow-scrolling:touch]">
         <div
           key={location.pathname}
-          className="page-enter flex min-h-0 flex-1 flex-col"
+          className="page-enter flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
         >
           <Outlet />
         </div>

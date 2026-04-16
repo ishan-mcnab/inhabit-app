@@ -479,7 +479,8 @@ export function Goals() {
     if (!insertError) {
       appCache.invalidate(habitsCacheKey(user.id))
       setFitnessHabitTitles((prev) => new Set(prev).add(title))
-      void navigate('/today')
+      setToast('Habit added! Find it on the Today tab.')
+      window.setTimeout(() => setToast(null), 2200)
     }
   }
 

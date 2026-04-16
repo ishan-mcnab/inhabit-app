@@ -388,7 +388,7 @@ function LevelProgressCard({
   barFlash: boolean
   levelUpBannerLevel: number | null
 }) {
-  const { level, weekly_xp: profileWeeklyXp } = profile
+  const { weekly_xp: profileWeeklyXp } = profile
   const weeklyXpVal = Math.max(0, Math.floor(profileWeeklyXp))
   const effectiveRank = calculateRank(weeklyXpVal)
   const weeklyBand = getWeeklyRankBandProgress(weeklyXpVal)
@@ -428,10 +428,7 @@ function LevelProgressCard({
           border: LEVEL_CARD_BORDER,
         }}
       >
-        <div className="flex items-center gap-2 sm:gap-3">
-          <span className="shrink-0 text-[18px] font-bold tabular-nums text-white">
-            LVL {level}
-          </span>
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
             <div
               className="h-2 w-full overflow-hidden rounded-full"
@@ -449,7 +446,7 @@ function LevelProgressCard({
               />
             </div>
           </div>
-          <span className="max-w-[6rem] shrink-0 text-right text-[12px] font-medium leading-tight text-zinc-500 sm:max-w-none">
+          <span className="max-w-[7.5rem] shrink-0 text-right text-[12px] font-medium leading-tight text-zinc-500 sm:max-w-none">
             {xpRight}
           </span>
         </div>
@@ -634,6 +631,8 @@ export function Today() {
   const [celebrationBannerOpen, setCelebrationBannerOpen] = useState(false)
   const [celebrationBannerExpanded, setCelebrationBannerExpanded] =
     useState(false)
+  const [celebrationBannerFading, setCelebrationBannerFading] =
+    useState(false)
   const [pressingMissionId, setPressingMissionId] = useState<string | null>(
     null,
   )
@@ -676,6 +675,7 @@ export function Today() {
   const deferBannerForConfettiRef = useRef(false)
   const confettiCancelRef = useRef<(() => void) | null>(null)
   const newWeekBannerTimersRef = useRef<number[]>([])
+  const fullClearBannerTimersRef = useRef<number[]>([])
   const awardQueueRef = useRef<AwardXpResult[]>([])
   const pumpBusyRef = useRef(false)
 
@@ -1246,11 +1246,14 @@ export function Today() {
         const result = await checkAndRegenerateWeeklyMissions(user.id)
         if (result.regenerated && result.goalsUpdated > 0) {
           setWeeklyNewMissionsBannerPhase('visible')
-          window.setTimeout(() => setWeeklyNewMissionsBannerPhase('fading'), 3000)
+          window.setTimeout(
+            () => setWeeklyNewMissionsBannerPhase('fading'),
+            4000,
+          )
           window.setTimeout(() => {
             setWeeklyNewMissionsBannerPhase('off')
             void reloadTodayMissions(user.id)
-          }, 3300)
+          }, 4300)
         }
       } catch (e) {
         console.error('checkAndRegenerateWeeklyMissions failed:', e)
@@ -1557,6 +1560,12 @@ export function Today() {
   useEffect(() => {
     if (loading || loadError || loadStallMessage) return
     if (missions.length === 0 || !missions.every((m) => m.completed)) {
+      try {
+        sessionStorage.removeItem(`inhabit_full_clear_banner_${todayStr}`)
+      } catch {
+        /* ignore */
+      }
+      setCelebrationBannerFading(false)
       setCelebrationBannerExpanded(false)
       const collapseTimer = window.setTimeout(() => {
         setCelebrationBannerOpen(false)
@@ -1564,8 +1573,52 @@ export function Today() {
       return () => window.clearTimeout(collapseTimer)
     }
     if (deferBannerForConfettiRef.current) return
+    try {
+      if (
+        typeof sessionStorage !== 'undefined' &&
+        sessionStorage.getItem(`inhabit_full_clear_banner_${todayStr}`) === '1'
+      ) {
+        return
+      }
+    } catch {
+      /* ignore */
+    }
     revealBanner(setCelebrationBannerOpen, setCelebrationBannerExpanded)
-  }, [loading, loadError, loadStallMessage, missions])
+  }, [loading, loadError, loadStallMessage, missions, todayStr])
+
+  useEffect(() => {
+    if (!celebrationBannerOpen || !celebrationBannerExpanded) return
+
+    for (const id of fullClearBannerTimersRef.current) {
+      window.clearTimeout(id)
+    }
+    fullClearBannerTimersRef.current = []
+
+    try {
+      sessionStorage.setItem(`inhabit_full_clear_banner_${todayStr}`, '1')
+    } catch {
+      /* ignore */
+    }
+
+    setCelebrationBannerFading(false)
+
+    const tFade = window.setTimeout(() => {
+      setCelebrationBannerFading(true)
+    }, 4000)
+    const tClose = window.setTimeout(() => {
+      setCelebrationBannerExpanded(false)
+      setCelebrationBannerOpen(false)
+      setCelebrationBannerFading(false)
+    }, 4300)
+    fullClearBannerTimersRef.current = [tFade, tClose]
+
+    return () => {
+      for (const id of fullClearBannerTimersRef.current) {
+        window.clearTimeout(id)
+      }
+      fullClearBannerTimersRef.current = []
+    }
+  }, [celebrationBannerOpen, celebrationBannerExpanded, todayStr])
 
   const doneCount = missions.filter((m) => m.completed).length
   const total = missions.length
@@ -1772,13 +1825,22 @@ export function Today() {
         ),
       )
 
-      const habitAward = await awardXP(userId, 15, 'habit_complete')
-      enqueueXpAward(habitAward)
-      enqueueXpToast(15)
+      console.log('Awarding habit XP for:', h.title)
+      try {
+        const habitAward = await awardXP(userId, 15, 'habit_complete')
+        enqueueXpAward(habitAward)
+        enqueueXpToast(15)
+      } catch (xpErr) {
+        console.error('awardXP habit_complete failed:', xpErr)
+      }
 
-      const streakResult = await checkAndUpdateStreak(userId, 'activity')
-      setStreakCurrent(streakResult.currentStreak)
-      setStreakLongest(streakResult.longestStreak)
+      try {
+        const streakResult = await checkAndUpdateStreak(userId, 'activity')
+        setStreakCurrent(streakResult.currentStreak)
+        setStreakLongest(streakResult.longestStreak)
+      } catch (streakErr) {
+        console.error('checkAndUpdateStreak after habit:', streakErr)
+      }
     } catch (e) {
       console.error('Habit completion failed:', e)
       setHabits((prev) =>
@@ -2263,7 +2325,7 @@ export function Today() {
   })()
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
+    <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden bg-app-bg">
       <header className="shrink-0 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] transition-opacity duration-300">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -2348,7 +2410,10 @@ export function Today() {
         <div className="min-h-0 overflow-hidden">
           {celebrationBannerOpen ? (
             <div
-              className="inhabit-banner-fade-in rounded-lg bg-emerald-500/20 px-4 py-3 text-center text-[13px] font-bold leading-snug text-emerald-300 ring-1 ring-emerald-500/35"
+              className={[
+                'inhabit-banner-fade-in rounded-lg bg-emerald-500/20 px-4 py-3 text-center text-[13px] font-bold leading-snug text-emerald-300 ring-1 ring-emerald-500/35 transition-opacity duration-300',
+                celebrationBannerFading ? 'opacity-0' : 'opacity-100',
+              ].join(' ')}
               role="status"
             >
               All missions complete! Full clear bonus incoming.
@@ -2357,7 +2422,7 @@ export function Today() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-28">
+      <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-28">
         {!loading && !loadError && !loadStallMessage ? (
           todayPriorityBanner ||
           (weeklyNewMissionsBannerPhase !== 'off' && !todayPriorityBanner) ? (
@@ -2366,7 +2431,7 @@ export function Today() {
               {weeklyNewMissionsBannerPhase !== 'off' && !todayPriorityBanner ? (
                 <div
                   className={[
-                    'inhabit-banner-fade-in -mx-4 w-[calc(100%+2rem)] rounded-lg px-4 py-3 text-center text-[13px] font-bold leading-snug text-white transition-opacity duration-300',
+                    'inhabit-banner-fade-in w-full min-w-0 rounded-lg px-4 py-3 text-center text-[13px] font-bold leading-snug text-white transition-opacity duration-300',
                     weeklyNewMissionsBannerPhase === 'fading'
                       ? 'opacity-0'
                       : 'opacity-100',

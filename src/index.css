@@ -33,6 +33,12 @@
     color-scheme: dark;
   }
 
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body {
     @apply m-0 min-h-screen bg-app-bg text-zinc-100 antialiased;
   }
