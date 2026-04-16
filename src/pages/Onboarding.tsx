@@ -294,9 +294,11 @@ export function Onboarding() {
                 position: 'absolute',
                 inset: 0,
                 background:
-                  'radial-gradient(ellipse at center, rgba(83,74,183,0.5) 0%, transparent 70%)',
-                filter: 'blur(16px)',
-                transform: 'scale(1.4)',
+                  'radial-gradient(ellipse at center, rgba(83,74,183,0.7) 0%, transparent 70%)',
+                width: 280,
+                height: 100,
+                filter: 'blur(28px)',
+                transform: 'scale(1.8)',
                 zIndex: 0,
               }}
               aria-hidden
