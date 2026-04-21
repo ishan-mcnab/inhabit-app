@@ -1,6 +1,19 @@
 import { supabase } from '../supabase'
 import { localDayStartEndIso } from './xp'
 
+export type OptimisticSleepLog = {
+  bedtime: string
+  wake_time: string
+  rest_rating: number
+  notes: string | null
+}
+
+export type OptimisticMoodLog = {
+  mood_rating: number
+  energy_rating: number
+  notes: string | null
+}
+
 export type HealthSnapshot = {
   sleep: {
     bedtime: string | null

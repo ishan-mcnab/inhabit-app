@@ -807,21 +807,31 @@ export function Progress() {
       setReflectionRows((reflectionsRes.data ?? []) as ReflectionHistoryRow[])
     }
 
-    if (sleepLogsRes.error) {
-      console.error('Progress sleep_logs:', sleepLogsRes.error)
-      setSleepInsightsLoadError(sleepLogsRes.error.message)
+    const sleepData = sleepLogsRes.data
+    const sleepError = sleepLogsRes.error
+    console.log('Sleep logs:', sleepData, sleepError)
+
+    if (sleepError) {
+      console.error('Progress sleep_logs:', sleepError)
+      setSleepInsightsLoadError(sleepError.message)
       setSleepChartLabels(sleep7.labels)
       setSleepChartRatings(sleep7.ymds.map(() => null))
       setSleepWeekAvg(null)
     } else {
       setSleepInsightsLoadError(null)
       const map = new Map<string, number>()
-      for (const row of (sleepLogsRes.data ?? []) as {
-        log_date?: string
+      for (const row of (sleepData ?? []) as {
+        log_date?: unknown
         rest_rating?: number
       }[]) {
-        const ld =
-          typeof row.log_date === 'string' ? row.log_date.slice(0, 10) : ''
+        let ld = ''
+        const rawDate = row.log_date
+        if (typeof rawDate === 'string') {
+          ld = rawDate.slice(0, 10)
+        } else if (rawDate instanceof Date) {
+          const d = rawDate
+          ld = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        }
         const r = row.rest_rating
         if (ld && typeof r === 'number' && r >= 1 && r <= 5) map.set(ld, r)
       }
@@ -1637,6 +1647,8 @@ export function Progress() {
                   </ul>
                 )}
               </section>
+                </>
+              )}
 
               <section
                 aria-labelledby="progress-sleep-insights-heading"
@@ -1674,6 +1686,7 @@ export function Progress() {
                       }}
                     >
                       <SleepRestRatingBarChart
+                        key={sleepChartRatings.join(',')}
                         labels={sleepChartLabels}
                         ratings={sleepChartRatings}
                       />
@@ -1686,8 +1699,6 @@ export function Progress() {
                   </div>
                 )}
               </section>
-                </>
-              )}
             </>
           ) : null}
         </div>

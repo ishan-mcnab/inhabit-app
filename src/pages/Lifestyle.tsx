@@ -336,7 +336,36 @@ export function Lifestyle() {
               todayYmd={healthYmd}
               snapshot={health}
               loading={loading}
-              onRefresh={() => void load()}
+              onSleepSaved={(row) =>
+                setHealth((h) => ({
+                  ...h,
+                  sleep: {
+                    bedtime: row.bedtime,
+                    wake_time: row.wake_time,
+                    rest_rating: row.rest_rating,
+                    notes: row.notes,
+                  },
+                }))
+              }
+              onWaterSaved={(glasses_count) =>
+                setHealth((h) => ({
+                  ...h,
+                  water: {
+                    glasses_count,
+                    daily_target: h.water?.daily_target ?? 8,
+                  },
+                }))
+              }
+              onMoodSaved={(row) =>
+                setHealth((h) => ({
+                  ...h,
+                  mood: {
+                    mood_rating: row.mood_rating,
+                    energy_rating: row.energy_rating,
+                    notes: row.notes,
+                  },
+                }))
+              }
             />
           ) : null}
         </div>

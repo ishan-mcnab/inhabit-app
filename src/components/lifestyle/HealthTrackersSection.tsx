@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { XPToast } from '../XPToast'
 import { useXpToastQueue } from '../../hooks/useXpToastQueue'
 import { appCache, profileCacheKey } from '../../lib/cache'
-import type { HealthSnapshot } from '../../lib/healthTrackers'
+import type {
+  HealthSnapshot,
+  OptimisticMoodLog,
+  OptimisticSleepLog,
+} from '../../lib/healthTrackers'
 import { hasXpReasonToday } from '../../lib/healthTrackers'
 import { awardXP } from '../../lib/xp'
 import { supabase } from '../../supabase'
@@ -60,7 +64,7 @@ function SleepLogModal({
   userId: string
   todayYmd: string
   initial: HealthSnapshot['sleep']
-  onSaved: () => void
+  onSaved: (row: OptimisticSleepLog) => void
   enqueueXpToast: (n: number) => void
 }) {
   const [bedtime, setBedtime] = useState('')
@@ -128,8 +132,13 @@ function SleepLogModal({
           console.error('sleep_logged XP:', e)
         }
       }
-      onSaved()
       onClose()
+      onSaved({
+        bedtime: bt,
+        wake_time: wt,
+        rest_rating: restRating,
+        notes: notes.trim() || null,
+      })
     } finally {
       setSaving(false)
     }
@@ -141,7 +150,7 @@ function SleepLogModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex flex-col justify-end bg-black/65 p-0"
+      className="fixed inset-0 z-[120] flex flex-col justify-end bg-black/65 p-0 motion-reduce:transition-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="sleep-modal-title"
@@ -265,7 +274,7 @@ function MoodLogModal({
   userId: string
   todayYmd: string
   initial: HealthSnapshot['mood']
-  onSaved: () => void
+  onSaved: (row: OptimisticMoodLog) => void
   enqueueXpToast: (n: number) => void
 }) {
   const [mood, setMood] = useState<number | null>(null)
@@ -334,8 +343,12 @@ function MoodLogModal({
           console.error('mood_logged XP:', e)
         }
       }
-      onSaved()
       onClose()
+      onSaved({
+        mood_rating: mood,
+        energy_rating: energy,
+        notes: notes.trim() || null,
+      })
     } finally {
       setSaving(false)
     }
@@ -345,7 +358,7 @@ function MoodLogModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex flex-col justify-end bg-black/65 p-0"
+      className="fixed inset-0 z-[120] flex flex-col justify-end bg-black/65 p-0 motion-reduce:transition-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mood-modal-title"
@@ -450,13 +463,17 @@ export function HealthTrackersSection({
   todayYmd,
   snapshot,
   loading,
-  onRefresh,
+  onSleepSaved,
+  onWaterSaved,
+  onMoodSaved,
 }: {
   userId: string
   todayYmd: string
   snapshot: HealthSnapshot
   loading: boolean
-  onRefresh: () => void
+  onSleepSaved: (row: OptimisticSleepLog) => void
+  onWaterSaved: (glassesCount: number) => void
+  onMoodSaved: (row: OptimisticMoodLog) => void
 }) {
   const {
     toast: xpToast,
@@ -502,12 +519,12 @@ export function HealthTrackersSection({
             }
           }
         }
-        onRefresh()
+        onWaterSaved(clamped)
       } finally {
         setWaterBusy(false)
       }
     },
-    [userId, todayYmd, target, snapshot.water, onRefresh, enqueueXpToast],
+    [userId, todayYmd, target, snapshot.water, onWaterSaved, enqueueXpToast],
   )
 
   const onGlassCircleClick = (index: number) => {
@@ -553,7 +570,7 @@ export function HealthTrackersSection({
         userId={userId}
         todayYmd={todayYmd}
         initial={snapshot.sleep}
-        onSaved={onRefresh}
+        onSaved={onSleepSaved}
         enqueueXpToast={enqueueXpToast}
       />
       <MoodLogModal
@@ -562,7 +579,7 @@ export function HealthTrackersSection({
         userId={userId}
         todayYmd={todayYmd}
         initial={snapshot.mood}
-        onSaved={onRefresh}
+        onSaved={onMoodSaved}
         enqueueXpToast={enqueueXpToast}
       />
 
