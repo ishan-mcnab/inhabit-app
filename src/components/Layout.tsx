@@ -3,10 +3,12 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   CalendarDays,
   ChartNoAxesCombined,
+  Sun,
   Target,
   User,
 } from 'lucide-react'
 import { Goals } from '../pages/Goals'
+import { Lifestyle } from '../pages/Lifestyle'
 import { Profile } from '../pages/Profile'
 import { Progress } from '../pages/Progress'
 import { Today } from '../pages/Today'
@@ -17,7 +19,13 @@ import { PWAInstallPrompt } from './PWAInstallPrompt'
 
 const TAB_MUTED = '#888780'
 
-const MAIN_TAB_PATHS = ['/today', '/goals', '/progress', '/profile'] as const
+const MAIN_TAB_PATHS = [
+  '/today',
+  '/goals',
+  '/lifestyle',
+  '/progress',
+  '/profile',
+] as const
 
 function isMainTabPath(pathname: string): boolean {
   return (
@@ -36,6 +44,7 @@ function isTabRoute(pathname: string): boolean {
 const tabs = [
   { to: '/today', label: 'Today', badge: 'today' as const, Icon: CalendarDays },
   { to: '/goals', label: 'Goals', badge: 'goals' as const, Icon: Target },
+  { to: '/lifestyle', label: 'Lifestyle', badge: null, Icon: Sun },
   {
     to: '/progress',
     label: 'Progress',
@@ -70,6 +79,7 @@ export function Layout() {
 
   const showToday = pathname === '/today' || pathname === '/'
   const showGoals = pathname === '/goals'
+  const showLifestyle = pathname === '/lifestyle'
   const showProgress = pathname === '/progress'
   const showProfile = pathname === '/profile'
 
@@ -120,6 +130,14 @@ export function Layout() {
             >
               <PageErrorBoundary>
                 <Goals />
+              </PageErrorBoundary>
+            </div>
+            <div
+              className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+              style={{ display: showLifestyle ? 'flex' : 'none' }}
+            >
+              <PageErrorBoundary>
+                <Lifestyle />
               </PageErrorBoundary>
             </div>
             <div

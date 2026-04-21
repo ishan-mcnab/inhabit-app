@@ -18,6 +18,7 @@ import { MissionHistory } from './pages/MissionHistory'
 import { Onboarding } from './pages/Onboarding'
 import { Share } from './pages/Share'
 import { WeeklyReflection } from './pages/WeeklyReflection'
+import { RoutineDetail } from './pages/RoutineDetail'
 import { SignUp } from './pages/SignUp'
 import { supabase } from './supabase'
 
@@ -82,6 +83,15 @@ function App() {
               }
             />
             <Route path="goals" element={<TabRouteStub />} />
+            <Route
+              path="lifestyle/routine/:type"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <RoutineDetail />
+                </PageErrorBoundary>
+              }
+            />
+            <Route path="lifestyle" element={<TabRouteStub />} />
             <Route path="goals/new" element={<CreateGoal />} />
             <Route
               path="goals/:goalId/plan"

@@ -1,0 +1,287 @@
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Sun } from 'lucide-react'
+import { streakTierTextStyle } from '../lib/streakTierStyle'
+import {
+  calculateRoutineStreak,
+  formatLocalDateYmd,
+  loadRoutineChecksFromStorage,
+  type RoutineType,
+} from '../lib/routineUtils'
+import { supabase } from '../supabase'
+
+const CARD_SURFACE = '#141418'
+const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const MUTED = '#888780'
+const MUTED_HEADING = '#888780'
+
+type RoutineRow = {
+  id: string
+  name: string
+  type: string
+}
+
+export function Lifestyle() {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [todayYmd] = useState(() => formatLocalDateYmd(new Date()))
+  const [morning, setMorning] = useState<{
+    routine: RoutineRow
+    itemCount: number
+    doneToday: boolean
+    checkedProgress: number
+    streak: number
+  } | null>(null)
+  const [evening, setEvening] = useState<{
+    routine: RoutineRow
+    itemCount: number
+    doneToday: boolean
+    checkedProgress: number
+    streak: number
+  } | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabase.auth.getUser()
+    if (authErr || !user) {
+      setLoading(false)
+      setError(authErr?.message ?? 'Not signed in')
+      return
+    }
+
+    const userId = user.id
+
+    const { data: existing } = await supabase
+      .from('routines')
+      .select('id,type')
+      .eq('user_id', userId)
+    const have = new Set((existing ?? []).map((r) => r.type))
+    const inserts: { user_id: string; name: string; type: string }[] = []
+    if (!have.has('morning')) {
+      inserts.push({
+        user_id: userId,
+        name: 'Morning Routine',
+        type: 'morning',
+      })
+    }
+    if (!have.has('evening')) {
+      inserts.push({
+        user_id: userId,
+        name: 'Evening Routine',
+        type: 'evening',
+      })
+    }
+    if (inserts.length > 0) {
+      const { error: insErr } = await supabase.from('routines').insert(inserts)
+      if (insErr) {
+        setLoading(false)
+        setError(insErr.message)
+        return
+      }
+    }
+
+    const { data: routines, error: rErr } = await supabase
+      .from('routines')
+      .select('id,name,type')
+      .eq('user_id', userId)
+      .in('type', ['morning', 'evening'])
+
+    if (rErr || !routines) {
+      setLoading(false)
+      setError(rErr?.message ?? 'Failed to load routines')
+      return
+    }
+
+    const routineRows: RoutineRow[] = routines
+
+    async function buildSide(type: RoutineType) {
+      const row = routineRows.find((x) => x.type === type) as RoutineRow | undefined
+      if (!row) return null
+
+      const [{ count: itemCount }, logToday, logsAll] = await Promise.all([
+        supabase
+          .from('routine_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('routine_id', row.id)
+          .eq('user_id', userId),
+        supabase
+          .from('routine_logs')
+          .select('id')
+          .eq('routine_id', row.id)
+          .eq('user_id', userId)
+          .eq('completed_at', todayYmd)
+          .maybeSingle(),
+        supabase
+          .from('routine_logs')
+          .select('completed_at')
+          .eq('routine_id', row.id)
+          .eq('user_id', userId)
+          .order('completed_at', { ascending: false }),
+      ])
+
+      const n = itemCount ?? 0
+      const doneToday = !logToday.error && !!logToday.data
+      const stored = loadRoutineChecksFromStorage(row.id, todayYmd)
+      const checkedProgress = doneToday
+        ? n
+        : Math.min(n, stored.length)
+
+      const dates = Array.from(
+        new Set(
+          ((logsAll.data ?? []) as { completed_at: string }[]).map((x) =>
+            typeof x.completed_at === 'string'
+              ? x.completed_at.slice(0, 10)
+              : '',
+          ).filter(Boolean),
+        ),
+      )
+      const streak = calculateRoutineStreak(dates, todayYmd)
+
+      return {
+        routine: row,
+        itemCount: n,
+        doneToday,
+        checkedProgress,
+        streak,
+      }
+    }
+
+    const [m, e] = await Promise.all([buildSide('morning'), buildSide('evening')])
+    setMorning(m)
+    setEvening(e)
+    setLoading(false)
+  }, [todayYmd])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
+      <header className="shrink-0 border-b border-zinc-800/60 px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
+        <div className="mx-auto flex max-w-lg items-center gap-2">
+          <Sun
+            size={26}
+            className="shrink-0 text-amber-300"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <h1 className="text-[22px] font-semibold tracking-tight text-white">
+              Lifestyle
+            </h1>
+            <p className="mt-0.5 text-[13px] font-medium" style={{ color: MUTED }}>
+              Your daily routines and wellness
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6">
+        <div className="mx-auto max-w-lg">
+          {error ? (
+            <p className="text-sm font-medium text-red-400" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="-mx-1 flex items-center gap-3">
+            <h2
+              className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
+              style={{ color: MUTED_HEADING }}
+            >
+              Routines
+            </h2>
+            <div className="h-px min-w-[2rem] flex-1 bg-zinc-800/50" aria-hidden />
+          </div>
+
+          {loading ? (
+            <p className="mt-6 text-sm font-medium text-zinc-500">Loading…</p>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <RoutineCard
+                emoji="☀️"
+                label="Morning"
+                data={morning}
+                routineType="morning"
+              />
+              <RoutineCard
+                emoji="🌙"
+                label="Evening"
+                data={evening}
+                routineType="evening"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RoutineCard({
+  emoji,
+  label,
+  data,
+  routineType,
+}: {
+  emoji: string
+  label: string
+  data: {
+    routine: RoutineRow
+    itemCount: number
+    doneToday: boolean
+    checkedProgress: number
+    streak: number
+  } | null
+  routineType: RoutineType
+}) {
+  if (!data) return null
+
+  const { itemCount, doneToday, checkedProgress, streak } = data
+  const empty = itemCount === 0
+  const subtitle = empty
+    ? `Tap to set up your ${routineType} routine`
+    : `${itemCount} item${itemCount === 1 ? '' : 's'}`
+
+  return (
+    <Link
+      to={`/lifestyle/routine/${routineType}`}
+      state={empty ? { startInEdit: true } : undefined}
+      className="block min-h-[120px] rounded-[12px] border p-4 outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
+      style={{ backgroundColor: CARD_SURFACE, borderColor: CARD_BORDER }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-2xl" aria-hidden>
+          {emoji}
+        </span>
+        {doneToday ? (
+          <span className="shrink-0 rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400 ring-1 ring-emerald-500/35">
+            Done
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-2 text-sm font-bold text-white">{label}</p>
+      <p className="mt-1 text-xs font-medium" style={{ color: MUTED }}>
+        {subtitle}
+      </p>
+      {!empty && !doneToday ? (
+        <p className="mt-2 text-xs font-medium" style={{ color: MUTED }}>
+          {checkedProgress}/{itemCount} done
+        </p>
+      ) : null}
+      {streak > 0 ? (
+        <p
+          className="mt-2 text-xs font-bold"
+          style={streakTierTextStyle(streak)}
+        >
+          🔥 {streak} day streak
+        </p>
+      ) : null}
+    </Link>
+  )
+}

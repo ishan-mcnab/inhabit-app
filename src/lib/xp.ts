@@ -238,6 +238,7 @@ const XP_LOG_REASON_LABELS: Record<string, string> = {
   streak_milestone: 'Streak milestone',
   weekly_reflection: 'Weekly reflection',
   reflection_streak: 'Reflection streak',
+  routine_complete: 'Routine completed',
 }
 
 export function formatXpLogReason(reason: string): string {
