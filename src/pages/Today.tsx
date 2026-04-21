@@ -1781,6 +1781,25 @@ export function Today() {
     })
   }, [habits])
 
+  /** No goals and no habits — two-card empty state only (goals + habits counts from load). */
+  const isBrandNewUser = useMemo(
+    () =>
+      Boolean(userId) &&
+      !hasGoals &&
+      habits.length === 0 &&
+      !loading &&
+      !habitsLoading &&
+      !habitsLoadError,
+    [
+      userId,
+      hasGoals,
+      habits.length,
+      loading,
+      habitsLoading,
+      habitsLoadError,
+    ],
+  )
+
   async function handleCompleteHabit(habitId: string) {
     if (!userId) return
     if (habitCompletingIds.has(habitId)) return
@@ -2354,7 +2373,8 @@ export function Today() {
             </h1>
             {loading && showDelayedSkeleton ? (
               <div className="mt-2 h-4 w-40 rounded bg-[#1e1e22] mission-skeleton-shell" />
-            ) : loadError || loadStallMessage ? null : total > 0 ? (
+            ) : loadError || loadStallMessage ? null : isBrandNewUser ? null : total >
+              0 ? (
               allDone ? (
                 <p className="mt-1 text-[13px] font-semibold text-emerald-400">
                   All done today!
@@ -2443,7 +2463,10 @@ export function Today() {
       </div>
 
       <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-28">
-        {!loading && !loadError && !loadStallMessage ? (
+        {!loading &&
+        !loadError &&
+        !loadStallMessage &&
+        !isBrandNewUser ? (
           todayPriorityBanner ||
           (weeklyNewMissionsBannerPhase !== 'off' && !todayPriorityBanner) ? (
             <div className="mt-2 mb-2 flex flex-col gap-2">
@@ -2498,7 +2521,7 @@ export function Today() {
           ) : null
         ) : (
           <div className="mx-auto flex w-full min-w-0 max-w-lg flex-col">
-            {!hasGoals ? (
+            {isBrandNewUser ? (
               <div className="w-full px-2 py-2">
                 <div className="flex w-full flex-col gap-3">
                   <div
@@ -2555,13 +2578,61 @@ export function Today() {
                     </p>
                     <Link
                       to="/habits/new"
-                      className="btn-press mt-4 w-full rounded-[12px] border border-zinc-800 bg-zinc-900/80 py-3 text-center text-sm font-bold text-white transition-opacity"
+                      className="btn-press mt-4 w-full rounded-[12px] py-3 text-center text-sm font-bold text-white transition-opacity"
+                      style={{ backgroundColor: '#534AB7' }}
                     >
                       Add Habit
                     </Link>
                   </div>
                 </div>
               </div>
+            ) : !hasGoals ? (
+              <>
+                <div className="-mx-4 mb-0 flex items-center gap-3 px-4">
+                  <span
+                    className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
+                    style={{ color: MUTED_HEADING }}
+                  >
+                    Missions
+                  </span>
+                  <div
+                    className="h-px min-w-[2rem] flex-1 bg-zinc-800/50"
+                    aria-hidden
+                  />
+                </div>
+                <div className="mt-5 w-full px-2">
+                  <div
+                    className="flex w-full flex-col items-center rounded-[12px] border p-4 text-center"
+                    style={{
+                      backgroundColor: '#141418',
+                      borderColor: CARD_BORDER,
+                    }}
+                  >
+                    <Target
+                      size={32}
+                      strokeWidth={1.5}
+                      className="text-[#444441]"
+                      aria-hidden
+                    />
+                    <p className="mt-3 text-[14px] font-bold text-white">
+                      Create a Goal
+                    </p>
+                    <p
+                      className="mt-2 text-[12px] font-medium leading-relaxed"
+                      style={{ color: MUTED_HEADING }}
+                    >
+                      Add a goal to get daily missions here.
+                    </p>
+                    <Link
+                      to="/goals/new"
+                      className="btn-press mt-4 w-full rounded-[12px] py-3 text-center text-sm font-bold text-white transition-opacity"
+                      style={{ backgroundColor: '#534AB7' }}
+                    >
+                      Create a Goal →
+                    </Link>
+                  </div>
+                </div>
+              </>
             ) : missionRegenerating ? (
               <div className="mx-auto flex w-full max-w-lg flex-col gap-3">
                 <MissionSkeleton />
@@ -2817,7 +2888,7 @@ export function Today() {
               </>
             )}
 
-            {userId ? (
+            {userId && !isBrandNewUser ? (
               <>
                 <div
                   className="my-5 border-t border-zinc-800/40 pt-5"
