@@ -2496,114 +2496,114 @@ export function Today() {
               <MissionSkeleton />
             </div>
           ) : null
-        ) : !hasGoals ? (
-          <div className="flex min-h-[50vh] flex-1 flex-col items-center justify-center px-2">
-            <div className="mx-auto w-full min-w-0 max-w-lg">
-              <div className="grid grid-cols-2 gap-3">
-                <div
-                  className="flex flex-col items-center rounded-[12px] border p-4 text-center"
-                  style={{
-                    backgroundColor: '#141418',
-                    borderColor: CARD_BORDER,
-                  }}
-                >
-                  <Target
-                    size={32}
-                    strokeWidth={1.5}
-                    className="text-[#444441]"
-                    aria-hidden
-                  />
-                  <p className="mt-3 text-[14px] font-bold text-white">
-                    Create a Goal
-                  </p>
-                  <p
-                    className="mt-2 text-[12px] font-medium leading-relaxed"
-                    style={{ color: MUTED_HEADING }}
-                  >
-                    Create your first goal to unlock daily missions.
-                  </p>
-                  <Link
-                    to="/goals/new"
-                    className="btn-press mt-4 w-full rounded-[12px] py-3 text-center text-sm font-bold text-white transition-opacity"
-                    style={{ backgroundColor: '#534AB7' }}
-                  >
-                    Create a Goal →
-                  </Link>
-                </div>
-                <div
-                  className="flex flex-col items-center rounded-[12px] border p-4 text-center"
-                  style={{
-                    backgroundColor: '#141418',
-                    borderColor: CARD_BORDER,
-                  }}
-                >
-                  <Repeat
-                    size={32}
-                    strokeWidth={1.5}
-                    className="text-zinc-500"
-                    aria-hidden
-                  />
-                  <p className="mt-3 text-[14px] font-bold text-white">
-                    Add a Habit
-                  </p>
-                  <p
-                    className="mt-2 text-[12px] font-medium leading-relaxed"
-                    style={{ color: MUTED_HEADING }}
-                  >
-                    Build daily consistency with small repeatable actions
-                  </p>
-                  <Link
-                    to="/habits/new"
-                    className="btn-press mt-4 w-full rounded-[12px] border border-zinc-800 bg-zinc-900/80 py-3 text-center text-sm font-bold text-white transition-opacity"
-                  >
-                    Add Habit
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : missionRegenerating ? (
-          <div className="mx-auto flex max-w-lg flex-col gap-3">
-            <MissionSkeleton />
-            <MissionSkeleton />
-            <MissionSkeleton />
-          </div>
-        ) : hasGoals && missionsLoadError ? (
-          <div className="mx-auto max-w-lg px-1 py-4">
-            <SectionLoadErrorCard
-              sectionLabel="missions"
-              message={missionsLoadError}
-              onRetry={() => void load()}
-            />
-          </div>
-        ) : hasGoals && missions.length === 0 ? (
-          <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
-            <StateCard>
-              <p className="text-lg font-bold text-white">
-                Some missions couldn&apos;t load
-              </p>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                Tap regenerate to try loading missions for this week.
-              </p>
-              <button
-                type="button"
-                disabled={missionRegenerateWorking}
-                onClick={() => void handleRegenerateMissionsTap()}
-                className="btn-press mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
-                style={{ backgroundColor: '#534AB7' }}
-              >
-                {missionRegenerateWorking ? 'Regenerating…' : 'Regenerate'}
-              </button>
-              <Link
-                to="/goals"
-                className="mt-3 block w-full rounded-xl border border-zinc-700 bg-zinc-800/50 py-3.5 text-center text-sm font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
-              >
-                Go to Goals
-              </Link>
-            </StateCard>
-          </div>
         ) : (
           <div className="mx-auto flex w-full min-w-0 max-w-lg flex-col">
+            {!hasGoals ? (
+              <div className="w-full px-2 py-2">
+                <div className="flex w-full flex-col gap-3">
+                  <div
+                    className="flex w-full flex-col items-center rounded-[12px] border p-4 text-center"
+                    style={{
+                      backgroundColor: '#141418',
+                      borderColor: CARD_BORDER,
+                    }}
+                  >
+                    <Target
+                      size={32}
+                      strokeWidth={1.5}
+                      className="text-[#444441]"
+                      aria-hidden
+                    />
+                    <p className="mt-3 text-[14px] font-bold text-white">
+                      Create a Goal
+                    </p>
+                    <p
+                      className="mt-2 text-[12px] font-medium leading-relaxed"
+                      style={{ color: MUTED_HEADING }}
+                    >
+                      Create your first goal to unlock daily missions.
+                    </p>
+                    <Link
+                      to="/goals/new"
+                      className="btn-press mt-4 w-full rounded-[12px] py-3 text-center text-sm font-bold text-white transition-opacity"
+                      style={{ backgroundColor: '#534AB7' }}
+                    >
+                      Create a Goal →
+                    </Link>
+                  </div>
+                  <div
+                    className="flex w-full flex-col items-center rounded-[12px] border p-4 text-center"
+                    style={{
+                      backgroundColor: '#141418',
+                      borderColor: CARD_BORDER,
+                    }}
+                  >
+                    <Repeat
+                      size={32}
+                      strokeWidth={1.5}
+                      className="text-zinc-500"
+                      aria-hidden
+                    />
+                    <p className="mt-3 text-[14px] font-bold text-white">
+                      Add a Habit
+                    </p>
+                    <p
+                      className="mt-2 text-[12px] font-medium leading-relaxed"
+                      style={{ color: MUTED_HEADING }}
+                    >
+                      Build daily consistency with small repeatable actions
+                    </p>
+                    <Link
+                      to="/habits/new"
+                      className="btn-press mt-4 w-full rounded-[12px] border border-zinc-800 bg-zinc-900/80 py-3 text-center text-sm font-bold text-white transition-opacity"
+                    >
+                      Add Habit
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : missionRegenerating ? (
+              <div className="mx-auto flex w-full max-w-lg flex-col gap-3">
+                <MissionSkeleton />
+                <MissionSkeleton />
+                <MissionSkeleton />
+              </div>
+            ) : hasGoals && missionsLoadError ? (
+              <div className="mx-auto w-full max-w-lg px-1 py-4">
+                <SectionLoadErrorCard
+                  sectionLabel="missions"
+                  message={missionsLoadError}
+                  onRetry={() => void load()}
+                />
+              </div>
+            ) : hasGoals && missions.length === 0 ? (
+              <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
+                <StateCard>
+                  <p className="text-lg font-bold text-white">
+                    Some missions couldn&apos;t load
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+                    Tap regenerate to try loading missions for this week.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={missionRegenerateWorking}
+                    onClick={() => void handleRegenerateMissionsTap()}
+                    className="btn-press mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
+                    style={{ backgroundColor: '#534AB7' }}
+                  >
+                    {missionRegenerateWorking ? 'Regenerating…' : 'Regenerate'}
+                  </button>
+                  <Link
+                    to="/goals"
+                    className="mt-3 block w-full rounded-xl border border-zinc-700 bg-zinc-800/50 py-3.5 text-center text-sm font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
+                  >
+                    Go to Goals
+                  </Link>
+                </StateCard>
+              </div>
+            ) : (
+              <>
             {completeError ? (
               <p className="mb-3 text-center text-sm font-medium text-red-400 transition-opacity">
                 {completeError}
@@ -2814,6 +2814,8 @@ export function Today() {
               )
             })}
             </div>
+              </>
+            )}
 
             {userId ? (
               <>
