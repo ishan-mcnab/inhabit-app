@@ -7,6 +7,8 @@ import {
   loadRoutineChecksFromStorage,
   type RoutineType,
 } from '../lib/routineUtils'
+import { HealthTrackersSection } from '../components/lifestyle/HealthTrackersSection'
+import type { HealthSnapshot } from '../lib/healthTrackers'
 import { supabase } from '../supabase'
 
 const CARD_SURFACE = '#141418'
@@ -39,8 +41,17 @@ export function Lifestyle() {
     streak: number
   } | null>(null)
 
+  const [healthUserId, setHealthUserId] = useState<string | null>(null)
+  const [healthYmd, setHealthYmd] = useState(() => formatLocalDateYmd(new Date()))
+  const [health, setHealth] = useState<HealthSnapshot>({
+    sleep: null,
+    water: null,
+    mood: null,
+  })
+
   const load = useCallback(async () => {
     const todayYmd = formatLocalDateYmd(new Date())
+    setHealthYmd(todayYmd)
     setLoading(true)
     setError(null)
     const {
@@ -48,12 +59,14 @@ export function Lifestyle() {
       error: authErr,
     } = await supabase.auth.getUser()
     if (authErr || !user) {
+      setHealthUserId(null)
       setLoading(false)
       setError(authErr?.message ?? 'Not signed in')
       return
     }
 
     const userId = user.id
+    setHealthUserId(userId)
 
     const { data: existing } = await supabase
       .from('routines')
@@ -148,9 +161,90 @@ export function Lifestyle() {
       }
     }
 
-    const [m, e] = await Promise.all([buildSide('morning'), buildSide('evening')])
+    const [m, e, sleepRes, waterRes, moodRes] = await Promise.all([
+      buildSide('morning'),
+      buildSide('evening'),
+      supabase
+        .from('sleep_logs')
+        .select('bedtime,wake_time,rest_rating,notes')
+        .eq('user_id', userId)
+        .eq('log_date', todayYmd)
+        .maybeSingle(),
+      supabase
+        .from('water_logs')
+        .select('glasses_count,daily_target')
+        .eq('user_id', userId)
+        .eq('log_date', todayYmd)
+        .maybeSingle(),
+      supabase
+        .from('mood_logs')
+        .select('mood_rating,energy_rating,notes')
+        .eq('user_id', userId)
+        .eq('log_date', todayYmd)
+        .maybeSingle(),
+    ])
     setMorning(m)
     setEvening(e)
+
+    const sleepRow = sleepRes.data as {
+      bedtime: string | null
+      wake_time: string | null
+      rest_rating: number | null
+      notes: string | null
+    } | null
+    const waterRow = waterRes.data as {
+      glasses_count: number
+      daily_target: number
+    } | null
+    const moodRow = moodRes.data as {
+      mood_rating: number | null
+      energy_rating: number | null
+      notes: string | null
+    } | null
+
+    if (sleepRes.error) console.error('sleep_logs:', sleepRes.error)
+    if (waterRes.error) console.error('water_logs:', waterRes.error)
+    if (moodRes.error) console.error('mood_logs:', moodRes.error)
+
+    setHealth({
+      sleep: sleepRow
+        ? {
+            bedtime: sleepRow.bedtime,
+            wake_time: sleepRow.wake_time,
+            rest_rating:
+              typeof sleepRow.rest_rating === 'number'
+                ? sleepRow.rest_rating
+                : null,
+            notes: sleepRow.notes,
+          }
+        : null,
+      water: waterRow
+        ? {
+            glasses_count:
+              typeof waterRow.glasses_count === 'number'
+                ? waterRow.glasses_count
+                : 0,
+            daily_target:
+              typeof waterRow.daily_target === 'number'
+                ? waterRow.daily_target
+                : 8,
+          }
+        : null,
+      mood: moodRow
+        ? {
+            mood_rating:
+              typeof moodRow.mood_rating === 'number'
+                ? moodRow.mood_rating
+                : null,
+            energy_rating:
+              typeof moodRow.energy_rating === 'number'
+                ? moodRow.energy_rating
+                : null,
+            notes: moodRow.notes,
+          }
+        : null,
+    })
+
     setLoading(false)
   }, [])
 
@@ -195,41 +289,56 @@ export function Lifestyle() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-6">
-        <div className="mx-auto max-w-lg">
+        <div className="mx-auto max-w-lg space-y-10">
           {error ? (
             <p className="text-sm font-medium text-red-400" role="alert">
               {error}
             </p>
           ) : null}
 
-          <div className="-mx-1 flex items-center gap-3">
-            <h2
-              className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
-              style={{ color: MUTED_HEADING }}
-            >
-              Routines
-            </h2>
-            <div className="h-px min-w-[2rem] flex-1 bg-zinc-800/50" aria-hidden />
-          </div>
-
-          {loading ? (
-            <p className="mt-6 text-sm font-medium text-zinc-500">Loading…</p>
-          ) : (
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <RoutineCard
-                emoji="☀️"
-                label="Morning"
-                data={morning}
-                routineType="morning"
-              />
-              <RoutineCard
-                emoji="🌙"
-                label="Evening"
-                data={evening}
-                routineType="evening"
-              />
+          <section>
+            <div className="-mx-1 flex items-center gap-3">
+              <h2
+                className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
+                style={{ color: MUTED_HEADING }}
+              >
+                Routines
+              </h2>
+              <div className="h-px min-w-[2rem] flex-1 bg-zinc-800/50" aria-hidden />
             </div>
-          )}
+
+            {loading ? (
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="h-[120px] animate-pulse rounded-[12px] border border-zinc-800/60 bg-zinc-900/40" />
+                <div className="h-[120px] animate-pulse rounded-[12px] border border-zinc-800/60 bg-zinc-900/40" />
+              </div>
+            ) : (
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <RoutineCard
+                  emoji="☀️"
+                  label="Morning"
+                  data={morning}
+                  routineType="morning"
+                />
+                <RoutineCard
+                  emoji="🌙"
+                  label="Evening"
+                  data={evening}
+                  routineType="evening"
+                />
+              </div>
+            )}
+          </section>
+
+          {healthUserId ? (
+            <HealthTrackersSection
+              userId={healthUserId}
+              todayYmd={healthYmd}
+              snapshot={health}
+              loading={loading}
+              onRefresh={() => void load()}
+            />
+          ) : null}
         </div>
       </div>
     </div>

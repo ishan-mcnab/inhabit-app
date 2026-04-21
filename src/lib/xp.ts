@@ -239,6 +239,9 @@ const XP_LOG_REASON_LABELS: Record<string, string> = {
   weekly_reflection: 'Weekly reflection',
   reflection_streak: 'Reflection streak',
   routine_complete: 'Routine completed',
+  sleep_logged: 'Sleep logged',
+  water_goal_reached: 'Water goal reached',
+  mood_logged: 'Mood check-in',
 }
 
 export function formatXpLogReason(reason: string): string {

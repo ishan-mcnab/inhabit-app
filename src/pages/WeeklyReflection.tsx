@@ -481,6 +481,59 @@ export function WeeklyReflection() {
       // bonus is optional; ignore
     }
 
+    const anchor = mondayOfIsoWeek(isoRef.current.year, isoRef.current.week)
+    const { mon, sun } = localWeekMondaySundayYmd(anchor)
+
+    const [moodWeekRes, sleepWeekRes] = await Promise.all([
+      supabase
+        .from('mood_logs')
+        .select('mood_rating,energy_rating')
+        .eq('user_id', user.id)
+        .gte('log_date', mon)
+        .lte('log_date', sun),
+      supabase
+        .from('sleep_logs')
+        .select('rest_rating')
+        .eq('user_id', user.id)
+        .gte('log_date', mon)
+        .lte('log_date', sun),
+    ])
+
+    if (moodWeekRes.error) {
+      console.error('WeeklyReflection mood_logs:', moodWeekRes.error)
+    }
+    if (sleepWeekRes.error) {
+      console.error('WeeklyReflection sleep_logs:', sleepWeekRes.error)
+    }
+
+    const avg = (xs: number[]): number | null => {
+      if (!xs.length) return null
+      return (
+        Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10
+      )
+    }
+
+    const moodRows = (moodWeekRes.data ?? []) as {
+      mood_rating?: unknown
+      energy_rating?: unknown
+    }[]
+    const moodNums = moodRows
+      .map((r) => r.mood_rating)
+      .filter((x): x is number => typeof x === 'number' && x >= 1 && x <= 5)
+    const energyNums = moodRows
+      .map((r) => r.energy_rating)
+      .filter((x): x is number => typeof x === 'number' && x >= 1 && x <= 5)
+    const sleepRows = (sleepWeekRes.data ?? []) as { rest_rating?: unknown }[]
+    const restNums = sleepRows
+      .map((r) => r.rest_rating)
+      .filter((x): x is number => typeof x === 'number' && x >= 1 && x <= 5)
+
+    const wellness = {
+      avgMoodThisWeek: avg(moodNums),
+      avgEnergyThisWeek: avg(energyNums),
+      avgRestThisWeek: avg(restNums),
+    }
+
     let insight = ''
     try {
       insight = await weeklyReflectionCoachInsight(
@@ -498,6 +551,7 @@ export function WeeklyReflection() {
           improve: improve.trim(),
         },
         userCtx ?? undefined,
+        wellness,
       )
     } catch {
       insight =

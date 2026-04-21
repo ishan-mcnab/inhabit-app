@@ -110,6 +110,32 @@ function localDayStart(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
+function buildLast7SleepRangeLocal(): {
+  labels: string[]
+  ymds: string[]
+  startYmd: string
+  endYmd: string
+} {
+  const wk = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const labels: string[] = []
+  const ymds: string[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = localDayStart(new Date())
+    d.setDate(d.getDate() - i)
+    labels.push(wk[d.getDay()] ?? '?')
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    ymds.push(`${y}-${m}-${day}`)
+  }
+  return {
+    labels,
+    ymds,
+    startYmd: ymds[0]!,
+    endYmd: ymds[ymds.length - 1]!,
+  }
+}
+
 /** Whole calendar days from account creation (local midnight) to today (local midnight). */
 function localCalendarDaysSinceJoined(isoCreatedAt: string): number {
   const created = new Date(isoCreatedAt)
@@ -236,6 +262,94 @@ function WeeklyXpBarChart({
 
   return (
     <div className="h-[160px] w-full">
+      <Bar data={data} options={options} />
+    </div>
+  )
+}
+
+const SLEEP_BAR_PURPLE = '#534AB7'
+const SLEEP_BAR_AMBER = '#BA7517'
+const SLEEP_BAR_RED = '#E24B4A'
+const SLEEP_BAR_EMPTY = '#2A2A2E'
+
+function SleepRestRatingBarChart({
+  labels,
+  ratings,
+}: {
+  labels: string[]
+  ratings: (number | null)[]
+}) {
+  const data = useMemo(() => {
+    return {
+      labels,
+      datasets: [
+        {
+          data: ratings.map((r) => (r == null ? 0 : r)),
+          backgroundColor: ratings.map((r) => {
+            if (r == null) return SLEEP_BAR_EMPTY
+            if (r <= 2) return SLEEP_BAR_RED
+            if (r === 3) return SLEEP_BAR_AMBER
+            return SLEEP_BAR_PURPLE
+          }),
+          minBarLength: 6,
+          borderWidth: 0,
+          borderRadius: 4,
+          maxBarThickness: 28,
+        },
+      ],
+    }
+  }, [labels, ratings])
+
+  const options: ChartOptions<'bar'> = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 6, bottom: 0, left: 0, right: 4 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e1e22',
+          titleColor: '#fafafa',
+          bodyColor: '#a1a1aa',
+          borderColor: GRID_LINE,
+          borderWidth: 1,
+          padding: 10,
+          displayColors: false,
+          callbacks: {
+            label: (ctx) => {
+              const i = ctx.dataIndex
+              const r = ratings[i]
+              if (r == null) return 'No sleep log'
+              return `Rest rating: ${r}/5`
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          border: { display: false },
+          grid: { color: GRID_LINE, lineWidth: 1 },
+          ticks: { color: '#71717a', font: { size: 11 } },
+        },
+        y: {
+          min: 0,
+          max: 5,
+          border: { display: false },
+          grid: { color: GRID_LINE, lineWidth: 1 },
+          ticks: {
+            color: '#71717a',
+            font: { size: 11 },
+            stepSize: 1,
+            precision: 0,
+          },
+        },
+      },
+    }),
+    [ratings],
+  )
+
+  return (
+    <div className="h-[180px] w-full">
       <Bar data={data} options={options} />
     </div>
   )
@@ -369,6 +483,14 @@ export function Progress() {
   const [reflectionsLoadError, setReflectionsLoadError] = useState<
     string | null
   >(null)
+  const [sleepInsightsLoadError, setSleepInsightsLoadError] = useState<
+    string | null
+  >(null)
+  const [sleepChartLabels, setSleepChartLabels] = useState<string[]>([])
+  const [sleepChartRatings, setSleepChartRatings] = useState<
+    (number | null)[]
+  >([])
+  const [sleepWeekAvg, setSleepWeekAvg] = useState<number | null>(null)
 
   const [weeklyXp, setWeeklyXp] = useState(0)
   const [totalXp, setTotalXp] = useState(0)
@@ -409,6 +531,7 @@ export function Progress() {
       setGoalsLoadError(null)
       setHabitsLoadError(null)
       setReflectionsLoadError(null)
+      setSleepInsightsLoadError(null)
     }
 
     const {
@@ -443,6 +566,8 @@ export function Progress() {
     habitGridStart.setDate(habitGridStart.getDate() - 6)
     habitGridStart.setHours(0, 0, 0, 0)
 
+    const sleep7 = buildLast7SleepRangeLocal()
+
     const [
       userRes,
       xpLogsRes,
@@ -452,6 +577,7 @@ export function Progress() {
       habitLogsRes,
       reflectionsRes,
       weeklyQuestsRes,
+      sleepLogsRes,
     ] = await Promise.all([
       supabase
         .from('users')
@@ -498,6 +624,12 @@ export function Progress() {
         .from('weekly_quests')
         .select('id,goal_id,title,week_number,completed')
         .eq('user_id', user.id),
+      supabase
+        .from('sleep_logs')
+        .select('log_date,rest_rating')
+        .eq('user_id', user.id)
+        .gte('log_date', sleep7.startYmd)
+        .lte('log_date', sleep7.endYmd),
     ])
 
     if (!silent) setLoading(false)
@@ -673,6 +805,37 @@ export function Progress() {
     } else {
       setReflectionsLoadError(null)
       setReflectionRows((reflectionsRes.data ?? []) as ReflectionHistoryRow[])
+    }
+
+    if (sleepLogsRes.error) {
+      console.error('Progress sleep_logs:', sleepLogsRes.error)
+      setSleepInsightsLoadError(sleepLogsRes.error.message)
+      setSleepChartLabels(sleep7.labels)
+      setSleepChartRatings(sleep7.ymds.map(() => null))
+      setSleepWeekAvg(null)
+    } else {
+      setSleepInsightsLoadError(null)
+      const map = new Map<string, number>()
+      for (const row of (sleepLogsRes.data ?? []) as {
+        log_date?: string
+        rest_rating?: number
+      }[]) {
+        const ld =
+          typeof row.log_date === 'string' ? row.log_date.slice(0, 10) : ''
+        const r = row.rest_rating
+        if (ld && typeof r === 'number' && r >= 1 && r <= 5) map.set(ld, r)
+      }
+      const ratings = sleep7.ymds.map((ymd) => map.get(ymd) ?? null)
+      const logged = ratings.filter((x): x is number => x != null)
+      const avg =
+        logged.length > 0
+          ? Math.round(
+              (logged.reduce((a, b) => a + b, 0) / logged.length) * 10,
+            ) / 10
+          : null
+      setSleepChartLabels(sleep7.labels)
+      setSleepChartRatings(ratings)
+      setSleepWeekAvg(avg)
     }
 
     lastFetchedAtRef.current = Date.now()
@@ -1472,6 +1635,55 @@ export function Progress() {
                       )
                     })}
                   </ul>
+                )}
+              </section>
+
+              <section
+                aria-labelledby="progress-sleep-insights-heading"
+                className="mt-10"
+              >
+                <div
+                  id="progress-sleep-insights-heading"
+                  className="sr-only"
+                >
+                  Sleep insights
+                </div>
+                <SectionHeadingRow>Sleep insights</SectionHeadingRow>
+                {sleepInsightsLoadError ? (
+                  <div className="mt-4">
+                    <SectionLoadErrorCard
+                      sectionLabel="sleep insights"
+                      message={sleepInsightsLoadError}
+                      onRetry={() => void load()}
+                    />
+                  </div>
+                ) : sleepChartRatings.every((r) => r == null) ? (
+                  <p
+                    className="mt-4 max-w-[320px] text-[13px] font-medium leading-snug"
+                    style={{ color: MUTED_BODY }}
+                  >
+                    No sleep data yet — start logging on the Lifestyle tab.
+                  </p>
+                ) : (
+                  <div className="mt-4">
+                    <div
+                      className="rounded-xl border p-4"
+                      style={{
+                        backgroundColor: CARD_BG,
+                        borderColor: CARD_BORDER,
+                      }}
+                    >
+                      <SleepRestRatingBarChart
+                        labels={sleepChartLabels}
+                        ratings={sleepChartRatings}
+                      />
+                      {sleepWeekAvg != null ? (
+                        <p className="mt-3 text-center text-[13px] font-semibold tabular-nums text-zinc-300">
+                          Avg: {sleepWeekAvg}/5 this week
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                 )}
               </section>
                 </>

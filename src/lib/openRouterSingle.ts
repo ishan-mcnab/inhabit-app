@@ -248,6 +248,11 @@ export async function weeklyReflectionCoachInsight(
     goalContext: Record<string, any>
     displayName: string
   },
+  wellness?: {
+    avgMoodThisWeek: number | null
+    avgEnergyThisWeek: number | null
+    avgRestThisWeek: number | null
+  },
 ): Promise<string> {
   const system =
     'You are a direct, no-BS discipline coach for young men. Give sharp, specific feedback based on their week. Never be generic. Never say "great job" or "keep it up". Reference their actual answers. Be direct and occasionally challenging. Maximum 2 sentences.'
@@ -307,6 +312,23 @@ export async function weeklyReflectionCoachInsight(
     }
   }
 
+  let wellnessBlock = ''
+  if (wellness) {
+    const moodLine =
+      wellness.avgMoodThisWeek != null
+        ? `Average mood this week: ${wellness.avgMoodThisWeek}/5`
+        : 'Average mood this week: no mood logs'
+    const energyLine =
+      wellness.avgEnergyThisWeek != null
+        ? `Average energy this week: ${wellness.avgEnergyThisWeek}/5`
+        : 'Average energy this week: no energy logs this week'
+    const restLine =
+      wellness.avgRestThisWeek != null
+        ? `Average sleep quality: ${wellness.avgRestThisWeek}/5`
+        : 'Average sleep quality: no sleep logs this week'
+    wellnessBlock = `${moodLine}\n${energyLine}\n${restLine}\n\n`
+  }
+
   const user =
     `${catLine}\n\n` +
     'Their week:\n' +
@@ -314,12 +336,16 @@ export async function weeklyReflectionCoachInsight(
     `- ${stats.streak} day streak\n` +
     `- ${stats.weeklyXp} XP earned\n` +
     `- ${stats.habitsCompleted} habits completed\n\n` +
+    wellnessBlock +
     'Their reflection:\n' +
     `Win: ${answersText.win}\n` +
     `Failed at / avoided: ${answersText.miss}\n` +
     `Will change: ${answersText.improve}\n\n` +
     (ctxLines.length ? `Context: ${ctxLines.join(' / ')}\n\n` : '') +
-    'Give a direct, specific, challenging 2-sentence insight. Reference their name once. Never be generic.'
+    'Give a direct, specific, challenging 2-sentence insight. Reference their name once. Never be generic.' +
+    (wellness
+      ? ' If wellness averages are provided above, you may tie them to discipline and performance.'
+      : '')
 
   return openRouterChat([
     { role: 'system', content: system },
