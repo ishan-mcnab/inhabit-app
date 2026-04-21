@@ -3194,14 +3194,6 @@ export function Today() {
                       })}
                     </div>
                   )}
-
-                  <Link
-                    to="/habits/new"
-                    className="btn-press mt-5 block w-full rounded-2xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95"
-                    style={{ backgroundColor: '#534AB7' }}
-                  >
-                    Add Habit
-                  </Link>
                 </section>
               </>
             ) : null}
