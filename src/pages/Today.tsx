@@ -658,6 +658,8 @@ export function Today() {
   const [missionRegenerateWorking, setMissionRegenerateWorking] =
     useState(false)
   const loadGenRef = useRef(0)
+  /** True after synchronous cache hydrate this load — blocks delayed skeleton. */
+  const hydratedFromCacheRef = useRef(false)
   const lastFetchedAtRef = useRef<number | null>(null)
   const skeletonDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -1056,6 +1058,7 @@ export function Today() {
     async (opts?: { silent?: boolean }) => {
       const silent = Boolean(opts?.silent)
       const gen = ++loadGenRef.current
+      hydratedFromCacheRef.current = false
 
       if (!silent) {
         setLoadError(null)
@@ -1106,6 +1109,9 @@ export function Today() {
         const h = appCache.get<TodayHabit[]>(habitsCacheKey(user.id))
         if (prof && m && Array.isArray(h)) {
           hydratedFromCache = true
+          hydratedFromCacheRef.current = true
+          clearSkeletonDelayTimer()
+          setShowDelayedSkeleton(false)
           setXpProfile(prof.xpProfile)
           setReflectionBannerName(prof.displayName)
           setStreakCurrent(prof.streakCurrent)
@@ -1124,7 +1130,6 @@ export function Today() {
           setLoading(false)
           setXpProfileLoading(false)
           setHabitsLoading(false)
-          setShowDelayedSkeleton(false)
         } else {
           setLoading(true)
           setXpProfileLoading(true)
@@ -1132,6 +1137,10 @@ export function Today() {
           clearSkeletonDelayTimer()
           skeletonDelayTimerRef.current = window.setTimeout(() => {
             if (loadGenRef.current !== gen) return
+            if (hydratedFromCacheRef.current) {
+              setShowDelayedSkeleton(false)
+              return
+            }
             setShowDelayedSkeleton(true)
           }, SKELETON_DELAY_MS)
         }

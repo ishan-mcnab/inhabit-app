@@ -4,6 +4,7 @@ import { SplashScreen } from './components/SplashScreen'
 import { useAuth } from './context/AuthContext'
 import { Layout } from './components/Layout'
 import { PageErrorBoundary } from './components/PageErrorBoundary'
+import { TabRouteStub } from './components/TabRouteStub'
 import { NotificationProvider } from './context/NotificationContext'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireGuest } from './components/RequireGuest'
@@ -12,16 +13,12 @@ import { CreateGoal } from './pages/CreateGoal'
 import { CustomPlanBuilder } from './pages/CustomPlanBuilder'
 import { CreateHabit } from './pages/CreateHabit'
 import { GoalDetail } from './pages/GoalDetail'
-import { Goals } from './pages/Goals'
 import { Login } from './pages/Login'
 import { MissionHistory } from './pages/MissionHistory'
 import { Onboarding } from './pages/Onboarding'
-import { Profile } from './pages/Profile'
-import { Progress } from './pages/Progress'
 import { Share } from './pages/Share'
 import { WeeklyReflection } from './pages/WeeklyReflection'
 import { SignUp } from './pages/SignUp'
-import { Today } from './pages/Today'
 import { supabase } from './supabase'
 
 function App() {
@@ -75,14 +72,7 @@ function App() {
             }
           >
             <Route index element={<Navigate to="/today" replace />} />
-            <Route
-              path="today"
-              element={
-                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
-                  <Today />
-                </PageErrorBoundary>
-              }
-            />
+            <Route path="today" element={<TabRouteStub />} />
             <Route
               path="history"
               element={
@@ -91,14 +81,7 @@ function App() {
                 </PageErrorBoundary>
               }
             />
-            <Route
-              path="goals"
-              element={
-                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
-                  <Goals />
-                </PageErrorBoundary>
-              }
-            />
+            <Route path="goals" element={<TabRouteStub />} />
             <Route path="goals/new" element={<CreateGoal />} />
             <Route
               path="goals/:goalId/plan"
@@ -125,22 +108,8 @@ function App() {
                 </PageErrorBoundary>
               }
             />
-            <Route
-              path="progress"
-              element={
-                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
-                  <Progress />
-                </PageErrorBoundary>
-              }
-            />
-            <Route
-              path="profile"
-              element={
-                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
-                  <Profile />
-                </PageErrorBoundary>
-              }
-            />
+            <Route path="progress" element={<TabRouteStub />} />
+            <Route path="profile" element={<TabRouteStub />} />
             <Route path="share" element={<Share />} />
             <Route path="*" element={<Navigate to="/today" replace />} />
           </Route>

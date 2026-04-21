@@ -6,11 +6,32 @@ import {
   Target,
   User,
 } from 'lucide-react'
+import { Goals } from '../pages/Goals'
+import { Profile } from '../pages/Profile'
+import { Progress } from '../pages/Progress'
+import { Today } from '../pages/Today'
 import { useNotifications } from '../context/NotificationContext'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
+import { PageErrorBoundary } from './PageErrorBoundary'
 import { PWAInstallPrompt } from './PWAInstallPrompt'
 
 const TAB_MUTED = '#888780'
+
+const MAIN_TAB_PATHS = ['/today', '/goals', '/progress', '/profile'] as const
+
+function isMainTabPath(pathname: string): boolean {
+  return (
+    pathname === '/' ||
+    (MAIN_TAB_PATHS as readonly string[]).includes(pathname)
+  )
+}
+
+function isTabRoute(pathname: string): boolean {
+  return (
+    pathname === '/' ||
+    (MAIN_TAB_PATHS as readonly string[]).includes(pathname)
+  )
+}
 
 const tabs = [
   { to: '/today', label: 'Today', badge: 'today' as const, Icon: CalendarDays },
@@ -26,6 +47,9 @@ const tabs = [
 
 export function Layout() {
   const location = useLocation()
+  const pathname = location.pathname
+  const isMainTab = isMainTabPath(pathname)
+  const tabRoute = isTabRoute(pathname)
   const {
     incompleteMissionsCount,
     reflectionDue,
@@ -43,6 +67,11 @@ export function Layout() {
   const todayTabBadge =
     (localHour >= 18 && incompleteMissionsCount > 0) || reflectionDue
   const goalsTabBadge = goalsNeedingAttention > 0
+
+  const showToday = pathname === '/today' || pathname === '/'
+  const showGoals = pathname === '/goals'
+  const showProgress = pathname === '/progress'
+  const showProfile = pathname === '/profile'
 
   return (
     <div className="flex h-[100dvh] min-h-0 flex-col bg-app-bg">
@@ -65,10 +94,57 @@ export function Layout() {
       </div>
       <main className="flex min-h-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-hidden overscroll-y-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] [-webkit-overflow-scrolling:touch]">
         <div
-          key={location.pathname}
-          className="page-enter flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+          className={[
+            'flex min-h-0 min-w-0 max-w-full flex-1 flex-col',
+            !tabRoute ? 'page-enter' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
         >
-          <Outlet />
+          <div
+            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+            style={{ display: isMainTab ? 'flex' : 'none' }}
+            aria-hidden={!isMainTab}
+          >
+            <div
+              className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+              style={{ display: showToday ? 'flex' : 'none' }}
+            >
+              <PageErrorBoundary>
+                <Today />
+              </PageErrorBoundary>
+            </div>
+            <div
+              className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+              style={{ display: showGoals ? 'flex' : 'none' }}
+            >
+              <PageErrorBoundary>
+                <Goals />
+              </PageErrorBoundary>
+            </div>
+            <div
+              className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+              style={{ display: showProgress ? 'flex' : 'none' }}
+            >
+              <PageErrorBoundary>
+                <Progress />
+              </PageErrorBoundary>
+            </div>
+            <div
+              className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+              style={{ display: showProfile ? 'flex' : 'none' }}
+            >
+              <PageErrorBoundary>
+                <Profile />
+              </PageErrorBoundary>
+            </div>
+          </div>
+          <div
+            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+            style={{ display: isMainTab ? 'none' : 'flex' }}
+          >
+            <Outlet />
+          </div>
         </div>
       </main>
       <nav
