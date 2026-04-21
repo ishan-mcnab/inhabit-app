@@ -1640,7 +1640,7 @@ export function GoalDetail() {
           </div>
         </div>
       ) : goal ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
+        <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28">
           {error ? (
             <div className="mb-4 flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-medium text-amber-100/90">{error}</p>
@@ -1783,7 +1783,7 @@ export function GoalDetail() {
                   <>
                     <div
                       className={[
-                        'mt-3 flex flex-col gap-4 rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-md ring-1 ring-zinc-800/40 transition-[transform,box-shadow,background-color] duration-300 sm:flex-row sm:items-start sm:justify-between',
+                        'mt-3 flex w-full min-w-0 max-w-full flex-col gap-4 overflow-hidden rounded-2xl border border-zinc-800/80 bg-app-surface p-4 shadow-md ring-1 ring-zinc-800/40 transition-[transform,box-shadow,background-color] duration-300 sm:flex-row sm:items-start sm:justify-between',
                         currentQuest.completed ? 'opacity-60' : '',
                         questLocked ? 'opacity-40' : '',
                         successFlashId === currentQuest.id
@@ -2006,7 +2006,7 @@ export function GoalDetail() {
                         <li
                           key={q.id}
                           className={[
-                            'card-interactive relative flex items-start gap-3 rounded-xl border bg-app-surface px-4 py-3 transition-opacity',
+                            'card-interactive relative flex w-full min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-xl border bg-app-surface px-4 py-3 transition-opacity',
                             questLocked
                               ? 'border-amber-500/20 bg-zinc-900/40 opacity-90'
                               : q.completed

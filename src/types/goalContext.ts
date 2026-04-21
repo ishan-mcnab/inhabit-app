@@ -3,12 +3,12 @@ export type GoalContext = {
   fitness_consistency?: {
     training_routine: string
     target_training_days: string
-    consistency_blocker: string
+    consistency_blocker: string | string[]
     training_location: string
     following_program?: string
   }
   health_habits?: {
-    focus_area: string
+    focus_area: string | string[]
     consistency_level: string
     constraints?: string
   }
@@ -19,19 +19,19 @@ export type GoalContext = {
     resources?: string
   }
   building_confidence?: {
-    biggest_blocker: string
+    biggest_blocker: string | string[]
     confidence_level: string
     life_stage: string
     specific_work?: string
   }
   mental_emotional_health?: {
-    driving_factor: string
+    driving_factor: string | string[]
     previous_experience: string
     time_commitment: string
     specific_address?: string
   }
   financial_goals?: {
-    main_focus: string
+    main_focus: string | string[]
     current_situation: string
     tracks_spending: string
     savings_target?: string

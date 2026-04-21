@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getGoalCategoryDisplay } from '../constants/goalCategoryPills'
+import {
+  normalizeHabitTimeOfDay,
+  type HabitTimeSlot,
+} from '../lib/habitTimeOfDay'
 import { supabase } from '../supabase'
 
 const PURPLE = '#534AB7'
@@ -20,14 +24,13 @@ const HABIT_CATEGORIES: { id: string; label: string; emoji: string }[] = [
 ]
 
 type Frequency = 'daily' | 'weekdays'
-type TimeOfDay = 'morning' | 'afternoon' | 'evening'
 
 export function CreateHabit() {
   const nav = useNavigate()
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState<string>('')
   const [frequency, setFrequency] = useState<Frequency>('daily')
-  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('morning')
+  const [timeOfDay, setTimeOfDay] = useState<HabitTimeSlot[]>(['morning'])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -44,6 +47,11 @@ export function CreateHabit() {
     }
     if (!category) {
       setError('Please select a category')
+      return
+    }
+    const timeSlots = normalizeHabitTimeOfDay(timeOfDay)
+    if (timeSlots.length === 0) {
+      setError('Pick at least one time of day')
       return
     }
 
@@ -66,7 +74,7 @@ export function CreateHabit() {
       title: trimmed,
       category,
       frequency,
-      time_of_day: timeOfDay,
+      time_of_day: timeSlots,
       current_streak: 0,
       last_completed: null,
     })
@@ -226,13 +234,23 @@ export function CreateHabit() {
                 { id: 'afternoon' as const, label: 'Afternoon' },
                 { id: 'evening' as const, label: 'Evening' },
               ].map((opt) => {
-                const active = timeOfDay === opt.id
+                const active = timeOfDay.includes(opt.id)
                 return (
                   <button
                     key={opt.id}
                     type="button"
                     disabled={saving}
-                    onClick={() => setTimeOfDay(opt.id)}
+                    onClick={() => {
+                      setTimeOfDay((prev) => {
+                        if (prev.includes(opt.id)) {
+                          if (prev.length <= 1) return prev
+                          return normalizeHabitTimeOfDay(
+                            prev.filter((t) => t !== opt.id),
+                          )
+                        }
+                        return normalizeHabitTimeOfDay([...prev, opt.id])
+                      })
+                    }}
                     className={[
                       'flex-1 rounded-xl px-3 py-3 text-sm font-bold transition-colors',
                       active ? 'text-white' : 'text-zinc-500 hover:text-zinc-300',

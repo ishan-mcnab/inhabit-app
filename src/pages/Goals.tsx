@@ -484,6 +484,7 @@ export function Goals() {
       title,
       category: 'fitness_consistency',
       frequency: 'daily',
+      time_of_day: ['morning'],
     })
     setAddingHabitKey(null)
     if (!insertError) {
@@ -562,7 +563,7 @@ export function Goals() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
+    <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden bg-app-bg">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="min-w-0 flex-1">
           <h1 className="text-[22px] font-semibold tracking-tight text-white">
@@ -589,7 +590,7 @@ export function Goals() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-28 pt-4">
+      <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-28 pt-4">
         {toast ? (
           <div className="mx-auto mb-4 max-w-lg rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/25">
             {toast}
@@ -644,7 +645,7 @@ export function Goals() {
                 </p>
               )
             ) : (
-              <ul className="mx-auto flex max-w-lg flex-col gap-2.5">
+              <ul className="mx-auto flex w-full min-w-0 max-w-lg flex-col gap-2.5">
                 {goals.map((goal) => {
                   const { label, emoji } = getGoalCategoryDisplay(goal.category)
                   const accent = getCategoryBorderColor(goal.category)
@@ -663,7 +664,7 @@ export function Goals() {
                         className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
                       >
                         <article
-                          className="card-interactive flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
+                          className="card-interactive flex min-h-[90px] w-full min-w-0 max-w-full gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
                           style={{
                             backgroundColor: CARD_SURFACE,
                             borderColor: CARD_BORDER,
@@ -1005,9 +1006,9 @@ export function Goals() {
             className="min-h-0 flex-1"
             onClick={closeSuggestions}
           />
-          <div className="max-h-[88vh] overflow-hidden rounded-t-3xl border border-zinc-800 border-b-0 bg-app-bg shadow-2xl">
+          <div className="max-h-[88vh] w-full max-w-full min-w-0 overflow-hidden rounded-t-3xl border border-zinc-800 border-b-0 bg-app-bg shadow-2xl">
             <div className="mx-auto h-1.5 w-10 shrink-0 rounded-full bg-zinc-700 mt-3 mb-2" />
-            <div className="max-h-[calc(88vh-2rem)] overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
+            <div className="max-h-[calc(88vh-2rem)] min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
               <h2 className="text-center text-lg font-bold text-white">
                 Suggested goals
               </h2>

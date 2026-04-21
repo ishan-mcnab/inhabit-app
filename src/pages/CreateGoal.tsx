@@ -7,6 +7,7 @@ import {
   type GoalCategoryId,
 } from '../constants/goalCategoryPills'
 import { generateMissions } from '../lib/generateMissions'
+import { goalContextSliceHasAnswers } from '../lib/goalContextSlice'
 import { calculateTotalWeeks } from '../lib/goalProgress'
 import { appCache, goalsCacheKey, missionsCacheKey } from '../lib/cache'
 import { supabase } from '../supabase'
@@ -331,14 +332,7 @@ export function CreateGoal() {
       category in (rawCtx as object)
     ) {
       const slice = (rawCtx as Record<string, unknown>)[category]
-      if (
-        slice &&
-        typeof slice === 'object' &&
-        !Array.isArray(slice) &&
-        Object.values(slice as Record<string, unknown>).some(
-          (v) => typeof v === 'string' && v.trim().length > 0,
-        )
-      ) {
+      if (slice && typeof slice === 'object' && goalContextSliceHasAnswers(slice)) {
         userContext = slice as Record<string, unknown>
       }
     }

@@ -55,20 +55,40 @@ function isGoalContextCategoryId(id: string): id is GoalContextCategoryId {
 
 function buildGoalContextPayload(
   order: string[],
-  draft: Record<string, Record<string, string>>,
-): Record<string, Record<string, string>> {
-  const out: Record<string, Record<string, string>> = {}
+  draft: Record<string, Record<string, string | string[]>>,
+): Record<string, Record<string, string | string[]>> {
+  const out: Record<string, Record<string, string | string[]>> = {}
   for (const cat of order) {
     if (!isGoalContextCategoryId(cat)) continue
     const fields = ONBOARDING_CONTEXT_FIELDS[cat]
     const src = draft[cat] ?? {}
-    const obj: Record<string, string> = {}
+    const obj: Record<string, string | string[]> = {}
     for (const f of fields) {
-      const raw = (src[f.key] ?? '').trim()
-      if (f.required) {
-        obj[f.key] = raw
-      } else if (raw !== '') {
-        obj[f.key] = raw
+      if (f.type === 'text') {
+        const raw = String(src[f.key] ?? '').trim()
+        if (f.required) {
+          obj[f.key] = raw
+        } else if (raw !== '') {
+          obj[f.key] = raw
+        }
+      } else if (f.type === 'pills' && f.multiSelect) {
+        const raw = src[f.key]
+        const arr = Array.isArray(raw)
+          ? raw.filter((x): x is string => typeof x === 'string' && x.length > 0)
+          : []
+        if (f.required) {
+          obj[f.key] = arr
+        } else if (arr.length > 0) {
+          obj[f.key] = arr
+        }
+      } else {
+        const pillRaw = src[f.key]
+        const raw = typeof pillRaw === 'string' ? pillRaw.trim() : ''
+        if (f.required) {
+          obj[f.key] = raw
+        } else if (raw !== '') {
+          obj[f.key] = raw
+        }
       }
     }
     out[cat] = obj
@@ -84,7 +104,7 @@ export function Onboarding() {
   const [selectedOrder, setSelectedOrder] = useState<string[]>([])
   const [contextIndex, setContextIndex] = useState(0)
   const [contextDraft, setContextDraft] = useState<
-    Record<string, Record<string, string>>
+    Record<string, Record<string, string | string[]>>
   >({})
   const [nameError, setNameError] = useState<string | null>(null)
   const [goalsError, setGoalsError] = useState<string | null>(null)
@@ -155,7 +175,11 @@ export function Onboarding() {
     setStep('context')
   }
 
-  function handleContextFieldChange(cat: string, key: string, value: string) {
+  function handleContextFieldChange(
+    cat: string,
+    key: string,
+    value: string | string[],
+  ) {
     setContextDraft((prev) => ({
       ...prev,
       [cat]: { ...(prev[cat] ?? {}), [key]: value },

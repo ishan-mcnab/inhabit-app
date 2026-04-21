@@ -1,4 +1,8 @@
-import { ONBOARDING_CONTEXT_FIELDS } from '../../constants/onboardingContextConfig'
+import {
+  ONBOARDING_CONTEXT_FIELDS,
+  type ContextFieldConfig,
+  type ContextPillField,
+} from '../../constants/onboardingContextConfig'
 import type { GoalContextCategoryId } from '../../types/goalContext'
 
 const GOAL_PURPLE = '#534AB7'
@@ -12,8 +16,8 @@ type Props = {
   headingTitle: string
   stepNumber: number
   totalSteps: number
-  values: Record<string, string>
-  onFieldChange: (key: string, value: string) => void
+  values: Record<string, string | string[]>
+  onFieldChange: (key: string, value: string | string[]) => void
   onBack: () => void
   onContinue: () => void
   onSkipSetupLater?: () => void
@@ -21,15 +25,31 @@ type Props = {
   formError: string | null
 }
 
+function isMultiPillField(f: ContextFieldConfig): f is ContextPillField & {
+  multiSelect: true
+} {
+  return f.type === 'pills' && f.multiSelect === true
+}
+
 function contextStepComplete(
   categoryId: GoalContextCategoryId,
-  values: Record<string, string>,
+  values: Record<string, string | string[]>,
 ): boolean {
   const fields = ONBOARDING_CONTEXT_FIELDS[categoryId]
   for (const f of fields) {
     if (!f.required) continue
-    const v = (values[f.key] ?? '').trim()
-    if (!v) return false
+    if (f.type === 'text') {
+      const v = String(values[f.key] ?? '').trim()
+      if (!v) return false
+    } else if (isMultiPillField(f)) {
+      const raw = values[f.key]
+      const arr = Array.isArray(raw) ? raw : []
+      if (arr.length === 0) return false
+    } else {
+      const rawVal = values[f.key]
+      const v = typeof rawVal === 'string' ? rawVal.trim() : ''
+      if (!v) return false
+    }
   }
   return true
 }
@@ -126,7 +146,14 @@ export function OnboardingContextStep({
                     {!field.required ? (
                       <button
                         type="button"
-                        onClick={() => onFieldChange(field.key, '')}
+                        onClick={() =>
+                          onFieldChange(
+                            field.key,
+                            field.type === 'pills' && isMultiPillField(field)
+                              ? []
+                              : '',
+                          )
+                        }
                         className="shrink-0 text-xs font-medium underline-offset-2 transition-colors hover:underline"
                         style={{ color: MUTED_BODY }}
                       >
@@ -136,13 +163,35 @@ export function OnboardingContextStep({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {field.options.map((opt) => {
-                      const selected = values[field.key] === opt
+                      const raw = values[field.key]
+                      const multi = isMultiPillField(field)
+                      const selected = multi
+                        ? Array.isArray(raw) && raw.includes(opt)
+                        : raw === opt
                       return (
                         <button
                           key={opt}
                           type="button"
                           aria-pressed={selected}
-                          onClick={() => onFieldChange(field.key, opt)}
+                          onClick={() => {
+                            if (multi) {
+                              const cur = Array.isArray(raw)
+                                ? [...raw]
+                                : typeof raw === 'string' && raw
+                                  ? [raw]
+                                  : []
+                              const i = cur.indexOf(opt)
+                              if (i >= 0) {
+                                if (field.required && cur.length <= 1) return
+                                cur.splice(i, 1)
+                                onFieldChange(field.key, cur)
+                              } else {
+                                onFieldChange(field.key, [...cur, opt])
+                              }
+                            } else {
+                              onFieldChange(field.key, opt)
+                            }
+                          }}
                           className={[
                             'inline-flex h-9 items-center rounded-lg border px-[14px] py-2 text-left text-[13px] font-medium transition-colors',
                             selected ? '' : 'text-white hover:bg-white/[0.04]',
@@ -192,7 +241,11 @@ export function OnboardingContextStep({
                 <input
                   id={`ctx-${categoryId}-${field.key}`}
                   type="text"
-                  value={values[field.key] ?? ''}
+                  value={
+                    typeof values[field.key] === 'string'
+                      ? values[field.key]
+                      : ''
+                  }
                   onChange={(e) => onFieldChange(field.key, e.target.value)}
                   placeholder={field.placeholder}
                   className="h-11 w-full rounded-xl border px-4 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus-visible:ring-2 focus-visible:ring-[#534AB7]/50"

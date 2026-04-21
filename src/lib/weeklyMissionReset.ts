@@ -1,3 +1,4 @@
+import { goalContextSliceHasAnswers } from './goalContextSlice'
 import { supabase } from '../supabase'
 import { generateMissions } from './generateMissions'
 import {
@@ -43,14 +44,7 @@ function sliceGoalContext(
     return undefined
   }
   const slice = (rawCtx as Record<string, unknown>)[category]
-  if (
-    slice &&
-    typeof slice === 'object' &&
-    !Array.isArray(slice) &&
-    Object.values(slice as Record<string, unknown>).some(
-      (v) => typeof v === 'string' && v.trim().length > 0,
-    )
-  ) {
+  if (slice && typeof slice === 'object' && goalContextSliceHasAnswers(slice)) {
     return slice as Record<string, unknown>
   }
   return undefined

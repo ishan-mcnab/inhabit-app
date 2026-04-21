@@ -5,6 +5,8 @@ export type ContextPillField = {
   label: string
   type: 'pills'
   required: boolean
+  /** When true, user may pick multiple pills; answer stored as string[]. */
+  multiSelect?: boolean
   options: readonly string[]
 }
 
@@ -47,6 +49,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       label: 'Biggest consistency blocker',
       type: 'pills',
       required: false,
+      multiSelect: true,
       options: [
         'Motivation',
         'Time',
@@ -76,6 +79,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       label: 'Which area needs the most work?',
       type: 'pills',
       required: true,
+      multiSelect: true,
       options: ['Sleep', 'Diet', 'Hydration', 'All equally'],
     },
     {
@@ -137,6 +141,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       label: 'Biggest confidence blocker',
       type: 'pills',
       required: true,
+      multiSelect: true,
       options: [
         'Social situations',
         'Public speaking',
@@ -172,6 +177,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       label: "What's driving this goal?",
       type: 'pills',
       required: true,
+      multiSelect: true,
       options: [
         'Stress',
         'Anxiety',
@@ -212,6 +218,7 @@ export const ONBOARDING_CONTEXT_FIELDS: Record<
       label: 'Main focus',
       type: 'pills',
       required: true,
+      multiSelect: true,
       options: [
         'Saving money',
         'Earning more',

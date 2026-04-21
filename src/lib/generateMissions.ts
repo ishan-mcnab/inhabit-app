@@ -62,15 +62,23 @@ function str(
   for (const k of keys) {
     const v = ctx[k]
     if (typeof v === 'string' && v.trim()) return v.trim()
+    if (Array.isArray(v)) {
+      const parts = v.filter((x) => typeof x === 'string' && x.trim())
+      if (parts.length) return parts.join(', ')
+    }
   }
   return undefined
 }
 
 function contextHasData(ctx: Record<string, unknown> | undefined): boolean {
   if (!ctx || typeof ctx !== 'object') return false
-  return Object.values(ctx).some(
-    (v) => typeof v === 'string' && v.trim().length > 0,
-  )
+  return Object.values(ctx).some((v) => {
+    if (typeof v === 'string') return v.trim().length > 0
+    if (Array.isArray(v)) {
+      return v.some((x) => typeof x === 'string' && x.trim().length > 0)
+    }
+    return false
+  })
 }
 
 function appendCategoryContext(

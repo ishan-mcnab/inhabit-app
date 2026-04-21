@@ -41,6 +41,12 @@ import {
   rankColor,
   type AwardXpResult,
 } from '../lib/xp'
+import {
+  formatHabitTimeOfDayLabels,
+  normalizeHabitTimeOfDay,
+  toggleHabitTimeSlot,
+  type HabitTimeSlot,
+} from '../lib/habitTimeOfDay'
 import { checkAndRegenerateWeeklyMissions } from '../lib/weeklyMissionReset'
 import {
   appCache,
@@ -211,7 +217,7 @@ type HabitRow = {
   title: string
   category: string | null
   frequency: string | null
-  time_of_day: string | null
+  time_of_day: HabitTimeSlot[]
   current_streak: number
   last_completed: string | null
 }
@@ -420,9 +426,9 @@ function LevelProgressCard({
       : `${weeklyBand.progressInBand.toLocaleString()} / ${weeklyBand.bandSize.toLocaleString()} XP`
 
   return (
-    <div className="shrink-0 px-4 pt-3">
+    <div className="w-full min-w-0 max-w-full shrink-0 overflow-x-hidden px-4 pt-3">
       <div
-        className="rounded-2xl px-4 py-3.5 shadow-sm"
+        className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl px-4 py-3.5 shadow-sm"
         style={{
           backgroundColor: LEVEL_CARD_BG,
           border: LEVEL_CARD_BORDER,
@@ -1030,7 +1036,14 @@ export function Today() {
           setGracePassesRemaining(prof.gracePassesRemaining)
           setMissions(m.missions)
           setHasGoals(m.hasGoals)
-          setHabits(h)
+          setHabits(
+            h.map((row) => ({
+              ...row,
+              time_of_day: normalizeHabitTimeOfDay(
+                (row as unknown as { time_of_day?: unknown }).time_of_day,
+              ),
+            })),
+          )
           setLoading(false)
           setXpProfileLoading(false)
           setHabitsLoading(false)
@@ -1275,6 +1288,9 @@ export function Today() {
       )
       const hs = ((habitsRes.data ?? []) as unknown as HabitRow[]).map((h) => ({
         ...h,
+        time_of_day: normalizeHabitTimeOfDay(
+          (h as unknown as { time_of_day?: unknown }).time_of_day,
+        ),
         completedToday: doneIds.has(h.id),
       }))
       setHabits(hs)
@@ -1398,6 +1414,9 @@ export function Today() {
       const hs = ((habitsRes.data ?? []) as unknown as HabitRow[]).map(
         (row) => ({
           ...row,
+          time_of_day: normalizeHabitTimeOfDay(
+            (row as unknown as { time_of_day?: unknown }).time_of_day,
+          ),
           completedToday: doneIds.has(row.id),
         }),
       )
@@ -1925,16 +1944,17 @@ export function Today() {
 
   async function persistHabitTimeOfDay(
     habitId: string,
-    time_of_day: 'morning' | 'afternoon' | 'evening',
+    time_of_day: HabitTimeSlot[],
   ) {
     if (!userId) return
+    const slots = normalizeHabitTimeOfDay(time_of_day)
     const prev = habits
     setHabits((hs) =>
-      hs.map((h) => (h.id === habitId ? { ...h, time_of_day } : h)),
+      hs.map((h) => (h.id === habitId ? { ...h, time_of_day: slots } : h)),
     )
     const { error } = await supabase
       .from('habits')
-      .update({ time_of_day })
+      .update({ time_of_day: slots })
       .eq('id', habitId)
       .eq('user_id', userId)
     if (error) {
@@ -2172,7 +2192,7 @@ export function Today() {
     if (showStreak) {
       return (
         <div
-          className="inhabit-banner-fade-in flex items-center gap-3 rounded-lg border border-[#EF9F27]/35 px-4 py-3"
+          className="inhabit-banner-fade-in flex w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-lg border border-[#EF9F27]/35 px-4 py-3"
           style={{
             backgroundColor: 'rgba(239, 159, 39, 0.1)',
             borderLeftWidth: 4,
@@ -2210,7 +2230,7 @@ export function Today() {
       const severe = clockHour >= 21
       return (
         <div
-          className="inhabit-banner-fade-in w-full rounded-lg border border-zinc-800/60 px-4 py-3"
+          className="inhabit-banner-fade-in w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-zinc-800/60 px-4 py-3"
           style={{
             backgroundColor: CARD_SURFACE,
             borderLeftWidth: 4,
@@ -2243,7 +2263,7 @@ export function Today() {
       return (
         <div
           className={[
-            'inhabit-banner-fade-in flex items-center justify-between gap-3 rounded-lg px-4 py-3',
+            'inhabit-banner-fade-in flex w-full min-w-0 max-w-full items-center justify-between gap-3 overflow-hidden rounded-lg px-4 py-3',
             lastChance ? 'border-l-4 border-[#E24B4A]' : '',
           ].join(' ')}
           style={{ backgroundColor: '#534AB7' }}
@@ -2271,7 +2291,7 @@ export function Today() {
       const dayWord = d === 1 ? 'day' : 'days'
       return (
         <div
-          className="inhabit-banner-fade-in flex items-center justify-between gap-3 rounded-lg border border-amber-500/25 border-l-4 border-l-amber-500 bg-zinc-900/50 px-4 py-3"
+          className="inhabit-banner-fade-in flex w-full min-w-0 max-w-full items-center justify-between gap-3 overflow-hidden rounded-lg border border-amber-500/25 border-l-4 border-l-amber-500 bg-zinc-900/50 px-4 py-3"
           role="status"
         >
           <div className="min-w-0">
@@ -2296,7 +2316,7 @@ export function Today() {
       return (
         <div
           className={[
-            'inhabit-banner-fade-in relative flex w-full items-start gap-3 rounded-lg border border-zinc-800/60 px-4 py-3 pr-10 transition-opacity duration-300',
+            'inhabit-banner-fade-in relative flex w-full min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-lg border border-zinc-800/60 px-4 py-3 pr-10 transition-opacity duration-300',
             newWeekMotivationPhase === 'fading' ? 'opacity-0' : 'opacity-100',
           ].join(' ')}
           style={{
@@ -2411,7 +2431,7 @@ export function Today() {
           {celebrationBannerOpen ? (
             <div
               className={[
-                'inhabit-banner-fade-in rounded-lg bg-emerald-500/20 px-4 py-3 text-center text-[13px] font-bold leading-snug text-emerald-300 ring-1 ring-emerald-500/35 transition-opacity duration-300',
+                'inhabit-banner-fade-in w-full min-w-0 max-w-full overflow-hidden rounded-lg bg-emerald-500/20 px-4 py-3 text-center text-[13px] font-bold leading-snug text-emerald-300 ring-1 ring-emerald-500/35 transition-opacity duration-300',
                 celebrationBannerFading ? 'opacity-0' : 'opacity-100',
               ].join(' ')}
               role="status"
@@ -2431,7 +2451,7 @@ export function Today() {
               {weeklyNewMissionsBannerPhase !== 'off' && !todayPriorityBanner ? (
                 <div
                   className={[
-                    'inhabit-banner-fade-in w-full min-w-0 rounded-lg px-4 py-3 text-center text-[13px] font-bold leading-snug text-white transition-opacity duration-300',
+                    'inhabit-banner-fade-in w-full min-w-0 max-w-full overflow-hidden rounded-lg px-4 py-3 text-center text-[13px] font-bold leading-snug text-white transition-opacity duration-300',
                     weeklyNewMissionsBannerPhase === 'fading'
                       ? 'opacity-0'
                       : 'opacity-100',
@@ -2478,31 +2498,68 @@ export function Today() {
           ) : null
         ) : !hasGoals ? (
           <div className="flex min-h-[50vh] flex-1 flex-col items-center justify-center px-2">
-            <div className="mx-auto w-full max-w-[320px]">
-              <StateCard>
-                <Target
-                  size={40}
-                  strokeWidth={1.5}
-                  className="mx-auto text-[#444441]"
-                  aria-hidden
-                />
-                <p className="mt-5 text-base font-bold text-white">
-                  No missions yet
-                </p>
-                <p
-                  className="mt-2 max-w-[260px] text-[13px] font-medium leading-relaxed"
-                  style={{ color: MUTED_HEADING }}
+            <div className="mx-auto w-full min-w-0 max-w-lg">
+              <div className="grid grid-cols-2 gap-3">
+                <div
+                  className="flex flex-col items-center rounded-[12px] border p-4 text-center"
+                  style={{
+                    backgroundColor: '#141418',
+                    borderColor: CARD_BORDER,
+                  }}
                 >
-                  Create your first goal to unlock daily missions.
-                </p>
-                <Link
-                  to="/goals/new"
-                  className="btn-press mx-auto mt-6 block w-full max-w-[280px] rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity"
-                  style={{ backgroundColor: '#534AB7' }}
+                  <Target
+                    size={32}
+                    strokeWidth={1.5}
+                    className="text-[#444441]"
+                    aria-hidden
+                  />
+                  <p className="mt-3 text-[14px] font-bold text-white">
+                    Create a Goal
+                  </p>
+                  <p
+                    className="mt-2 text-[12px] font-medium leading-relaxed"
+                    style={{ color: MUTED_HEADING }}
+                  >
+                    Create your first goal to unlock daily missions.
+                  </p>
+                  <Link
+                    to="/goals/new"
+                    className="btn-press mt-4 w-full rounded-[12px] py-3 text-center text-sm font-bold text-white transition-opacity"
+                    style={{ backgroundColor: '#534AB7' }}
+                  >
+                    Create a Goal →
+                  </Link>
+                </div>
+                <div
+                  className="flex flex-col items-center rounded-[12px] border p-4 text-center"
+                  style={{
+                    backgroundColor: '#141418',
+                    borderColor: CARD_BORDER,
+                  }}
                 >
-                  Create a Goal →
-                </Link>
-              </StateCard>
+                  <Repeat
+                    size={32}
+                    strokeWidth={1.5}
+                    className="text-zinc-500"
+                    aria-hidden
+                  />
+                  <p className="mt-3 text-[14px] font-bold text-white">
+                    Add a Habit
+                  </p>
+                  <p
+                    className="mt-2 text-[12px] font-medium leading-relaxed"
+                    style={{ color: MUTED_HEADING }}
+                  >
+                    Build daily consistency with small repeatable actions
+                  </p>
+                  <Link
+                    to="/habits/new"
+                    className="btn-press mt-4 w-full rounded-[12px] border border-zinc-800 bg-zinc-900/80 py-3 text-center text-sm font-bold text-white transition-opacity"
+                  >
+                    Add Habit
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         ) : missionRegenerating ? (
@@ -2546,7 +2603,7 @@ export function Today() {
             </StateCard>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-lg flex-col">
+          <div className="mx-auto flex w-full min-w-0 max-w-lg flex-col">
             {completeError ? (
               <p className="mb-3 text-center text-sm font-medium text-red-400 transition-opacity">
                 {completeError}
@@ -2566,7 +2623,7 @@ export function Today() {
               </span>
               <div className="h-px min-w-[2rem] flex-1 bg-zinc-800/50" aria-hidden />
             </div>
-            <div className="mt-5 flex flex-col gap-3">
+            <div className="mt-5 flex w-full min-w-0 max-w-full flex-col gap-3 overflow-x-hidden">
             {missions.map((m, index) => {
               const accent = getMissionBoardAccent(m.category)
               const isPressing = pressingMissionId === m.id
@@ -2582,7 +2639,7 @@ export function Today() {
                   ) : null}
                   <div
                     className={[
-                      'card-interactive relative flex min-h-[64px] transform-gpu items-stretch gap-3 rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
+                      'card-interactive relative flex min-h-[64px] w-full min-w-0 max-w-full transform-gpu items-stretch gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
                       m.completed ? 'opacity-[0.45]' : 'opacity-100',
                       removing ? 'opacity-0' : '',
                       isPressing
@@ -2839,6 +2896,12 @@ export function Today() {
                       >
                         Add daily habits to build consistency over time.
                       </p>
+                      <Link
+                        to="/habits/new"
+                        className="btn-press mt-6 w-full max-w-[280px] rounded-xl border border-zinc-800 bg-zinc-900/80 py-3.5 text-center text-sm font-bold text-white transition-opacity"
+                      >
+                        Add Habit
+                      </Link>
                     </div>
                   ) : (
                     <div className="mt-5 flex flex-col gap-3">
@@ -2847,15 +2910,10 @@ export function Today() {
                           {habitActionError}
                         </p>
                       ) : null}
-                      {sortedVisibleHabits.map((h, hi) => {
+                      {sortedVisibleHabits.map((h) => {
                         const accent = getMissionBoardAccent(h.category)
                         const done = h.completedToday
-                        const time =
-                          h.time_of_day === 'afternoon'
-                            ? 'Afternoon'
-                            : h.time_of_day === 'evening'
-                              ? 'Evening'
-                              : 'Morning'
+                        const time = formatHabitTimeOfDayLabels(h.time_of_day)
                         const disabled = done || habitCompletingIds.has(h.id)
                         const isEditing = editingHabitId === h.id
                         const streakN = Math.max(0, h.current_streak)
@@ -2864,16 +2922,10 @@ export function Today() {
                         const isPressing = pressingHabitId === h.id
                         const isRemoving = removingHabitIds.has(h.id)
                         return (
-                          <Fragment key={h.id}>
-                            {hi > 0 ? (
-                              <div
-                                className="h-px shrink-0 bg-zinc-800/50"
-                                aria-hidden
-                              />
-                            ) : null}
                           <div
+                            key={h.id}
                             className={[
-                              'card-interactive relative flex min-h-[64px] transform-gpu items-stretch gap-3 rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
+                              'card-interactive relative flex min-h-[64px] w-full min-w-0 max-w-full transform-gpu items-stretch gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
                               done ? 'opacity-[0.45]' : 'opacity-100',
                               isPressing
                                 ? 'scale-[0.98] transition-none'
@@ -3065,7 +3117,6 @@ export function Today() {
                               ) : null}
                             </div>
                           </div>
-                          </Fragment>
                         )
                       })}
                     </div>
@@ -3274,24 +3325,39 @@ export function Today() {
               <p className="px-4 pb-1 pt-0.5 text-[11px] font-medium text-zinc-600">
                 Time of day
               </p>
-              {(
-                [
-                  ['morning', 'Morning'],
-                  ['afternoon', 'Afternoon'],
-                  ['evening', 'Evening'],
-                ] as const
-              ).map(([val, label]) => (
-                <button
-                  key={val}
-                  type="button"
-                  onClick={() =>
-                    void persistHabitTimeOfDay(habitMenuAnchor.id, val)
-                  }
-                  className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
-                >
-                  {label}
-                </button>
-              ))}
+              <p className="px-4 pb-2 text-[11px] font-medium text-zinc-500">
+                Tap to toggle (keep at least one)
+              </p>
+              {(() => {
+                const hh = habits.find((x) => x.id === habitMenuAnchor.id)
+                const slots = hh?.time_of_day ?? ['morning']
+                return (
+                  [
+                    ['morning', 'Morning'],
+                    ['afternoon', 'Afternoon'],
+                    ['evening', 'Evening'],
+                  ] as const
+                ).map(([val, label]) => {
+                  const selected = slots.includes(val)
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => {
+                        if (!hh) return
+                        const next = toggleHabitTimeSlot(slots, val)
+                        if (next.join() === slots.join()) return
+                        void persistHabitTimeOfDay(habitMenuAnchor.id, next)
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-zinc-900/60"
+                      aria-pressed={selected}
+                    >
+                      {selected ? '✓ ' : ''}
+                      {label}
+                    </button>
+                  )
+                })
+              })()}
             </div>
           ) : null}
         </div>
