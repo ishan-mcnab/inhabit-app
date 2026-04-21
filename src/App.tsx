@@ -9,6 +9,7 @@ import { RequireAuth } from './components/RequireAuth'
 import { RequireGuest } from './components/RequireGuest'
 import { RequireOnboarded } from './components/RequireOnboarded'
 import { CreateGoal } from './pages/CreateGoal'
+import { CustomPlanBuilder } from './pages/CustomPlanBuilder'
 import { CreateHabit } from './pages/CreateHabit'
 import { GoalDetail } from './pages/GoalDetail'
 import { Goals } from './pages/Goals'
@@ -99,6 +100,14 @@ function App() {
               }
             />
             <Route path="goals/new" element={<CreateGoal />} />
+            <Route
+              path="goals/:goalId/plan"
+              element={
+                <PageErrorBoundary key={`${location.pathname}-${location.key}`}>
+                  <CustomPlanBuilder />
+                </PageErrorBoundary>
+              }
+            />
             <Route
               path="goals/:goalId"
               element={

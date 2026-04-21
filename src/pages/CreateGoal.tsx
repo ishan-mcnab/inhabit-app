@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, PenLine, Sparkles } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   GOAL_CATEGORY_PILLS,
@@ -102,12 +102,14 @@ type SubmitPhase =
   | 'success'
   | 'partial_done'
 
-function submitButtonLabel(phase: SubmitPhase): string {
+type PlanType = 'ai' | 'custom'
+
+function submitButtonLabel(phase: SubmitPhase, planType: PlanType): string {
   switch (phase) {
     case 'saving_goal':
       return 'Saving...'
     case 'generating':
-      return 'Building your plan...'
+      return planType === 'custom' ? 'Create Goal' : 'Building your plan...'
     case 'saving_missions':
       return 'Saving missions...'
     case 'success':
@@ -155,6 +157,7 @@ export function CreateGoal() {
   const [formError, setFormError] = useState<string | null>(null)
   const [infoBanner, setInfoBanner] = useState<string | null>(null)
   const [submitPhase, setSubmitPhase] = useState<SubmitPhase>('idle')
+  const [planType, setPlanType] = useState<PlanType>('ai')
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -206,10 +209,11 @@ export function CreateGoal() {
 
   const formLocked =
     submitPhase === 'saving_goal' ||
-    submitPhase === 'generating' ||
-    submitPhase === 'saving_missions' ||
-    submitPhase === 'success' ||
-    submitPhase === 'partial_done'
+    (planType === 'ai' &&
+      (submitPhase === 'generating' ||
+        submitPhase === 'saving_missions' ||
+        submitPhase === 'success' ||
+        submitPhase === 'partial_done'))
 
   useEffect(() => {
     return () => {
@@ -275,9 +279,6 @@ export function CreateGoal() {
     if (!valid || !categoryId) return
 
     const category = categoryId
-    const totalWeeks = calculateTotalWeeks(targetDate)
-    const batchStartWeek = 1
-    const batchEndWeek = Math.min(4, totalWeeks)
 
     setSubmitPhase('saving_goal')
 
@@ -303,6 +304,7 @@ export function CreateGoal() {
         target_date: targetDate,
         progress_percent: 0,
         status: 'active',
+        is_custom_plan: planType === 'custom',
       })
       .select('id')
       .single()
@@ -314,6 +316,17 @@ export function CreateGoal() {
     }
 
     const goalId = goalRow.id
+
+    if (planType === 'custom') {
+      appCache.invalidate(goalsCacheKey(user.id))
+      setSubmitPhase('idle')
+      void navigate(`/goals/${goalId}/plan`)
+      return
+    }
+
+    const totalWeeks = calculateTotalWeeks(targetDate)
+    const batchStartWeek = 1
+    const batchEndWeek = Math.min(4, totalWeeks)
 
     setSubmitPhase('generating')
 
@@ -496,6 +509,81 @@ export function CreateGoal() {
               </p>
             ) : null}
 
+            <p className="mt-8 text-xs font-medium uppercase tracking-[0.08em] text-zinc-500">
+              How do you want to plan this goal?
+            </p>
+            <div
+              className="mt-3 grid grid-cols-2 gap-2.5"
+              role="group"
+              aria-label="Plan type"
+            >
+              <button
+                type="button"
+                disabled={formLocked}
+                aria-pressed={planType === 'ai'}
+                onClick={() => setPlanType('ai')}
+                className={[
+                  'flex min-h-[5.5rem] flex-col gap-1 rounded-xl border-2 px-3 py-3 text-left transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50',
+                  planType === 'ai'
+                    ? ''
+                    : 'border-zinc-800 bg-app-surface hover:border-zinc-700',
+                ].join(' ')}
+                style={
+                  planType === 'ai'
+                    ? {
+                        borderColor: GOAL_PURPLE,
+                        backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                      }
+                    : undefined
+                }
+              >
+                <Sparkles
+                  size={20}
+                  className="shrink-0"
+                  style={{ color: GOAL_PURPLE }}
+                  aria-hidden
+                />
+                <span className="text-sm font-bold text-white">
+                  Build it for me
+                </span>
+                <span className="text-xs font-medium leading-snug text-zinc-500">
+                  AI generates your missions and quests based on your goal
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={formLocked}
+                aria-pressed={planType === 'custom'}
+                onClick={() => setPlanType('custom')}
+                className={[
+                  'flex min-h-[5.5rem] flex-col gap-1 rounded-xl border-2 px-3 py-3 text-left transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50',
+                  planType === 'custom'
+                    ? ''
+                    : 'border-zinc-800 bg-app-surface hover:border-zinc-700',
+                ].join(' ')}
+                style={
+                  planType === 'custom'
+                    ? {
+                        borderColor: GOAL_PURPLE,
+                        backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                      }
+                    : undefined
+                }
+              >
+                <PenLine
+                  size={20}
+                  className="shrink-0 text-zinc-500"
+                  aria-hidden
+                />
+                <span className="text-sm font-bold text-white">
+                  I&apos;ll plan it myself
+                </span>
+                <span className="text-xs font-medium leading-snug text-zinc-500">
+                  Set your own weekly quests and daily missions
+                </span>
+              </button>
+            </div>
+
             <p className="mt-8 text-sm font-semibold text-zinc-200">Duration</p>
             <div
               className="mt-3 flex flex-wrap gap-2"
@@ -631,7 +719,7 @@ export function CreateGoal() {
               disabled={formLocked}
               className="btn-press w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitButtonLabel(submitPhase)}
+              {submitButtonLabel(submitPhase, planType)}
             </button>
           </div>
         </div>

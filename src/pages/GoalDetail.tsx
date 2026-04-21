@@ -88,6 +88,7 @@ type GoalRow = {
   status: string
   completed_at: string | null
   created_at: string
+  is_custom_plan?: boolean
 }
 
 type WeeklyQuestRow = PickableQuest & {
@@ -266,7 +267,7 @@ export function GoalDetail() {
       supabase
         .from('goals')
         .select(
-          'id,title,category,target_date,progress_percent,status,completed_at,created_at',
+          'id,title,category,target_date,progress_percent,status,completed_at,created_at,is_custom_plan',
         )
         .eq('id', goalId)
         .eq('user_id', user.id)
@@ -316,6 +317,7 @@ export function GoalDetail() {
       status: raw.status ?? 'active',
       completed_at: raw.completed_at ?? null,
       created_at: raw.created_at ?? new Date().toISOString(),
+      is_custom_plan: Boolean(raw.is_custom_plan),
     })
 
     if (questsRes.error) {
@@ -350,6 +352,7 @@ export function GoalDetail() {
 
   const generateNextBatch = useCallback(async () => {
     if (!goal || !userId || !goalId) return
+    if (goal.is_custom_plan) return
     if (goal.status === 'paused' || goal.status === 'completed') return
     if (!goal.target_date || !goal.created_at) return
     if (batchGenInFlight.current) return
@@ -1291,7 +1294,19 @@ export function GoalDetail() {
               >
                 Change Target Date
               </button>
-              {goal?.status === 'active' ? (
+              {goal?.status === 'active' && goal.is_custom_plan ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoalMenuOpen(false)
+                    void navigate(`/goals/${goalId}/plan?edit=1`)
+                  }}
+                  className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-4 text-left text-sm font-bold text-white"
+                >
+                  Edit My Plan
+                </button>
+              ) : null}
+              {goal?.status === 'active' && !goal.is_custom_plan ? (
                 <button
                   type="button"
                   onClick={() => {

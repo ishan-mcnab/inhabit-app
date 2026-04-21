@@ -30,6 +30,7 @@ type GoalRow = {
   progress_percent: number
   status?: string
   created_at?: string
+  is_custom_plan?: boolean
 }
 
 type CompletedGoalRow = {
@@ -230,7 +231,7 @@ export function Goals() {
       supabase
         .from('goals')
         .select(
-          'id,title,category,target_date,progress_percent,status,created_at',
+          'id,title,category,target_date,progress_percent,status,created_at,is_custom_plan',
         )
         .eq('user_id', user.id)
         .eq('status', 'active')
@@ -238,7 +239,7 @@ export function Goals() {
       supabase
         .from('goals')
         .select(
-          'id,title,category,target_date,progress_percent,status,created_at',
+          'id,title,category,target_date,progress_percent,status,created_at,is_custom_plan',
         )
         .eq('user_id', user.id)
         .eq('status', 'paused')
@@ -680,10 +681,17 @@ export function Goals() {
                               {goal.title}
                             </h2>
                             <p
-                              className="mt-2 text-xs font-medium"
+                              className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium"
                               style={{ color: MUTED_BODY }}
                             >
-                              <span aria-hidden>{emoji}</span> {label}
+                              <span>
+                                <span aria-hidden>{emoji}</span> {label}
+                              </span>
+                              {goal.is_custom_plan ? (
+                                <span className="rounded-full border border-zinc-700/60 bg-zinc-800/30 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
+                                  Custom
+                                </span>
+                              ) : null}
                             </p>
                             <p className={`mt-1 text-xs font-medium ${targetCls}`}>
                               Target {formatTargetDate(goal.target_date)}
@@ -785,10 +793,17 @@ export function Goals() {
                                 </span>
                               </div>
                               <p
-                                className="mt-2 text-xs font-medium"
+                                className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium"
                                 style={{ color: MUTED_BODY }}
                               >
-                                <span aria-hidden>{emoji}</span> {label}
+                                <span>
+                                  <span aria-hidden>{emoji}</span> {label}
+                                </span>
+                                {goal.is_custom_plan ? (
+                                  <span className="rounded-full border border-zinc-700/60 bg-zinc-800/30 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
+                                    Custom
+                                  </span>
+                                ) : null}
                               </p>
                               <p
                                 className={`mt-1 text-xs font-medium ${targetCls}`}
