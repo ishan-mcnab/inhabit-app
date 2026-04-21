@@ -809,7 +809,6 @@ export function Progress() {
 
     const sleepData = sleepLogsRes.data
     const sleepError = sleepLogsRes.error
-    console.log('Sleep logs:', sleepData, sleepError)
 
     if (sleepError) {
       console.error('Progress sleep_logs:', sleepError)
