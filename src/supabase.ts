@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
+/** Eager client creation at module load — warms auth + connection before React mounts. */
 const url = import.meta.env.VITE_SUPABASE_URL
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 

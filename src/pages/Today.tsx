@@ -364,7 +364,7 @@ type MissionsDayCache = {
 }
 
 const TAB_REFRESH_STALE_MS = 30_000
-const SKELETON_DELAY_MS = 200
+const SKELETON_DELAY_MS = 50
 
 function normalizeRank(rankInput: unknown): string {
   if (typeof rankInput === 'string' && rankInput.trim().length > 0) {
@@ -994,11 +994,12 @@ export function Today() {
       }
 
       const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+      const user = session?.user ?? null
 
-      if (userError || !user) {
+      if (sessionError || !user) {
         if (!silent) {
           clearSkeletonDelayTimer()
           setShowDelayedSkeleton(false)
@@ -1011,7 +1012,7 @@ export function Today() {
           setGraceModalOpen(false)
           setGraceStreakBeforeMiss(0)
           setGracePassesRemaining(0)
-          setLoadError(userError?.message ?? 'Not signed in')
+          setLoadError(sessionError?.message ?? 'Not signed in')
           setUserId(null)
           setHabits([])
         }
@@ -1060,27 +1061,19 @@ export function Today() {
         }
       }
 
-      await ensureMondayGraceReset(user.id)
-
-    try {
-      await checkAndResetWeeklyXp(user.id)
-    } catch (weeklyErr) {
-      console.error('checkAndResetWeeklyXp failed:', weeklyErr)
-    }
-
     const { startIso, endIso } = localDayStartEndIso()
 
     const [goalsRes, missionsRes, userXpRes, habitsRes, habitLogsRes] =
       await Promise.all([
-      supabase
-        .from('goals')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('status', 'active'),
-      supabase
-        .from('daily_missions')
-        .select(
-          `
+        supabase
+          .from('goals')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('status', 'active'),
+        supabase
+          .from('daily_missions')
+          .select(
+            `
           id,
           title,
           completed,
@@ -1090,33 +1083,33 @@ export function Today() {
           goal_id,
           goals ( title, category, status )
         `,
-        )
-        .eq('user_id', user.id)
-        .eq('due_date', todayStr)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('users')
-        .select(
-          'total_xp, level, weekly_xp, rank, current_streak, longest_streak, grace_passes_remaining, display_name',
-        )
-        .eq('id', user.id)
-        .maybeSingle(),
-      supabase
-        .from('habits')
-        .select(
-          'id,title,category,frequency,time_of_day,current_streak,last_completed,created_at',
-        )
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('habit_logs')
-        .select('habit_id')
-        .eq('user_id', user.id)
-        .gte('completed_at', startIso)
-        .lte('completed_at', endIso),
-    ])
+          )
+          .eq('user_id', user.id)
+          .eq('due_date', todayStr)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('users')
+          .select(
+            'total_xp, level, weekly_xp, rank, current_streak, longest_streak, grace_passes_remaining, display_name',
+          )
+          .eq('id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('habits')
+          .select(
+            'id,title,category,frequency,time_of_day,current_streak,last_completed,created_at',
+          )
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('habit_logs')
+          .select('habit_id')
+          .eq('user_id', user.id)
+          .gte('completed_at', startIso)
+          .lte('completed_at', endIso),
+      ])
 
-    let streakBeforeMount = 0
+    let profileStreakBeforeMount = 0
     let streakForDebug = 0
     let graceRem = 0
 
@@ -1156,7 +1149,7 @@ export function Today() {
         typeof d.longest_streak === 'number' && !Number.isNaN(d.longest_streak)
           ? Math.max(0, Math.floor(d.longest_streak))
           : 0
-      streakBeforeMount = cs
+      profileStreakBeforeMount = cs
       streakForDebug = cs
       graceRem =
         typeof d.grace_passes_remaining === 'number' &&
@@ -1177,56 +1170,6 @@ export function Today() {
       setStreakCurrent(0)
       setStreakLongest(0)
       setGracePassesRemaining(0)
-    }
-
-    if (!userXpRes.error && userXpRes.data) {
-      try {
-        const mountResult = await checkAndUpdateStreak(user.id, 'mount')
-        setStreakCurrent(mountResult.currentStreak)
-        setStreakLongest(mountResult.longestStreak)
-        streakForDebug = mountResult.currentStreak
-
-        if (mountResult.streakReset && streakBeforeMount > 0) {
-          const key = `inhabit_grace_prompt_${user.id}_${todayStr}`
-          if (!sessionStorage.getItem(key)) {
-            sessionStorage.setItem(key, '1')
-            setGraceStreakBeforeMiss(streakBeforeMount)
-            setGraceModalOpen(true)
-          }
-        }
-      } catch (err) {
-        console.error('checkAndUpdateStreak (mount) failed:', err)
-      }
-    }
-
-    if (
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('inhabit_debug') === 'true' &&
-      userXpRes.data &&
-      !userXpRes.error
-    ) {
-      const dbg = userXpRes.data as Record<string, unknown>
-      const total =
-        typeof dbg.total_xp === 'number' && !Number.isNaN(dbg.total_xp)
-          ? dbg.total_xp
-          : 0
-      const weekly =
-        typeof dbg.weekly_xp === 'number' && !Number.isNaN(dbg.weekly_xp)
-          ? dbg.weekly_xp
-          : 0
-      const level =
-        typeof dbg.level === 'number' && !Number.isNaN(dbg.level)
-          ? dbg.level
-          : 1
-      const rank = normalizeRank(dbg.rank)
-      if (
-        typeof localStorage !== 'undefined' &&
-        localStorage.getItem('inhabit_debug') === 'true'
-      ) {
-        console.log(
-          `[InHabit] XP Summary — Total: ${total} | Weekly: ${weekly} | Level: ${level} | Rank: ${rank} | Streak: ${streakForDebug} days`,
-        )
-      }
     }
 
     if (goalsRes.error) {
@@ -1253,28 +1196,6 @@ export function Today() {
       setMissions([])
     }
 
-    void (async () => {
-      setMissionRegenerating(true)
-      try {
-        const result = await checkAndRegenerateWeeklyMissions(user.id)
-        if (result.regenerated && result.goalsUpdated > 0) {
-          setWeeklyNewMissionsBannerPhase('visible')
-          window.setTimeout(
-            () => setWeeklyNewMissionsBannerPhase('fading'),
-            4000,
-          )
-          window.setTimeout(() => {
-            setWeeklyNewMissionsBannerPhase('off')
-            void reloadTodayMissions(user.id)
-          }, 4300)
-        }
-      } catch (e) {
-        console.error('checkAndRegenerateWeeklyMissions failed:', e)
-      } finally {
-        setMissionRegenerating(false)
-      }
-    })()
-
     if (habitsRes.error) {
       console.error('Failed to load habits:', habitsRes.error)
       setHabitsLoadError(habitsRes.error.message)
@@ -1294,74 +1215,6 @@ export function Today() {
         completedToday: doneIds.has(h.id),
       }))
       setHabits(hs)
-    }
-
-    const joinIso =
-      typeof user.created_at === 'string' ? user.created_at : ''
-    const daysSinceJoined =
-      joinIso && !Number.isNaN(new Date(joinIso).getTime())
-        ? localCalendarDaysSinceJoined(joinIso)
-        : 999
-
-    if (daysSinceJoined < 7) {
-      setReflectionNudge('none')
-    } else {
-      const now = new Date()
-      const cw = getLocalISOWeek(now)
-      const cy = getLocalISOWeekYear(now)
-      const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
-      const { mon, sun } = localWeekMondaySundayYmd(now)
-      const { startIso: wStartIso, endIso: wEndIso } = localWeekStartEndIso(now)
-      const [curRes, prevRes, weekTotalRes, weekDoneRes] = await Promise.all([
-        supabase
-          .from('reflections')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('iso_week_year', cy)
-          .eq('week_number', cw)
-          .maybeSingle(),
-        supabase
-          .from('reflections')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('iso_week_year', py)
-          .eq('week_number', pw)
-          .maybeSingle(),
-        supabase
-          .from('daily_missions')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .gte('due_date', mon)
-          .lte('due_date', sun)
-          .not('due_date', 'is', null),
-        supabase
-          .from('daily_missions')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('completed', true)
-          .gte('completed_at', wStartIso)
-          .lte('completed_at', wEndIso)
-          .not('completed_at', 'is', null),
-      ])
-
-      if (!weekTotalRes.error && !weekDoneRes.error) {
-        const tot = weekTotalRes.count ?? 0
-        const done = weekDoneRes.count ?? 0
-        const rate =
-          tot <= 0 ? 0 : Math.min(100, Math.round((done / tot) * 100))
-        setReflectionWeekMissionRate(rate)
-      }
-
-      if (curRes.error || prevRes.error) {
-        setReflectionNudge('none')
-      } else if (now.getDay() === 0) {
-        setReflectionNudge(!curRes.data ? 'sunday' : 'none')
-      } else if (prevRes.data || curRes.data) {
-        setReflectionNudge('none')
-      } else {
-        setReflectionNudge('missed')
-        setReflectionMissedDaysAgo(daysSinceLastLocalSundayStart())
-      }
     }
 
     if (loadGenRef.current !== gen) return
@@ -1447,6 +1300,163 @@ export function Today() {
       setXpProfileLoading(false)
       setHabitsLoading(false)
     }
+
+    const uid = user.id
+    const joinIsoForSecondary =
+      typeof user.created_at === 'string' ? user.created_at : ''
+
+    void (async () => {
+      await Promise.all([
+        ensureMondayGraceReset(uid).catch((e) => {
+          console.error('ensureMondayGraceReset failed:', e)
+        }),
+        checkAndResetWeeklyXp(uid).catch((weeklyErr) => {
+          console.error('checkAndResetWeeklyXp failed:', weeklyErr)
+        }),
+      ])
+      if (loadGenRef.current !== gen) return
+
+      let streakDbg = streakForDebug
+      if (!userXpRes.error && userXpRes.data) {
+        try {
+          const mountResult = await checkAndUpdateStreak(uid, 'mount')
+          if (loadGenRef.current !== gen) return
+          setStreakCurrent(mountResult.currentStreak)
+          setStreakLongest(mountResult.longestStreak)
+          streakDbg = mountResult.currentStreak
+          if (
+            mountResult.streakReset &&
+            profileStreakBeforeMount > 0
+          ) {
+            const key = `inhabit_grace_prompt_${uid}_${todayStr}`
+            if (!sessionStorage.getItem(key)) {
+              sessionStorage.setItem(key, '1')
+              setGraceStreakBeforeMiss(profileStreakBeforeMount)
+              setGraceModalOpen(true)
+            }
+          }
+        } catch (err) {
+          console.error('checkAndUpdateStreak (mount) failed:', err)
+        }
+      }
+
+      if (
+        typeof localStorage !== 'undefined' &&
+        localStorage.getItem('inhabit_debug') === 'true' &&
+        userXpRes.data &&
+        !userXpRes.error
+      ) {
+        const dbg = userXpRes.data as Record<string, unknown>
+        const total =
+          typeof dbg.total_xp === 'number' && !Number.isNaN(dbg.total_xp)
+            ? dbg.total_xp
+            : 0
+        const weekly =
+          typeof dbg.weekly_xp === 'number' && !Number.isNaN(dbg.weekly_xp)
+            ? dbg.weekly_xp
+            : 0
+        const level =
+          typeof dbg.level === 'number' && !Number.isNaN(dbg.level)
+            ? dbg.level
+            : 1
+        const rank = normalizeRank(dbg.rank)
+        console.log(
+          `[InHabit] XP Summary — Total: ${total} | Weekly: ${weekly} | Level: ${level} | Rank: ${rank} | Streak: ${streakDbg} days`,
+        )
+      }
+
+      const daysSinceJoined =
+        joinIsoForSecondary &&
+        !Number.isNaN(new Date(joinIsoForSecondary).getTime())
+          ? localCalendarDaysSinceJoined(joinIsoForSecondary)
+          : 999
+
+      if (daysSinceJoined < 7) {
+        if (loadGenRef.current !== gen) return
+        setReflectionNudge('none')
+      } else {
+        const now = new Date()
+        const cw = getLocalISOWeek(now)
+        const cy = getLocalISOWeekYear(now)
+        const { week: pw, isoYear: py } = previousIsoWeek(cw, cy)
+        const { mon, sun } = localWeekMondaySundayYmd(now)
+        const { startIso: wStartIso, endIso: wEndIso } =
+          localWeekStartEndIso(now)
+        const [curRes, prevRes, weekTotalRes, weekDoneRes] =
+          await Promise.all([
+            supabase
+              .from('reflections')
+              .select('id')
+              .eq('user_id', uid)
+              .eq('iso_week_year', cy)
+              .eq('week_number', cw)
+              .maybeSingle(),
+            supabase
+              .from('reflections')
+              .select('id')
+              .eq('user_id', uid)
+              .eq('iso_week_year', py)
+              .eq('week_number', pw)
+              .maybeSingle(),
+            supabase
+              .from('daily_missions')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', uid)
+              .gte('due_date', mon)
+              .lte('due_date', sun)
+              .not('due_date', 'is', null),
+            supabase
+              .from('daily_missions')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', uid)
+              .eq('completed', true)
+              .gte('completed_at', wStartIso)
+              .lte('completed_at', wEndIso)
+              .not('completed_at', 'is', null),
+          ])
+        if (loadGenRef.current !== gen) return
+
+        if (!weekTotalRes.error && !weekDoneRes.error) {
+          const tot = weekTotalRes.count ?? 0
+          const done = weekDoneRes.count ?? 0
+          const rate =
+            tot <= 0 ? 0 : Math.min(100, Math.round((done / tot) * 100))
+          setReflectionWeekMissionRate(rate)
+        }
+
+        if (curRes.error || prevRes.error) {
+          setReflectionNudge('none')
+        } else if (now.getDay() === 0) {
+          setReflectionNudge(!curRes.data ? 'sunday' : 'none')
+        } else if (prevRes.data || curRes.data) {
+          setReflectionNudge('none')
+        } else {
+          setReflectionNudge('missed')
+          setReflectionMissedDaysAgo(daysSinceLastLocalSundayStart())
+        }
+      }
+
+      setMissionRegenerating(true)
+      try {
+        const result = await checkAndRegenerateWeeklyMissions(uid)
+        if (loadGenRef.current !== gen) return
+        if (result.regenerated && result.goalsUpdated > 0) {
+          setWeeklyNewMissionsBannerPhase('visible')
+          window.setTimeout(
+            () => setWeeklyNewMissionsBannerPhase('fading'),
+            4000,
+          )
+          window.setTimeout(() => {
+            setWeeklyNewMissionsBannerPhase('off')
+            void reloadTodayMissions(uid)
+          }, 4300)
+        }
+      } catch (e) {
+        console.error('checkAndRegenerateWeeklyMissions failed:', e)
+      } finally {
+        setMissionRegenerating(false)
+      }
+    })()
   },
     [
       todayStr,
@@ -1879,6 +1889,8 @@ export function Today() {
       } catch (streakErr) {
         console.error('checkAndUpdateStreak after habit:', streakErr)
       }
+
+      appCache.invalidate(habitsCacheKey(userId))
     } catch (e) {
       console.error('Habit completion failed:', e)
       setHabits((prev) =>
