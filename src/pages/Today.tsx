@@ -350,6 +350,45 @@ type XpProfileRow = {
   rank: string
 }
 
+function todayMissionsQuietEqual(
+  prev: TodayMission[],
+  next: TodayMission[],
+): boolean {
+  if (prev.length !== next.length) return false
+  for (let i = 0; i < prev.length; i++) {
+    if (prev[i].completed !== next[i].completed) return false
+  }
+  return true
+}
+
+function todayHabitsQuietEqual(
+  prev: TodayHabit[],
+  next: TodayHabit[],
+): boolean {
+  if (prev.length !== next.length) return false
+  for (let i = 0; i < prev.length; i++) {
+    if (prev[i].id !== next[i].id) return false
+    if (prev[i].completedToday !== next[i].completedToday) return false
+  }
+  return true
+}
+
+function xpCoreQuietEqual(
+  prevXp: XpProfileRow | null,
+  nextXp: XpProfileRow,
+  prevStreak: number,
+  nextStreak: number,
+): boolean {
+  if (!prevXp) return false
+  return (
+    prevXp.total_xp === nextXp.total_xp &&
+    prevXp.weekly_xp === nextXp.weekly_xp &&
+    prevXp.level === nextXp.level &&
+    prevXp.rank === nextXp.rank &&
+    prevStreak === nextStreak
+  )
+}
+
 type ProfileCachePayload = {
   xpProfile: XpProfileRow
   displayName: string
@@ -365,6 +404,7 @@ type MissionsDayCache = {
 
 const TAB_REFRESH_STALE_MS = 30_000
 const SKELETON_DELAY_MS = 50
+const BACKGROUND_REFRESH_DELAY_MS = 300
 
 function normalizeRank(rankInput: unknown): string {
   if (typeof rankInput === 'string' && rankInput.trim().length > 0) {
@@ -693,7 +733,7 @@ export function Today() {
   } = useXpToastQueue()
 
   const [streakCurrent, setStreakCurrent] = useState(0)
-  const [, setStreakLongest] = useState(0)
+  const [streakLongest, setStreakLongest] = useState(0)
 
   const [habitsLoading, setHabitsLoading] = useState(true)
   const [reflectionNudge, setReflectionNudge] = useState<
@@ -978,6 +1018,40 @@ export function Today() {
     }
   }, [userId, reloadTodayMissions])
 
+  const missionsQuietRef = useRef(missions)
+  const habitsQuietRef = useRef(habits)
+  const xpProfileQuietRef = useRef(xpProfile)
+  const streakCurrentQuietRef = useRef(streakCurrent)
+  const hasGoalsQuietRef = useRef(hasGoals)
+  const streakLongestQuietRef = useRef(streakLongest)
+  const gracePassesQuietRef = useRef(gracePassesRemaining)
+  const reflectionBannerNameQuietRef = useRef(reflectionBannerName)
+
+  useEffect(() => {
+    missionsQuietRef.current = missions
+  }, [missions])
+  useEffect(() => {
+    habitsQuietRef.current = habits
+  }, [habits])
+  useEffect(() => {
+    xpProfileQuietRef.current = xpProfile
+  }, [xpProfile])
+  useEffect(() => {
+    streakCurrentQuietRef.current = streakCurrent
+  }, [streakCurrent])
+  useEffect(() => {
+    hasGoalsQuietRef.current = hasGoals
+  }, [hasGoals])
+  useEffect(() => {
+    streakLongestQuietRef.current = streakLongest
+  }, [streakLongest])
+  useEffect(() => {
+    gracePassesQuietRef.current = gracePassesRemaining
+  }, [gracePassesRemaining])
+  useEffect(() => {
+    reflectionBannerNameQuietRef.current = reflectionBannerName
+  }, [reflectionBannerName])
+
   const load = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = Boolean(opts?.silent)
@@ -1021,6 +1095,7 @@ export function Today() {
 
       setUserId(user.id)
 
+      let hydratedFromCache = false
       if (!silent) {
         const prof = appCache.get<ProfileCachePayload>(
           profileCacheKey(user.id),
@@ -1030,6 +1105,7 @@ export function Today() {
         )
         const h = appCache.get<TodayHabit[]>(habitsCacheKey(user.id))
         if (prof && m && Array.isArray(h)) {
+          hydratedFromCache = true
           setXpProfile(prof.xpProfile)
           setReflectionBannerName(prof.displayName)
           setStreakCurrent(prof.streakCurrent)
@@ -1059,6 +1135,12 @@ export function Today() {
             setShowDelayedSkeleton(true)
           }, SKELETON_DELAY_MS)
         }
+      }
+
+      const useQuietRefresh = silent || hydratedFromCache
+      if (useQuietRefresh) {
+        await sleep(BACKGROUND_REFRESH_DELAY_MS)
+        if (loadGenRef.current !== gen) return
       }
 
     const { startIso, endIso } = localDayStartEndIso()
@@ -1127,8 +1209,7 @@ export function Today() {
     } else if (userXpRes.data) {
       const d = userXpRes.data as Record<string, unknown>
       const dn = typeof d.display_name === 'string' ? d.display_name.trim() : ''
-      setReflectionBannerName(dn || '—')
-      setXpProfile({
+      const xpProf: XpProfileRow = {
         total_xp:
           typeof d.total_xp === 'number' && !Number.isNaN(d.total_xp)
             ? d.total_xp
@@ -1140,7 +1221,7 @@ export function Today() {
             ? d.weekly_xp
             : 0,
         rank: normalizeRank(d.rank),
-      })
+      }
       const cs =
         typeof d.current_streak === 'number' && !Number.isNaN(d.current_streak)
           ? Math.max(0, Math.floor(d.current_streak))
@@ -1156,9 +1237,35 @@ export function Today() {
         !Number.isNaN(d.grace_passes_remaining)
           ? Math.max(0, Math.floor(d.grace_passes_remaining))
           : 0
-      setStreakCurrent(cs)
-      setStreakLongest(ls)
-      setGracePassesRemaining(graceRem)
+
+      if (
+        !(
+          useQuietRefresh &&
+          xpCoreQuietEqual(
+            xpProfileQuietRef.current,
+            xpProf,
+            streakCurrentQuietRef.current,
+            cs,
+          )
+        )
+      ) {
+        setXpProfile(xpProf)
+        setStreakCurrent(cs)
+      }
+
+      const bannerNext = dn || '—'
+      if (
+        !useQuietRefresh ||
+        reflectionBannerNameQuietRef.current !== bannerNext
+      ) {
+        setReflectionBannerName(bannerNext)
+      }
+      if (!useQuietRefresh || streakLongestQuietRef.current !== ls) {
+        setStreakLongest(ls)
+      }
+      if (!useQuietRefresh || gracePassesQuietRef.current !== graceRem) {
+        setGracePassesRemaining(graceRem)
+      }
     } else {
       setReflectionBannerName('—')
       setXpProfile({
@@ -1178,7 +1285,10 @@ export function Today() {
       setMissions([])
     } else {
       const count = goalsRes.count ?? 0
-      setHasGoals(count > 0)
+      const nextHasGoals = count > 0
+      if (!useQuietRefresh || hasGoalsQuietRef.current !== nextHasGoals) {
+        setHasGoals(nextHasGoals)
+      }
     }
 
     if (missionsRes.error) {
@@ -1191,7 +1301,14 @@ export function Today() {
       const list = rows
         .filter(missionRowFromActiveGoal)
         .map(mapRowToMission)
-      setMissions(list)
+      if (
+        !(
+          useQuietRefresh &&
+          todayMissionsQuietEqual(missionsQuietRef.current, list)
+        )
+      ) {
+        setMissions(list)
+      }
     } else {
       setMissions([])
     }
@@ -1214,7 +1331,11 @@ export function Today() {
         ),
         completedToday: doneIds.has(h.id),
       }))
-      setHabits(hs)
+      if (
+        !(useQuietRefresh && todayHabitsQuietEqual(habitsQuietRef.current, hs))
+      ) {
+        setHabits(hs)
+      }
     }
 
     if (loadGenRef.current !== gen) return
