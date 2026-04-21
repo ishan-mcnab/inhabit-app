@@ -50,6 +50,37 @@ export function clearRoutineChecksStorage(routineId: string, ymd: string): void 
   }
 }
 
+/** Normalize `routine_logs.completed_at` from Supabase (date string or Date). */
+export function routineLogCompletedAtToYmd(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') {
+    const s = value.trim()
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+    return ''
+  }
+  if (value instanceof Date) return formatLocalDateYmd(value)
+  return ''
+}
+
+/**
+ * Streak from logs ordered by `completed_at` desc: consecutive local calendar days,
+ * anchored at today if completed today, else starting from yesterday.
+ */
+export function calculateRoutineStreakFromLogRows(
+  rows: { completed_at: unknown }[],
+  todayYmd: string,
+): number {
+  const seen = new Set<string>()
+  const ymds: string[] = []
+  for (const row of rows) {
+    const y = routineLogCompletedAtToYmd(row.completed_at)
+    if (!y || seen.has(y)) continue
+    seen.add(y)
+    ymds.push(y)
+  }
+  return calculateRoutineStreak(ymds, todayYmd)
+}
+
 /** Consecutive calendar days with a log, walking back from today (or yesterday if today missing). */
 export function calculateRoutineStreak(
   completedDatesYmd: string[],

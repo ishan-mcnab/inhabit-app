@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Sun } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
 import { streakTierTextStyle } from '../lib/streakTierStyle'
 import {
-  calculateRoutineStreak,
+  calculateRoutineStreakFromLogRows,
   formatLocalDateYmd,
   loadRoutineChecksFromStorage,
   type RoutineType,
@@ -22,9 +21,9 @@ type RoutineRow = {
 }
 
 export function Lifestyle() {
+  const location = useLocation()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [todayYmd] = useState(() => formatLocalDateYmd(new Date()))
   const [morning, setMorning] = useState<{
     routine: RoutineRow
     itemCount: number
@@ -41,6 +40,7 @@ export function Lifestyle() {
   } | null>(null)
 
   const load = useCallback(async () => {
+    const todayYmd = formatLocalDateYmd(new Date())
     setLoading(true)
     setError(null)
     const {
@@ -102,7 +102,7 @@ export function Lifestyle() {
       const row = routineRows.find((x) => x.type === type) as RoutineRow | undefined
       if (!row) return null
 
-      const [{ count: itemCount }, logToday, logsAll] = await Promise.all([
+      const [itemsRes, logToday, logsAll] = await Promise.all([
         supabase
           .from('routine_items')
           .select('id', { count: 'exact', head: true })
@@ -123,23 +123,21 @@ export function Lifestyle() {
           .order('completed_at', { ascending: false }),
       ])
 
-      const n = itemCount ?? 0
-      const doneToday = !logToday.error && !!logToday.data
+      const n = itemsRes.count ?? 0
+      if (itemsRes.error) {
+        console.error('routine_items count:', itemsRes.error)
+      }
+      const doneToday = Boolean(logToday.data) && !logToday.error
       const stored = loadRoutineChecksFromStorage(row.id, todayYmd)
       const checkedProgress = doneToday
         ? n
         : Math.min(n, stored.length)
 
-      const dates = Array.from(
-        new Set(
-          ((logsAll.data ?? []) as { completed_at: string }[]).map((x) =>
-            typeof x.completed_at === 'string'
-              ? x.completed_at.slice(0, 10)
-              : '',
-          ).filter(Boolean),
-        ),
-      )
-      const streak = calculateRoutineStreak(dates, todayYmd)
+      const logRows = (logsAll.data ?? []) as { completed_at: unknown }[]
+      if (logsAll.error) {
+        console.error('routine_logs list:', logsAll.error)
+      }
+      const streak = calculateRoutineStreakFromLogRows(logRows, todayYmd)
 
       return {
         routine: row,
@@ -154,34 +152,49 @@ export function Lifestyle() {
     setMorning(m)
     setEvening(e)
     setLoading(false)
-  }, [todayYmd])
+  }, [])
 
   useEffect(() => {
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (location.pathname !== '/lifestyle') return
+    void load()
+  }, [location.pathname, load])
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      if (location.pathname !== '/lifestyle') return
+      void load()
+    }
+    const onWindowFocus = () => {
+      if (location.pathname !== '/lifestyle') return
+      void load()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onWindowFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onWindowFocus)
+    }
+  }, [load, location.pathname])
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-app-bg">
-      <header className="shrink-0 border-b border-zinc-800/60 px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
-        <div className="mx-auto flex max-w-lg items-center gap-2">
-          <Sun
-            size={26}
-            className="shrink-0 text-amber-300"
-            strokeWidth={2}
-            aria-hidden
-          />
-          <div className="min-w-0">
-            <h1 className="text-[22px] font-semibold tracking-tight text-white">
-              Lifestyle
-            </h1>
-            <p className="mt-0.5 text-[13px] font-medium" style={{ color: MUTED }}>
-              Your daily routines and wellness
-            </p>
-          </div>
+      <header className="shrink-0 border-b border-zinc-800/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="mx-auto max-w-lg">
+          <h1 className="text-[22px] font-semibold tracking-tight text-white">
+            Lifestyle
+          </h1>
+          <p className="mt-1 text-[13px] font-medium" style={{ color: MUTED }}>
+            Your daily routines and wellness
+          </p>
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-28 pt-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-6">
         <div className="mx-auto max-w-lg">
           {error ? (
             <p className="text-sm font-medium text-red-400" role="alert">
@@ -246,7 +259,11 @@ function RoutineCard({
   const empty = itemCount === 0
   const subtitle = empty
     ? `Tap to set up your ${routineType} routine`
-    : `${itemCount} item${itemCount === 1 ? '' : 's'}`
+    : doneToday
+      ? 'Completed today'
+      : `${itemCount} item${itemCount === 1 ? '' : 's'}`
+  const showProgressLine =
+    !empty && !doneToday && checkedProgress > 0 && itemCount > 0
 
   return (
     <Link
@@ -261,7 +278,7 @@ function RoutineCard({
         </span>
         {doneToday ? (
           <span className="shrink-0 rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400 ring-1 ring-emerald-500/35">
-            Done
+            Done ✓
           </span>
         ) : null}
       </div>
@@ -269,17 +286,17 @@ function RoutineCard({
       <p className="mt-1 text-xs font-medium" style={{ color: MUTED }}>
         {subtitle}
       </p>
-      {!empty && !doneToday ? (
+      {showProgressLine ? (
         <p className="mt-2 text-xs font-medium" style={{ color: MUTED }}>
           {checkedProgress}/{itemCount} done
         </p>
       ) : null}
-      {streak > 0 ? (
+      {!empty && streak > 0 ? (
         <p
           className="mt-2 text-xs font-bold"
           style={streakTierTextStyle(streak)}
         >
-          🔥 {streak} day streak
+          🔥 {streak} {streak === 1 ? 'day' : 'days'}
         </p>
       ) : null}
     </Link>
