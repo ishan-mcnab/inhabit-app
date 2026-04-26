@@ -244,6 +244,11 @@
   animation: quest-completion-overlay 0.6s ease-out forwards;
 }
 
+.tutorial-highlight {
+  position: relative;
+  z-index: 10000;
+}
+
 @keyframes reflection-circle-draw {
   from {
     stroke-dashoffset: 226;

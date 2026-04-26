@@ -488,6 +488,7 @@ function LevelProgressCard({
           backgroundColor: LEVEL_CARD_BG,
           border: LEVEL_CARD_BORDER,
         }}
+        data-tutorial="xp-bar"
       >
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
@@ -2746,7 +2747,7 @@ export function Today() {
               </div>
             ) : !hasGoals ? (
               <>
-                <div className="-mx-4 mb-0 flex items-center gap-3 px-4">
+                <div className="-mx-4 mb-0 flex items-center gap-3 px-4" data-tutorial="missions-list">
                   <span
                     className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
                     style={{ color: MUTED_HEADING }}
@@ -2765,6 +2766,7 @@ export function Today() {
                       backgroundColor: '#141418',
                       borderColor: CARD_BORDER,
                     }}
+                    data-tutorial="first-mission"
                   >
                     <Target
                       size={32}
@@ -2806,30 +2808,35 @@ export function Today() {
                 />
               </div>
             ) : hasGoals && missions.length === 0 ? (
-              <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
-                <StateCard>
-                  <p className="text-lg font-bold text-white">
-                    Some missions couldn&apos;t load
-                  </p>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                    Tap regenerate to try loading missions for this week.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={missionRegenerateWorking}
-                    onClick={() => void handleRegenerateMissionsTap()}
-                    className="btn-press mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
-                    style={{ backgroundColor: '#534AB7' }}
-                  >
-                    {missionRegenerateWorking ? 'Regenerating…' : 'Regenerate'}
-                  </button>
-                  <Link
-                    to="/goals"
-                    className="mt-3 block w-full rounded-xl border border-zinc-700 bg-zinc-800/50 py-3.5 text-center text-sm font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
-                  >
-                    Go to Goals
-                  </Link>
-                </StateCard>
+              <div
+                className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8"
+                data-tutorial="missions-list"
+              >
+                <div className="w-full" data-tutorial="first-mission">
+                  <StateCard>
+                    <p className="text-lg font-bold text-white">
+                      Some missions couldn&apos;t load
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+                      Tap regenerate to try loading missions for this week.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={missionRegenerateWorking}
+                      onClick={() => void handleRegenerateMissionsTap()}
+                      className="btn-press mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
+                      style={{ backgroundColor: '#534AB7' }}
+                    >
+                      {missionRegenerateWorking ? 'Regenerating…' : 'Regenerate'}
+                    </button>
+                    <Link
+                      to="/goals"
+                      className="mt-3 block w-full rounded-xl border border-zinc-700 bg-zinc-800/50 py-3.5 text-center text-sm font-bold text-zinc-300 transition-colors hover:bg-zinc-800"
+                    >
+                      Go to Goals
+                    </Link>
+                  </StateCard>
+                </div>
               </div>
             ) : (
               <>
@@ -2843,7 +2850,7 @@ export function Today() {
                 {missionActionError}
               </p>
             ) : null}
-            <div className="-mx-4 mb-0 flex items-center gap-3 px-4">
+            <div className="-mx-4 mb-0 flex items-center gap-3 px-4" data-tutorial="missions-list">
               <span
                 className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
                 style={{ color: MUTED_HEADING }}
@@ -2879,6 +2886,7 @@ export function Today() {
                       backgroundColor: CARD_SURFACE,
                       borderColor: CARD_BORDER,
                     }}
+                    {...(index === 0 ? { 'data-tutorial': 'first-mission' } : null)}
                     onPointerDownCapture={(e) => {
                       if (m.completed) return
                       const el = e.target
@@ -3065,7 +3073,7 @@ export function Today() {
                   aria-hidden
                 />
                 <section aria-labelledby="today-habits-heading">
-                  <div className="-mx-4 flex items-center gap-3 px-4">
+                  <div className="-mx-4 flex items-center gap-3 px-4" data-tutorial="habits-section">
                     <h2
                       id="today-habits-heading"
                       className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"

@@ -572,19 +572,23 @@ export function Goals() {
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void openSuggestions()}
-            className="btn-press flex items-center gap-1.5 rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-2 text-sm font-bold text-[#534AB7] transition-colors hover:bg-white/5"
-          >
-            <Sparkles size={14} aria-hidden strokeWidth={2} />
-            Suggest goals
-          </button>
+          {goals.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void openSuggestions()}
+              className="btn-press flex items-center gap-1.5 rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-2 text-sm font-bold text-[#534AB7] transition-colors hover:bg-white/5"
+              data-tutorial="suggest-goals"
+            >
+              <Sparkles size={14} aria-hidden strokeWidth={2} />
+              Suggest goals
+            </button>
+          ) : null}
           <Link
             to="/goals/new"
             aria-label="Create new goal"
             className="btn-press flex size-9 items-center justify-center rounded-lg text-white shadow-md transition-colors hover:opacity-90"
             style={{ backgroundColor: GOAL_PURPLE }}
+            data-tutorial="add-goal"
           >
             <Plus size={18} aria-hidden strokeWidth={2.5} />
           </Link>
@@ -636,6 +640,8 @@ export function Goals() {
                     to="/goals/new"
                     className="btn-press mt-8 w-full max-w-[280px] rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95"
                     style={{ backgroundColor: GOAL_PURPLE }}
+                    data-tutorial="first-goal"
+                    data-tutorial-variant="empty"
                   >
                     Set your first goal →
                   </Link>
@@ -647,7 +653,7 @@ export function Goals() {
               )
             ) : (
               <ul className="mx-auto flex w-full min-w-0 max-w-lg flex-col gap-2.5">
-                {goals.map((goal) => {
+                {goals.map((goal, idx) => {
                   const { label, emoji } = getGoalCategoryDisplay(goal.category)
                   const accent = getCategoryBorderColor(goal.category)
                   const pct = clampPercent(goal.progress_percent)
@@ -670,6 +676,7 @@ export function Goals() {
                             backgroundColor: CARD_SURFACE,
                             borderColor: CARD_BORDER,
                           }}
+                          {...(idx === 0 ? { 'data-tutorial': 'first-goal' } : null)}
                         >
                           <div
                             className="w-[3px] shrink-0 self-stretch rounded-full"

@@ -773,7 +773,7 @@ export function Profile() {
               </section>
 
               <section className="text-center" aria-label="Weekly rank">
-                <div className="pt-6 pb-5">
+                <div className="pt-6 pb-5" data-tutorial="rank-shield-profile">
                   <RankShield rankName={displayRank} accentColor={rankHue} />
                   <p
                     className="mt-3 text-[14px] font-medium leading-snug"
@@ -828,7 +828,7 @@ export function Profile() {
                     />
                   </div>
                 ) : null}
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-4 grid grid-cols-2 gap-3" data-tutorial="stats-grid">
                   <StatCardCount
                     accent={STAT_PURPLE}
                     label="Total XP"

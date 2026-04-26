@@ -1001,7 +1001,7 @@ export function Progress() {
                     />
                   </div>
                 ) : null}
-                <div className="pt-6 pb-5">
+                <div className="pt-6 pb-5" data-tutorial="rank-shield-progress">
                   <RankShield rankName={displayRank} accentColor={rankHue} />
                   <p
                     className="mt-3 text-[14px] font-medium leading-snug"
@@ -1464,7 +1464,10 @@ export function Progress() {
                 )}
               </section>
 
-              <section aria-labelledby="progress-reflections-heading">
+              <section
+                aria-labelledby="progress-reflections-heading"
+                data-tutorial="reflections-section"
+              >
                 <div id="progress-reflections-heading" className="sr-only">
                   Reflections
                 </div>
