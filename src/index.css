@@ -33,6 +33,7 @@
 @layer base {
   html {
     color-scheme: dark;
+    height: 100%;
   }
 
   html,
@@ -44,11 +45,13 @@
   body {
     overflow-x: hidden;
     max-width: 100vw;
-    @apply m-0 min-h-screen bg-app-bg text-zinc-100 antialiased;
+    min-height: 100%;
+    @apply m-0 bg-app-bg text-zinc-100 antialiased;
   }
 
   #root {
-    @apply min-h-screen;
+    min-height: 100%;
+    height: 100%;
   }
 
   button:focus-visible,

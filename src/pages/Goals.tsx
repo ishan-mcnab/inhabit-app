@@ -1010,7 +1010,10 @@ export function Goals() {
 
       {suggestOpen ? (
         <div
-          className="fixed inset-0 z-50 flex flex-col justify-end bg-black/65 p-0"
+          className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/65 p-0"
+          style={{
+            paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))',
+          }}
           role="dialog"
           aria-modal="true"
           aria-label="Suggested goals"
@@ -1021,9 +1024,21 @@ export function Goals() {
             className="min-h-0 flex-1"
             onClick={closeSuggestions}
           />
-          <div className="max-h-[88vh] w-full max-w-full min-w-0 overflow-hidden rounded-t-3xl border border-zinc-800 border-b-0 bg-app-bg shadow-2xl">
-            <div className="mx-auto h-1.5 w-10 shrink-0 rounded-full bg-zinc-700 mt-3 mb-2" />
-            <div className="max-h-[calc(88vh-2rem)] min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
+          <div
+            className="flex max-h-full min-w-0 w-full max-w-full flex-col overflow-hidden rounded-t-3xl border border-zinc-800 border-b-0 bg-app-bg shadow-2xl"
+            style={{
+              maxHeight:
+                'calc(100dvh - 4rem - env(safe-area-inset-bottom, 0px))',
+            }}
+          >
+            <div className="mx-auto mt-3 mb-2 h-1.5 w-10 shrink-0 rounded-full bg-zinc-700" />
+            <div
+              className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pt-2"
+              style={{
+                paddingBottom:
+                  'calc(4rem + env(safe-area-inset-bottom, 0px))',
+              }}
+            >
               <h2 className="text-center text-lg font-bold text-white">
                 Suggested goals
               </h2>

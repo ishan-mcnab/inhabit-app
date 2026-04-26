@@ -84,11 +84,16 @@ export function Layout() {
   const showProfile = pathname === '/profile'
 
   return (
-    <div className="relative flex h-[100dvh] min-h-0 flex-col bg-app-bg">
+    <div className="relative flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden bg-app-bg">
       <PWAInstallPrompt />
       <div
-        className="fixed inset-0 pointer-events-none"
-        style={{ zIndex: 0 }}
+        className="pointer-events-none"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: 'none',
+        }}
         aria-hidden="true"
       >
         <div
@@ -133,7 +138,12 @@ export function Layout() {
       >
         You&apos;re offline — changes will sync when you reconnect
       </div>
-      <main className="relative z-10 flex min-h-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-hidden overscroll-y-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] [-webkit-overflow-scrolling:touch]">
+      <main
+        className="relative z-10 flex min-h-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+        style={{
+          paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
         <div
           className={[
             'flex min-h-0 min-w-0 max-w-full flex-1 flex-col',
@@ -197,8 +207,14 @@ export function Layout() {
         </div>
       </main>
       <nav
-        className="relative fixed bottom-0 left-0 right-0 z-50 flex min-h-16 items-stretch pb-[env(safe-area-inset-bottom,0px)]"
+        className="flex min-h-16 w-full items-stretch pb-[env(safe-area-inset-bottom,0px)]"
         style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          width: '100%',
+          zIndex: 50,
           borderTop: '1px solid rgba(255,255,255,0.06)',
           background: 'rgba(13,13,15,0.95)',
           backdropFilter: 'blur(12px)',
