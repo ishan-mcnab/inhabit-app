@@ -160,7 +160,12 @@ function formatTodayHeading(d: Date): string {
   })
 }
 
-type GoalEmbed = { title: string; category: string | null; status?: string | null }
+type GoalEmbed = {
+  title: string
+  category: string | null
+  status?: string | null
+  is_custom_plan?: boolean | null
+}
 
 type MissionRow = {
   id: string
@@ -170,6 +175,7 @@ type MissionRow = {
   xp_reward: number | null
   due_date: string | null
   goal_id: string
+  time_of_day?: string | null
   goals: GoalEmbed | GoalEmbed[] | null
 }
 
@@ -189,6 +195,8 @@ type TodayMission = {
   goal_id: string
   goalTitle: string
   category: string | null
+  time_of_day: 'morning' | 'afternoon' | 'evening' | null
+  isCustomPlan: boolean
 }
 
 function missionRowFromActiveGoal(row: MissionRow): boolean {
@@ -201,6 +209,11 @@ function missionRowFromActiveGoal(row: MissionRow): boolean {
 
 function mapRowToMission(row: MissionRow): TodayMission {
   const g = pickGoalEmbed(row.goals)
+  const rawTod = typeof row.time_of_day === 'string' ? row.time_of_day : ''
+  const time_of_day =
+    rawTod === 'morning' || rawTod === 'afternoon' || rawTod === 'evening'
+      ? rawTod
+      : null
   return {
     id: row.id,
     title: row.title,
@@ -209,6 +222,8 @@ function mapRowToMission(row: MissionRow): TodayMission {
     goal_id: row.goal_id,
     goalTitle: g?.title ?? 'Goal',
     category: g?.category ?? null,
+    time_of_day,
+    isCustomPlan: Boolean(g?.is_custom_plan),
   }
 }
 
@@ -979,7 +994,8 @@ export function Today() {
           xp_reward,
           due_date,
           goal_id,
-          goals ( title, category, status )
+          time_of_day,
+          goals ( title, category, status, is_custom_plan )
         `,
         )
         .eq('user_id', uid)
@@ -2852,7 +2868,7 @@ export function Today() {
                   ) : null}
                   <div
                     className={[
-                      'card-interactive relative flex min-h-[64px] w-full min-w-0 max-w-full transform-gpu items-stretch gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
+                      'card-interactive card-sheen relative flex min-h-[64px] w-full min-w-0 max-w-full transform-gpu items-stretch gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
                       m.completed ? 'opacity-[0.45]' : 'opacity-100',
                       removing ? 'opacity-0' : '',
                       isPressing
@@ -2942,6 +2958,18 @@ export function Today() {
                         >
                           {m.goalTitle}
                         </p>
+                        {m.isCustomPlan && m.time_of_day ? (
+                          <p
+                            className="mt-0.5 text-[11px] font-medium"
+                            style={{ color: '#888780' }}
+                          >
+                            {m.time_of_day === 'morning'
+                              ? 'Morning'
+                              : m.time_of_day === 'afternoon'
+                                ? 'Afternoon'
+                                : 'Evening'}
+                          </p>
+                        ) : null}
                       </div>
 
                       {!m.completed && !isEditing ? (
@@ -3140,7 +3168,7 @@ export function Today() {
                           <div
                             key={h.id}
                             className={[
-                              'card-interactive relative flex min-h-[64px] w-full min-w-0 max-w-full transform-gpu items-stretch gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
+                              'card-interactive card-sheen relative flex min-h-[64px] w-full min-w-0 max-w-full transform-gpu items-stretch gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
                               done ? 'opacity-[0.45]' : 'opacity-100',
                               isPressing
                                 ? 'scale-[0.98] transition-none'

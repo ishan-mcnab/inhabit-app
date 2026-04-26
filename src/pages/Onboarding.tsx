@@ -360,12 +360,6 @@ export function Onboarding() {
         style={{ backgroundColor: '#0D0D0F' }}
       >
         <div className="mx-auto flex w-full max-w-[22rem] flex-1 flex-col justify-center">
-          <p
-            className="text-center text-sm font-medium"
-            style={{ color: '#888780' }}
-          >
-            Welcome to InHabit
-          </p>
           <h1 className="mt-3 text-center text-2xl font-semibold tracking-tight text-white">
             What should we call you?
           </h1>

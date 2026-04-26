@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Plus } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { GOAL_PURPLE } from '../constants/goalCategoryPills'
 import { calculateTotalWeeks } from '../lib/goalProgress'
@@ -25,6 +25,8 @@ export function CustomPlanBuilder() {
   const navigate = useNavigate()
   const editMode = searchParams.get('edit') === '1'
 
+  type MissionTimeOfDay = 'morning' | 'afternoon' | 'evening' | null
+
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [goalTitle, setGoalTitle] = useState('')
@@ -34,6 +36,9 @@ export function CustomPlanBuilder() {
   const [questTitles, setQuestTitles] = useState<string[]>([])
   const [dailyTitles, setDailyTitles] = useState<string[]>(() =>
     Array(7).fill(''),
+  )
+  const [dailyTimes, setDailyTimes] = useState<MissionTimeOfDay[]>(() =>
+    Array(7).fill(null),
   )
 
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -86,11 +91,11 @@ export function CustomPlanBuilder() {
         .order('week_number', { ascending: true }),
       supabase
         .from('daily_missions')
-        .select('title,due_date')
+        .select('title,due_date,time_of_day')
         .eq('goal_id', goalId)
         .eq('user_id', user.id)
         .order('due_date', { ascending: true, nullsFirst: false })
-        .limit(7),
+        .limit(14),
     ])
 
     setLoading(false)
@@ -149,15 +154,27 @@ export function CustomPlanBuilder() {
     }
 
     if (hasPrefill && missionsRes.data && missionsRes.data.length > 0) {
-      const nextDaily = Array(7).fill('')
-      const rows = missionsRes.data.slice(0, 7)
-      for (let i = 0; i < rows.length; i++) {
+      const rows = missionsRes.data.slice(0, 14) as {
+        title?: unknown
+        time_of_day?: unknown
+      }[]
+      const slots = Math.max(7, Math.min(14, rows.length))
+      const nextDaily = Array(slots).fill('')
+      const nextTimes = Array(slots).fill(null) as MissionTimeOfDay[]
+      for (let i = 0; i < slots; i++) {
         const t = rows[i]?.title
         nextDaily[i] = typeof t === 'string' ? t : ''
+        const tod = rows[i]?.time_of_day
+        nextTimes[i] =
+          tod === 'morning' || tod === 'afternoon' || tod === 'evening'
+            ? tod
+            : null
       }
       setDailyTitles(nextDaily)
+      setDailyTimes(nextTimes)
     } else {
       setDailyTitles(Array(7).fill(''))
+      setDailyTimes(Array(7).fill(null))
     }
 
     if (questsRes.error) {
@@ -201,6 +218,22 @@ export function CustomPlanBuilder() {
     })
   }
 
+  function toggleDailyTimeAt(
+    index: number,
+    next: Exclude<MissionTimeOfDay, null>,
+  ) {
+    setDailyTimes((prev) => {
+      const arr = [...prev]
+      arr[index] = arr[index] === next ? null : next
+      return arr
+    })
+  }
+
+  function addAnotherMissionField() {
+    setDailyTitles((prev) => (prev.length >= 14 ? prev : [...prev, '']))
+    setDailyTimes((prev) => (prev.length >= 14 ? prev : [...prev, null]))
+  }
+
   async function handleSave() {
     setSaveError(null)
     if (!goalId) return
@@ -208,7 +241,8 @@ export function CustomPlanBuilder() {
     const filledQuests = questTitles
       .map((t) => t.trim())
       .filter((t) => t.length > 0)
-    const filledDaily = dailyTitles
+    const filledFirstSevenDaily = dailyTitles
+      .slice(0, 7)
       .map((t) => t.trim())
       .filter((t) => t.length > 0)
 
@@ -216,7 +250,7 @@ export function CustomPlanBuilder() {
       setSaveError('Add at least one weekly milestone.')
       return
     }
-    if (filledDaily.length < 3) {
+    if (filledFirstSevenDaily.length < 3) {
       setSaveError('Add at least three daily actions.')
       return
     }
@@ -299,11 +333,13 @@ export function CustomPlanBuilder() {
       completed: boolean
       xp_reward: number
       due_date: string
+      time_of_day?: string | null
     }[] = []
 
     dailyTitles.forEach((raw, i) => {
       const title = raw.trim()
       if (!title) return
+      const tag = dailyTimes[i] ?? null
       missionRows.push({
         goal_id: goalId,
         user_id: user.id,
@@ -311,6 +347,7 @@ export function CustomPlanBuilder() {
         completed: false,
         xp_reward: 25,
         due_date: formatLocalDate(addDays(base, i)),
+        time_of_day: tag,
       })
     })
 
@@ -455,21 +492,71 @@ export function CustomPlanBuilder() {
 
           <div className="mt-4 flex flex-col gap-3">
             {dailyTitles.map((val, idx) => (
-              <label
-                key={`d-${idx}`}
-                className="block text-xs font-semibold text-zinc-400"
-              >
-                Mission {idx + 1}:{' '}
-                <input
-                  type="text"
-                  value={val}
-                  onChange={(e) => setDailyAt(idx, e.target.value)}
-                  placeholder="e.g. Study for 30 minutes"
-                  disabled={saving}
-                  className="mt-1.5 w-full rounded-xl border border-zinc-800 bg-app-surface px-3 py-3 text-sm font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 disabled:opacity-50"
-                />
-              </label>
+              <div key={`d-${idx}`} className="block">
+                <label className="block text-xs font-semibold text-zinc-400">
+                  Mission {idx + 1}:{' '}
+                  <input
+                    type="text"
+                    value={val}
+                    onChange={(e) => setDailyAt(idx, e.target.value)}
+                    placeholder="e.g. Study for 30 minutes"
+                    disabled={saving}
+                    className="mt-1.5 w-full rounded-xl border border-zinc-800 bg-app-surface px-3 py-3 text-sm font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 disabled:opacity-50"
+                  />
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(
+                    [
+                      { key: 'morning' as const, label: 'Morning 🌅' },
+                      { key: 'afternoon' as const, label: 'Afternoon ☀️' },
+                      { key: 'evening' as const, label: 'Evening 🌙' },
+                    ] as const
+                  ).map((opt) => {
+                    const selected = dailyTimes[idx] === opt.key
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        disabled={saving}
+                        onClick={() => toggleDailyTimeAt(idx, opt.key)}
+                        className="rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
+                        style={{
+                          borderColor: selected
+                            ? GOAL_PURPLE
+                            : 'rgba(255,255,255,0.12)',
+                          backgroundColor: selected
+                            ? 'rgba(83,74,183,0.18)'
+                            : 'transparent',
+                          color: selected ? '#ffffff' : '#888780',
+                        }}
+                        aria-pressed={selected}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             ))}
+          </div>
+
+          <div className="mt-3">
+            {dailyTitles.length < 14 ? (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={addAnotherMissionField}
+                className="inline-flex items-center gap-2 text-[13px] font-semibold disabled:opacity-50"
+                style={{ color: GOAL_PURPLE }}
+              >
+                <Plus size={14} aria-hidden strokeWidth={2.5} />
+                + Add mission
+              </button>
+            ) : (
+              <p className="text-[13px] font-medium" style={{ color: '#888780' }}>
+                Maximum 14 missions reached
+              </p>
+            )}
           </div>
 
           {saveError ? (

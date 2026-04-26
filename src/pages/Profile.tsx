@@ -227,7 +227,7 @@ function StatCard({
 }) {
   return (
     <div
-      className="rounded-xl border border-l-[3px] px-4 py-3 transition-colors hover:bg-white/[0.04]"
+      className="card-sheen rounded-xl border border-l-[3px] px-4 py-3 transition-colors hover:bg-white/[0.04]"
       style={{
         backgroundColor: CARD_BG,
         borderColor: CARD_BORDER,

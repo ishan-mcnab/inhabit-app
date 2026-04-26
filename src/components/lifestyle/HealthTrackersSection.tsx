@@ -37,13 +37,13 @@ function restTierColor(r: number): string {
 function RestRatingDots({ rating }: { rating: number }) {
   const fill = restTierColor(rating)
   return (
-    <span className="mt-1 flex gap-0.5 text-[11px] leading-none" aria-hidden>
+    <span className="mt-2 flex gap-1 text-[12px] leading-none" aria-hidden>
       {[1, 2, 3, 4, 5].map((i) => (
         <span
           key={i}
-          style={{ color: i <= rating ? fill : 'rgba(63,63,70,0.9)' }}
+          style={{ color: i <= rating ? fill : 'rgba(255,255,255,0.14)' }}
         >
-          {i <= rating ? '●' : '○'}
+          ●
         </span>
       ))}
     </span>
@@ -616,20 +616,24 @@ export function HealthTrackersSection({
                   🌙
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-white">Sleep</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-bold text-white">Sleep</p>
+                    {sleepLogged ? (
+                      <span className="shrink-0 rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400 ring-1 ring-emerald-500/35">
+                        Logged ✓
+                      </span>
+                    ) : null}
+                  </div>
                   {sleepLogged && snapshot.sleep?.rest_rating != null ? (
                     <>
-                      <p
-                        className="mt-1 text-xs font-medium"
-                        style={{ color: MUTED }}
-                      >
+                      <p className="mt-2 text-sm font-semibold text-white">
                         {snapshot.sleep.bedtime} → {snapshot.sleep.wake_time}
                       </p>
                       <RestRatingDots rating={snapshot.sleep.rest_rating} />
                     </>
                   ) : (
                     <p
-                      className="mt-1 text-xs font-medium"
+                      className="mt-2 text-xs font-medium"
                       style={{ color: MUTED }}
                     >
                       Log tonight&apos;s sleep
@@ -639,7 +643,7 @@ export function HealthTrackersSection({
                     className="mt-3 inline-block rounded-lg px-3 py-1.5 text-xs font-bold text-white"
                     style={{ backgroundColor: PURPLE }}
                   >
-                    Log Sleep
+                    {sleepLogged ? 'Edit Sleep Log' : 'Log Sleep'}
                   </span>
                 </div>
               </div>

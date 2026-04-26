@@ -84,8 +84,39 @@ export function Layout() {
   const showProfile = pathname === '/profile'
 
   return (
-    <div className="flex h-[100dvh] min-h-0 flex-col bg-app-bg">
+    <div className="relative flex h-[100dvh] min-h-0 flex-col bg-app-bg">
       <PWAInstallPrompt />
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{ zIndex: 0 }}
+        aria-hidden="true"
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '80%',
+            height: '40%',
+            background:
+              'radial-gradient(ellipse at 50% 0%, rgba(83,74,183,0.07) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            width: '40%',
+            height: '30%',
+            background:
+              'radial-gradient(ellipse at 100% 0%, rgba(255,255,255,0.025) 0%, transparent 60%)',
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
       <div
         className={[
           'fixed left-0 right-0 z-[9999] border-l-4 py-2.5 pl-3 pr-4 text-[13px] font-medium text-white transition-opacity duration-300 ease-out',
@@ -102,7 +133,7 @@ export function Layout() {
       >
         You&apos;re offline — changes will sync when you reconnect
       </div>
-      <main className="flex min-h-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-hidden overscroll-y-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] [-webkit-overflow-scrolling:touch]">
+      <main className="relative z-10 flex min-h-0 max-w-full flex-1 flex-col overflow-x-hidden overflow-y-hidden overscroll-y-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] [-webkit-overflow-scrolling:touch]">
         <div
           className={[
             'flex min-h-0 min-w-0 max-w-full flex-1 flex-col',
@@ -166,7 +197,13 @@ export function Layout() {
         </div>
       </main>
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 flex min-h-16 items-stretch border-t border-zinc-800/60 bg-tab-bar pb-[env(safe-area-inset-bottom,0px)]"
+        className="relative fixed bottom-0 left-0 right-0 z-50 flex min-h-16 items-stretch pb-[env(safe-area-inset-bottom,0px)]"
+        style={{
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          background: 'rgba(13,13,15,0.95)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}
         role="navigation"
         aria-label="Main tabs"
       >

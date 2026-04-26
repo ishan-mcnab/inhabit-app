@@ -408,7 +408,7 @@ function StatCard({
 }) {
   return (
     <div
-      className="rounded-xl border border-l-[3px] px-4 py-3 transition-colors hover:bg-white/[0.04]"
+      className="card-sheen rounded-xl border border-l-[3px] px-4 py-3 transition-colors hover:bg-white/[0.04]"
       style={{
         backgroundColor: CARD_BG,
         borderColor: CARD_BORDER,
@@ -1281,7 +1281,7 @@ export function Progress() {
                             className="block rounded-2xl outline-none ring-app-accent/0 transition-transform focus-visible:ring-2 focus-visible:ring-app-accent/50 active:scale-[0.98]"
                           >
                             <article
-                              className="card-interactive flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
+                              className="card-interactive card-sheen flex min-h-[90px] gap-3 rounded-2xl border p-4 shadow-sm transition-colors hover:bg-white/[0.04]"
                               style={{
                                 backgroundColor: CARD_BG,
                                 borderColor: CARD_BORDER,
@@ -1392,7 +1392,7 @@ export function Progress() {
                       return (
                         <li
                           key={h.id}
-                          className="card-interactive rounded-lg border px-4 py-3"
+                          className="card-interactive card-sheen rounded-lg border px-4 py-3"
                           style={{
                             backgroundColor: CARD_BG,
                             borderColor: CARD_BORDER,
@@ -1507,7 +1507,7 @@ export function Progress() {
                       return (
                         <li
                           key={r.id}
-                          className="card-interactive rounded-xl border p-4"
+                          className="card-interactive card-sheen rounded-xl border p-4"
                           style={{
                             backgroundColor: CARD_BG,
                             borderColor: CARD_BORDER,
