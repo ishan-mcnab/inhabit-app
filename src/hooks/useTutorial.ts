@@ -5,19 +5,11 @@ import { useAuth } from '../context/AuthContext'
 export type TutorialStep = {
   id: number
   icon:
-    | 'BarChart2'
-    | 'CheckSquare'
-    | 'Zap'
-    | 'Repeat'
+    | 'CalendarDays'
     | 'Flag'
-    | 'Sparkles'
-    | 'PenLine'
     | 'Sun'
-    | 'Moon'
     | 'TrendingUp'
-    | 'BookOpen'
-    | 'Shield'
-    | 'Award'
+    | 'User'
     | 'CheckCircle2'
   tab: 'Today' | 'Goals' | 'Lifestyle' | 'Progress' | 'Profile' | null
   heading: string
@@ -27,97 +19,41 @@ export type TutorialStep = {
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 1,
-    icon: 'BarChart2',
+    icon: 'CalendarDays',
     tab: 'Today',
-    heading: 'Your rank & XP',
-    copy: 'Every action earns XP. Fill the bar and level up. Your rank resets every Monday — earn it back every week.',
+    heading: 'Your daily home base',
+    copy: "Your missions and habits live here.\nComplete them each day to earn XP, build\nyour streak, and level up your rank.",
   },
   {
     id: 2,
-    icon: 'CheckSquare',
-    tab: 'Today',
-    heading: 'Your missions',
-    copy: 'AI-built around your goals. Complete them daily. Miss a day and your streak takes the hit.',
+    icon: 'Flag',
+    tab: 'Goals',
+    heading: 'Set a goal, get a plan',
+    copy: 'Create a goal and InHabit builds\na personalized quest plan and daily\nmissions around it using AI.',
   },
   {
     id: 3,
-    icon: 'Zap',
-    tab: 'Today',
-    heading: 'Earn XP',
-    copy: 'Tap the circle on any mission to mark it done. Complete all missions in a day for a full clear bonus.',
+    icon: 'Sun',
+    tab: 'Lifestyle',
+    heading: 'Build your daily rhythm',
+    copy: 'Set up your morning and evening\nroutines, and track your sleep, water,\nand mood — all in one place.',
   },
   {
     id: 4,
-    icon: 'Repeat',
-    tab: 'Today',
-    heading: 'Your habits',
-    copy: 'Daily recurring behaviors that compound over time. Track them every day. Streaks matter more than single sessions.',
+    icon: 'TrendingUp',
+    tab: 'Progress',
+    heading: "See how far you've come",
+    copy: "Your XP history, goal milestones,\nhabit consistency, and weekly reflections\nall live here.",
   },
   {
     id: 5,
-    icon: 'Flag',
-    tab: 'Goals',
-    heading: 'Your goals',
-    copy: 'Each goal gets a 4-week quest plan and daily missions built by AI. Tap into any goal to track your weekly milestones.',
+    icon: 'User',
+    tab: 'Profile',
+    heading: 'Your rank and stats',
+    copy: 'Track your total XP, streaks, and\nrank. Your rank resets every Monday —\nkeep earning it back.',
   },
   {
     id: 6,
-    icon: 'Sparkles',
-    tab: 'Goals',
-    heading: 'Need ideas?',
-    copy: 'InHabit can suggest goals based on your profile and focus areas. Tap ✨ on the Goals tab to see what fits.',
-  },
-  {
-    id: 7,
-    icon: 'PenLine',
-    tab: 'Goals',
-    heading: 'Build your own plan',
-    copy: "Not feeling the AI plan? Choose 'I'll plan it myself' when creating a goal and write your own quests and missions.",
-  },
-  {
-    id: 8,
-    icon: 'Sun',
-    tab: 'Lifestyle',
-    heading: 'Morning & evening routines',
-    copy: 'Build a repeatable daily routine. Add your own steps, check them off in order. Complete the full stack for bonus XP.',
-  },
-  {
-    id: 9,
-    icon: 'Moon',
-    tab: 'Lifestyle',
-    heading: 'Track your wellness',
-    copy: 'Log sleep, water intake, and your mood and energy daily. Everything feeds into your weekly coaching insight.',
-  },
-  {
-    id: 10,
-    icon: 'TrendingUp',
-    tab: 'Progress',
-    heading: 'Your progress',
-    copy: "XP charts, goal milestones, habit grids, and sleep trends. Everything you've built — visualized over time.",
-  },
-  {
-    id: 11,
-    icon: 'BookOpen',
-    tab: 'Progress',
-    heading: 'Weekly reflections',
-    copy: 'Every Sunday, answer 3 questions about your week. InHabit gives you a 2-sentence coaching insight based on your actual data.',
-  },
-  {
-    id: 12,
-    icon: 'Shield',
-    tab: 'Profile',
-    heading: 'Your rank',
-    copy: 'Recruit to Legend. Your rank is based on XP earned this week and resets every Monday. The grind never stops.',
-  },
-  {
-    id: 13,
-    icon: 'Award',
-    tab: 'Profile',
-    heading: 'Your stats',
-    copy: 'Total XP, streak record, missions completed. Every number here is something you earned. Check your Profile to see the full picture.',
-  },
-  {
-    id: 14,
     icon: 'CheckCircle2',
     tab: null,
     heading: "You're set.",
@@ -191,10 +127,11 @@ export function useTutorial() {
 
   useEffect(() => {
     if (!state.showTutorial) return
-    if (state.currentStep >= steps.length) {
+    // Show end card at index 5; auto-complete only if user advances beyond it.
+    if (state.currentStep > 5) {
       void completeTutorial()
     }
-  }, [completeTutorial, state.currentStep, state.showTutorial, steps.length])
+  }, [completeTutorial, state.currentStep, state.showTutorial])
 
   return {
     steps,

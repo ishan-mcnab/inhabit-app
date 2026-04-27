@@ -1,19 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Award,
-  BarChart2,
-  BookOpen,
+  CalendarDays,
   CheckCircle2,
-  CheckSquare,
   Flag,
-  Moon,
-  PenLine,
-  Repeat,
-  Shield,
-  Sparkles,
   Sun,
   TrendingUp,
-  Zap,
+  User,
 } from 'lucide-react'
 import type { TutorialStep } from '../../hooks/useTutorial'
 
@@ -34,32 +26,16 @@ function clamp(v: number, min: number, max: number) {
 
 function iconFor(step: TutorialStep) {
   switch (step.icon) {
-    case 'BarChart2':
-      return BarChart2
-    case 'CheckSquare':
-      return CheckSquare
-    case 'Zap':
-      return Zap
-    case 'Repeat':
-      return Repeat
+    case 'CalendarDays':
+      return CalendarDays
     case 'Flag':
       return Flag
-    case 'Sparkles':
-      return Sparkles
-    case 'PenLine':
-      return PenLine
     case 'Sun':
       return Sun
-    case 'Moon':
-      return Moon
     case 'TrendingUp':
       return TrendingUp
-    case 'BookOpen':
-      return BookOpen
-    case 'Shield':
-      return Shield
-    case 'Award':
-      return Award
+    case 'User':
+      return User
     case 'CheckCircle2':
       return CheckCircle2
   }
@@ -69,12 +45,18 @@ export function TutorialOverlay({ steps, currentStep, onNext, onSkip }: Props) {
   const total = steps.length
   const idx = clamp(currentStep, 0, Math.max(0, total - 1))
   const step = steps[idx]
-  const isEndCard = step.id === 14
+  const isEndCard = step.id === 6
 
   const progressPct = useMemo(() => {
-    if (total <= 0) return 0
-    return clamp(((idx + 1) / total) * 100, 0, 100)
-  }, [idx, total])
+    // Progress reflects 5 slides (end card is separate).
+    const slidesTotal = 5
+    const clampedSlide = clamp(idx, 0, slidesTotal)
+    return clamp(
+      ((Math.min(clampedSlide, slidesTotal - 1) + 1) / slidesTotal) * 100,
+      0,
+      100,
+    )
+  }, [idx])
 
   const [phase, setPhase] = useState<'in' | 'out'>('in')
 
@@ -168,122 +150,169 @@ export function TutorialOverlay({ steps, currentStep, onNext, onSkip }: Props) {
           inset: 0,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-          paddingTop: 'max(56px, env(safe-area-inset-top, 0px) + 24px)',
+          paddingTop: 'max(40px, env(safe-area-inset-top, 0px) + 16px)',
           paddingLeft: 16,
           paddingRight: 16,
           paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))',
           ...slideStyle,
         }}
       >
-        {isEndCard ? (
-          <EndCard onGo={() => void onSkip()} />
-        ) : (
-          <>
-            <div
-              style={{
-                height: 80,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              aria-hidden
-            >
+        {/* Center section */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingTop: 24,
+            paddingBottom: 16,
+            width: '100%',
+          }}
+        >
+          {isEndCard ? (
+            <>
+              <CheckCircle2
+                size={64}
+                color={PURPLE}
+                strokeWidth={2.25}
+                aria-hidden
+              />
               <div
                 style={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: 999,
-                  background: 'rgba(83,74,183,0.15)',
+                  marginTop: 18,
+                  fontSize: 28,
+                  fontWeight: 800,
+                  color: '#fff',
+                  textAlign: 'center',
+                }}
+              >
+                You&apos;re set.
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: MUTED,
+                  textAlign: 'center',
+                }}
+              >
+                Now go build something.
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                style={{
+                  height: 80,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
+                aria-hidden
               >
-                <Icon size={48} color={PURPLE} strokeWidth={2.25} />
+                <div
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 999,
+                    background: 'rgba(83,74,183,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon size={48} color={PURPLE} strokeWidth={2.25} />
+                </div>
               </div>
-            </div>
 
-            <div
-              style={{
-                marginTop: 24,
-                maxWidth: 280,
-                textAlign: 'center',
-                fontSize: 24,
-                fontWeight: 700,
-                color: '#ffffff',
-                lineHeight: 1.15,
-              }}
-            >
-              {step.heading}
-            </div>
-
-            <div
-              style={{
-                marginTop: 12,
-                maxWidth: 300,
-                textAlign: 'center',
-                fontSize: 15,
-                fontWeight: 500,
-                color: MUTED,
-                lineHeight: 1.6,
-                whiteSpace: 'pre-line',
-              }}
-            >
-              {step.copy}
-            </div>
-
-            {step.tab ? (
               <div
                 style={{
-                  marginTop: 14,
-                  padding: '6px 10px',
-                  borderRadius: 999,
-                  backgroundColor: '#141418',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                  color: 'rgba(255,255,255,0.72)',
-                  fontSize: 12,
-                  fontWeight: 600,
+                  marginTop: 24,
+                  maxWidth: 280,
+                  textAlign: 'center',
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  lineHeight: 1.15,
                 }}
               >
-                {step.tab} tab
+                {step.heading}
               </div>
-            ) : null}
 
-            <div style={{ flex: 1 }} />
+              <div
+                style={{
+                  marginTop: 12,
+                  maxWidth: 300,
+                  textAlign: 'center',
+                  fontSize: 15,
+                  fontWeight: 500,
+                  color: MUTED,
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-line',
+                }}
+              >
+                {step.copy}
+              </div>
 
-            <Dots current={idx} total={total} />
+              {step.tab ? (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    backgroundColor: '#141418',
+                    border: '1px solid rgba(255,255,255,0.10)',
+                    color: 'rgba(255,255,255,0.72)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {step.tab}
+                </div>
+              ) : null}
 
-            <button
-              type="button"
-              className="btn-press"
-              onClick={handleAdvance}
-              style={{
-                marginTop: 14,
-                width: 'min(520px, calc(100vw - 32px))',
-                height: 52,
-                borderRadius: 14,
-                border: 'none',
-                backgroundColor: PURPLE,
-                color: '#fff',
-                fontSize: 15,
-                fontWeight: 800,
-                cursor: 'pointer',
-                alignSelf: 'center',
-              }}
-            >
-              {idx >= total - 1 ? "Let's go" : 'Next →'}
-            </button>
-          </>
-        )}
+              <div style={{ height: 22 }} />
+              <Dots current={idx} />
+            </>
+          )}
+        </div>
+
+        {/* Bottom section */}
+        <button
+          type="button"
+          className="btn-press"
+          onClick={() => {
+            if (isEndCard) {
+              void onSkip()
+              return
+            }
+            handleAdvance()
+          }}
+          style={{
+            width: 'min(520px, calc(100vw - 32px))',
+            height: 52,
+            borderRadius: 14,
+            border: 'none',
+            backgroundColor: PURPLE,
+            color: '#fff',
+            fontSize: 15,
+            fontWeight: 800,
+            cursor: 'pointer',
+            alignSelf: 'center',
+            marginBottom: 4,
+          }}
+        >
+          {isEndCard ? "Let's go" : 'Next →'}
+        </button>
       </div>
     </div>
   )
 }
 
-function Dots({ current, total }: { current: number; total: number }) {
-  const count = Math.max(0, total - 1) // end card excludes dots
+function Dots({ current }: { current: number }) {
+  const count = 5
   return (
     <div
       style={{
@@ -307,65 +336,6 @@ function Dots({ current, total }: { current: number; total: number }) {
         />
       ))}
     </div>
-  )
-}
-
-function EndCard({ onGo }: { onGo: () => void }) {
-  return (
-    <>
-      <div style={{ flex: 1 }} />
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          width: 'min(420px, 100%)',
-        }}
-      >
-        <CheckCircle2 size={64} color={PURPLE} strokeWidth={2.25} aria-hidden />
-        <div
-          style={{
-            marginTop: 18,
-            fontSize: 28,
-            fontWeight: 800,
-            color: '#fff',
-          }}
-        >
-          You&apos;re set.
-        </div>
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: 16,
-            fontWeight: 600,
-            color: MUTED,
-          }}
-        >
-          Now go build something.
-        </div>
-      </div>
-      <div style={{ flex: 1 }} />
-      <button
-        type="button"
-        className="btn-press"
-        onClick={onGo}
-        style={{
-          width: 'min(520px, calc(100vw - 32px))',
-          height: 52,
-          borderRadius: 14,
-          border: 'none',
-          backgroundColor: PURPLE,
-          color: '#fff',
-          fontSize: 15,
-          fontWeight: 800,
-          cursor: 'pointer',
-          alignSelf: 'center',
-        }}
-      >
-        Let&apos;s go
-      </button>
-    </>
   )
 }
 
