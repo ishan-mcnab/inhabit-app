@@ -296,7 +296,7 @@ export function Lifestyle() {
             </p>
           ) : null}
 
-          <section data-tutorial="routines-section">
+          <section>
             <div className="-mx-1 flex items-center gap-3">
               <h2
                 className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
@@ -331,44 +331,42 @@ export function Lifestyle() {
           </section>
 
           {healthUserId ? (
-            <div data-tutorial="health-trackers">
-              <HealthTrackersSection
-                userId={healthUserId}
-                todayYmd={healthYmd}
-                snapshot={health}
-                loading={loading}
-                onSleepSaved={(row) =>
-                  setHealth((h) => ({
-                    ...h,
-                    sleep: {
-                      bedtime: row.bedtime,
-                      wake_time: row.wake_time,
-                      rest_rating: row.rest_rating,
-                      notes: row.notes,
-                    },
-                  }))
-                }
-                onWaterSaved={(glasses_count) =>
-                  setHealth((h) => ({
-                    ...h,
-                    water: {
-                      glasses_count,
-                      daily_target: h.water?.daily_target ?? 8,
-                    },
-                  }))
-                }
-                onMoodSaved={(row) =>
-                  setHealth((h) => ({
-                    ...h,
-                    mood: {
-                      mood_rating: row.mood_rating,
-                      energy_rating: row.energy_rating,
-                      notes: row.notes,
-                    },
-                  }))
-                }
-              />
-            </div>
+            <HealthTrackersSection
+              userId={healthUserId}
+              todayYmd={healthYmd}
+              snapshot={health}
+              loading={loading}
+              onSleepSaved={(row) =>
+                setHealth((h) => ({
+                  ...h,
+                  sleep: {
+                    bedtime: row.bedtime,
+                    wake_time: row.wake_time,
+                    rest_rating: row.rest_rating,
+                    notes: row.notes,
+                  },
+                }))
+              }
+              onWaterSaved={(glasses_count) =>
+                setHealth((h) => ({
+                  ...h,
+                  water: {
+                    glasses_count,
+                    daily_target: h.water?.daily_target ?? 8,
+                  },
+                }))
+              }
+              onMoodSaved={(row) =>
+                setHealth((h) => ({
+                  ...h,
+                  mood: {
+                    mood_rating: row.mood_rating,
+                    energy_rating: row.energy_rating,
+                    notes: row.notes,
+                  },
+                }))
+              }
+            />
           ) : null}
         </div>
       </div>

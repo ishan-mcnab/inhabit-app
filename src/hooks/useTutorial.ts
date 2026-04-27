@@ -2,121 +2,124 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
 
-export type TutorialTab = 'today' | 'goals' | 'lifestyle' | 'progress' | 'profile'
-
 export type TutorialStep = {
   id: number
-  tab: TutorialTab
-  targetSelector: string | null
+  icon:
+    | 'BarChart2'
+    | 'CheckSquare'
+    | 'Zap'
+    | 'Repeat'
+    | 'Flag'
+    | 'Sparkles'
+    | 'PenLine'
+    | 'Sun'
+    | 'Moon'
+    | 'TrendingUp'
+    | 'BookOpen'
+    | 'Shield'
+    | 'Award'
+    | 'CheckCircle2'
+  tab: 'Today' | 'Goals' | 'Lifestyle' | 'Progress' | 'Profile' | null
   heading: string
   copy: string
-  isTabTransition?: boolean
-  transitionLabel?: string
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 1,
-    tab: 'today',
-    targetSelector: '[data-tutorial="xp-bar"]',
-    heading: 'Your rank',
-    copy: 'Every action earns XP. Fill the bar, level up. Your rank resets every Monday — earn it back.',
+    icon: 'BarChart2',
+    tab: 'Today',
+    heading: 'Your rank & XP',
+    copy: 'Every action earns XP. Fill the bar and level up. Your rank resets every Monday — earn it back every week.',
   },
   {
     id: 2,
-    tab: 'today',
-    targetSelector: '[data-tutorial="missions-list"]',
+    icon: 'CheckSquare',
+    tab: 'Today',
     heading: 'Your missions',
     copy: 'AI-built around your goals. Complete them daily. Miss a day and your streak takes the hit.',
   },
   {
     id: 3,
-    tab: 'today',
-    targetSelector: '[data-tutorial="first-mission"]',
-    heading: 'Mark it done',
-    copy: "Tap the circle to complete a mission. That's how XP moves.",
+    icon: 'Zap',
+    tab: 'Today',
+    heading: 'Earn XP',
+    copy: 'Tap the circle on any mission to mark it done. Complete all missions in a day for a full clear bonus.',
   },
   {
     id: 4,
-    tab: 'today',
-    targetSelector: '[data-tutorial="habits-section"]',
+    icon: 'Repeat',
+    tab: 'Today',
     heading: 'Your habits',
-    copy: 'Daily recurring behaviors. Track them every day. Streaks compound over time.',
+    copy: 'Daily recurring behaviors that compound over time. Track them every day. Streaks matter more than single sessions.',
   },
   {
     id: 5,
-    tab: 'today',
-    targetSelector: '[data-tutorial="lifestyle-tab"]',
-    heading: 'Sleep. Water. Routines.',
-    copy: 'The Lifestyle tab. Build your morning and evening routines. Log your wellness daily.',
+    icon: 'Flag',
+    tab: 'Goals',
+    heading: 'Your goals',
+    copy: 'Each goal gets a 4-week quest plan and daily missions built by AI. Tap into any goal to track your weekly milestones.',
   },
   {
     id: 6,
-    tab: 'goals',
-    targetSelector: '[data-tutorial="first-goal"]',
-    heading: 'Your goals',
-    copy: 'Each goal has its own quest plan and daily missions. Tap in to track progress.',
+    icon: 'Sparkles',
+    tab: 'Goals',
+    heading: 'Need ideas?',
+    copy: 'InHabit can suggest goals based on your profile and focus areas. Tap ✨ on the Goals tab to see what fits.',
   },
   {
     id: 7,
-    tab: 'goals',
-    targetSelector: '[data-tutorial="suggest-goals"]',
-    heading: 'Need ideas?',
-    copy: 'InHabit can suggest goals based on your profile. Tap to see what fits.',
+    icon: 'PenLine',
+    tab: 'Goals',
+    heading: 'Build your own plan',
+    copy: "Not feeling the AI plan? Choose 'I'll plan it myself' when creating a goal and write your own quests and missions.",
   },
   {
     id: 8,
-    tab: 'goals',
-    targetSelector: '[data-tutorial="add-goal"]',
-    heading: 'Add a goal anytime',
-    copy: 'New goal, new plan. InHabit builds it around you.',
+    icon: 'Sun',
+    tab: 'Lifestyle',
+    heading: 'Morning & evening routines',
+    copy: 'Build a repeatable daily routine. Add your own steps, check them off in order. Complete the full stack for bonus XP.',
   },
   {
     id: 9,
-    tab: 'lifestyle',
-    targetSelector: '[data-tutorial="routines-section"]',
-    heading: 'Your routines',
-    copy: 'Build a morning or evening routine. Customise every step. Complete the stack for bonus XP.',
+    icon: 'Moon',
+    tab: 'Lifestyle',
+    heading: 'Track your wellness',
+    copy: 'Log sleep, water intake, and your mood and energy daily. Everything feeds into your weekly coaching insight.',
   },
   {
     id: 10,
-    tab: 'lifestyle',
-    targetSelector: '[data-tutorial="health-trackers"]',
-    heading: 'Track your wellness',
-    copy: 'Sleep, water, mood. Logged here. Feeds your weekly coaching insight back.',
+    icon: 'TrendingUp',
+    tab: 'Progress',
+    heading: 'Your progress',
+    copy: "XP charts, goal milestones, habit grids, and sleep trends. Everything you've built — visualized over time.",
   },
   {
     id: 11,
-    tab: 'progress',
-    targetSelector: '[data-tutorial="rank-shield-progress"]',
-    heading: 'Your progress',
-    copy: "XP charts, goal progress, habit grids. Everything you've built, visualized.",
+    icon: 'BookOpen',
+    tab: 'Progress',
+    heading: 'Weekly reflections',
+    copy: 'Every Sunday, answer 3 questions about your week. InHabit gives you a 2-sentence coaching insight based on your actual data.',
   },
   {
     id: 12,
-    tab: 'progress',
-    targetSelector: '[data-tutorial="reflections-section"]',
-    heading: 'Weekly reflections',
-    copy: 'Every Sunday, answer 3 questions about your week. InHabit gives you a 2-sentence coaching insight back.',
+    icon: 'Shield',
+    tab: 'Profile',
+    heading: 'Your rank',
+    copy: 'Recruit to Legend. Your rank is based on XP earned this week and resets every Monday. The grind never stops.',
   },
   {
     id: 13,
-    tab: 'profile',
-    targetSelector: '[data-tutorial="rank-shield-profile"]',
-    heading: 'Your rank',
-    copy: 'Recruit to Legend. Resets every Monday. The grind never stops.',
+    icon: 'Award',
+    tab: 'Profile',
+    heading: 'Your stats',
+    copy: 'Total XP, streak record, missions completed. Every number here is something you earned. Check your Profile to see the full picture.',
   },
   {
     id: 14,
-    tab: 'profile',
-    targetSelector: '[data-tutorial="stats-grid"]',
-    heading: 'Your stats',
-    copy: "Total XP, streak, missions done. Everything you've earned is tracked here.",
-  },
-  {
-    id: 15,
-    tab: 'profile',
-    targetSelector: null,
+    icon: 'CheckCircle2',
+    tab: null,
     heading: "You're set.",
     copy: 'Now go build something.',
   },
@@ -126,18 +129,14 @@ type TutorialState = {
   showTutorial: boolean
   currentStep: number
   loading: boolean
-  onboarded: boolean
-  completed: boolean
 }
 
-export function useTutorial(activeTab: TutorialTab) {
+export function useTutorial() {
   const { session } = useAuth()
   const [state, setState] = useState<TutorialState>({
     showTutorial: false,
     currentStep: 0,
     loading: true,
-    onboarded: false,
-    completed: false,
   })
 
   const steps = useMemo(() => TUTORIAL_STEPS, [])
@@ -150,7 +149,7 @@ export function useTutorial(activeTab: TutorialTab) {
         .update({ tutorial_completed: true })
         .eq('id', userId)
     }
-    setState((prev) => ({ ...prev, showTutorial: false, completed: true }))
+    setState((prev) => ({ ...prev, showTutorial: false }))
   }, [session?.user.id])
 
   const skipTutorial = useCallback(async () => {
@@ -158,23 +157,13 @@ export function useTutorial(activeTab: TutorialTab) {
   }, [completeTutorial])
 
   const nextStep = useCallback(() => {
-    setState((prev) => {
-      const next = prev.currentStep + 1
-      return { ...prev, currentStep: next }
-    })
-  }, [steps.length])
+    setState((prev) => ({ ...prev, currentStep: prev.currentStep + 1 }))
+  }, [])
 
   useEffect(() => {
     const userId = session?.user.id
     if (!userId) {
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        showTutorial: false,
-        onboarded: false,
-        completed: false,
-        currentStep: 0,
-      }))
+      setState({ showTutorial: false, currentStep: 0, loading: false })
       return
     }
 
@@ -186,38 +175,19 @@ export function useTutorial(activeTab: TutorialTab) {
         .maybeSingle()
 
       if (error) {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          showTutorial: false,
-          onboarded: false,
-          completed: false,
-          currentStep: 0,
-        }))
+        setState({ showTutorial: false, currentStep: 0, loading: false })
         return
       }
 
       const onboarded = data?.onboarded === true
       const completed = data?.tutorial_completed === true
-
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        showTutorial: false,
-        onboarded,
-        completed,
+      setState({
+        showTutorial: onboarded && !completed,
         currentStep: 0,
-      }))
+        loading: false,
+      })
     })()
   }, [session?.user.id])
-
-  useEffect(() => {
-    if (state.loading) return
-    if (!state.onboarded) return
-    if (state.completed) return
-    if (activeTab !== 'today') return
-    setState((prev) => (prev.showTutorial ? prev : { ...prev, showTutorial: true }))
-  }, [activeTab, state.completed, state.loading, state.onboarded])
 
   useEffect(() => {
     if (!state.showTutorial) return

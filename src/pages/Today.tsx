@@ -488,7 +488,6 @@ function LevelProgressCard({
           backgroundColor: LEVEL_CARD_BG,
           border: LEVEL_CARD_BORDER,
         }}
-        data-tutorial="xp-bar"
       >
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
@@ -2747,7 +2746,7 @@ export function Today() {
               </div>
             ) : !hasGoals ? (
               <>
-                <div className="-mx-4 mb-0 flex items-center gap-3 px-4" data-tutorial="missions-list">
+                <div className="-mx-4 mb-0 flex items-center gap-3 px-4">
                   <span
                     className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
                     style={{ color: MUTED_HEADING }}
@@ -2766,7 +2765,6 @@ export function Today() {
                       backgroundColor: '#141418',
                       borderColor: CARD_BORDER,
                     }}
-                    data-tutorial="first-mission"
                   >
                     <Target
                       size={32}
@@ -2808,11 +2806,8 @@ export function Today() {
                 />
               </div>
             ) : hasGoals && missions.length === 0 ? (
-              <div
-                className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8"
-                data-tutorial="missions-list"
-              >
-                <div className="w-full" data-tutorial="first-mission">
+              <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">
+                <div className="w-full">
                   <StateCard>
                     <p className="text-lg font-bold text-white">
                       Some missions couldn&apos;t load
@@ -2850,7 +2845,7 @@ export function Today() {
                 {missionActionError}
               </p>
             ) : null}
-            <div className="-mx-4 mb-0 flex items-center gap-3 px-4" data-tutorial="missions-list">
+            <div className="-mx-4 mb-0 flex items-center gap-3 px-4">
               <span
                 className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"
                 style={{ color: MUTED_HEADING }}
@@ -2886,7 +2881,6 @@ export function Today() {
                       backgroundColor: CARD_SURFACE,
                       borderColor: CARD_BORDER,
                     }}
-                    {...(index === 0 ? { 'data-tutorial': 'first-mission' } : null)}
                     onPointerDownCapture={(e) => {
                       if (m.completed) return
                       const el = e.target
@@ -3073,7 +3067,7 @@ export function Today() {
                   aria-hidden
                 />
                 <section aria-labelledby="today-habits-heading">
-                  <div className="-mx-4 flex items-center gap-3 px-4" data-tutorial="habits-section">
+                  <div className="-mx-4 flex items-center gap-3 px-4">
                     <h2
                       id="today-habits-heading"
                       className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]"

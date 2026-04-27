@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   CalendarDays,
   ChartNoAxesCombined,
@@ -14,7 +14,7 @@ import { Progress } from '../pages/Progress'
 import { Today } from '../pages/Today'
 import { useNotifications } from '../context/NotificationContext'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
-import { useTutorial, type TutorialTab } from '../hooks/useTutorial'
+import { useTutorial } from '../hooks/useTutorial'
 import { PageErrorBoundary } from './PageErrorBoundary'
 import { PWAInstallPrompt } from './PWAInstallPrompt'
 import { TutorialOverlay } from './tutorial/TutorialOverlay'
@@ -56,31 +56,7 @@ const tabs = [
   { to: '/profile', label: 'Profile', badge: null, Icon: User },
 ] as const
 
-function tabFromPath(pathname: string): TutorialTab {
-  if (pathname === '/' || pathname === '/today') return 'today'
-  if (pathname.startsWith('/goals')) return 'goals'
-  if (pathname.startsWith('/lifestyle')) return 'lifestyle'
-  if (pathname.startsWith('/progress')) return 'progress'
-  return 'profile'
-}
-
-function tabLabel(tab: TutorialTab): string {
-  switch (tab) {
-    case 'today':
-      return 'Today'
-    case 'goals':
-      return 'Goals'
-    case 'lifestyle':
-      return 'Lifestyle'
-    case 'progress':
-      return 'Progress'
-    case 'profile':
-      return 'Profile'
-  }
-}
-
 export function Layout() {
-  const navigate = useNavigate()
   const location = useLocation()
   const pathname = location.pathname
   const isMainTab = isMainTabPath(pathname)
@@ -103,154 +79,24 @@ export function Layout() {
     (localHour >= 18 && incompleteMissionsCount > 0) || reflectionDue
   const goalsTabBadge = goalsNeedingAttention > 0
 
-  const activeTab = tabFromPath(pathname)
   const { steps, showTutorial, currentStep, nextStep, skipTutorial } =
-    useTutorial(activeTab)
+    useTutorial()
 
-  const [tutorialActiveTab, setTutorialActiveTab] = useState<TutorialTab>(
-    activeTab,
-  )
-  const [isTabTransition, setIsTabTransition] = useState(false)
-  const [transitionLabel, setTransitionLabel] = useState('')
-
-  const targetRef = useRef<HTMLElement | null>(null)
-  const [goalsEmptyForTutorial, setGoalsEmptyForTutorial] = useState(false)
-
-  useEffect(() => {
-    if (!showTutorial) {
-      setTutorialActiveTab(activeTab)
-      setIsTabTransition(false)
-      return
-    }
-    // When tutorial starts, pin tab display to current tab.
-    setTutorialActiveTab((prev) => prev ?? activeTab)
-  }, [activeTab, showTutorial])
-
-  const effectiveTab: TutorialTab = showTutorial ? tutorialActiveTab : activeTab
-
-  const showToday = effectiveTab === 'today'
-  const showGoals = effectiveTab === 'goals'
-  const showLifestyle = effectiveTab === 'lifestyle'
-  const showProgress = effectiveTab === 'progress'
-  const showProfile = effectiveTab === 'profile'
-
-  const effectiveSteps = useMemo(() => {
-    const s = [...steps]
-    return s.map((st) => {
-      if (st.id === 6 && goalsEmptyForTutorial) {
-        return {
-          ...st,
-          heading: 'Set your first goal',
-          copy: 'InHabit builds a 4-week quest plan and daily missions around it automatically.',
-        }
-      }
-      return st
-    })
-  }, [goalsEmptyForTutorial, steps])
-
-  useEffect(() => {
-    if (!showTutorial) return
-    const step = effectiveSteps[currentStep]
-    if (!step) return
-
-    // Goals step 7 only exists when suggest button exists.
-    if (step.id === 7) {
-      const el = document.querySelector(step.targetSelector ?? '')
-      if (!el) {
-        nextStep()
-      }
-    }
-  }, [currentStep, effectiveSteps, nextStep, showTutorial])
-
-  useEffect(() => {
-    if (!showTutorial) {
-      setGoalsEmptyForTutorial(false)
-      return
-    }
-    const step = steps[currentStep]
-    if (!step || step.id !== 6) {
-      setGoalsEmptyForTutorial(false)
-      return
-    }
-    const el = document.querySelector(step.targetSelector ?? '')
-    if (el instanceof HTMLElement) {
-      setGoalsEmptyForTutorial(el.dataset.tutorialVariant === 'empty')
-    } else {
-      setGoalsEmptyForTutorial(false)
-    }
-  }, [currentStep, showTutorial, steps])
-
-  useEffect(() => {
-    if (!showTutorial) return
-    const step = effectiveSteps[currentStep]
-    if (!step) return
-
-    const nextTab = step.tab
-    if (nextTab !== tutorialActiveTab && !isTabTransition) {
-      setIsTabTransition(true)
-      setTransitionLabel(`${tabLabel(nextTab)} →`)
-      window.setTimeout(() => {
-        setTutorialActiveTab(nextTab)
-        void navigate(`/${nextTab}`, { replace: true })
-        setIsTabTransition(false)
-      }, 500)
-    }
-  }, [
-    currentStep,
-    effectiveSteps,
-    isTabTransition,
-    navigate,
-    showTutorial,
-    tutorialActiveTab,
-  ])
-
-  useEffect(() => {
-    if (!showTutorial) {
-      targetRef.current = null
-      return
-    }
-
-    if (isTabTransition) {
-      targetRef.current = null
-      return
-    }
-
-    const step = effectiveSteps[currentStep]
-    if (!step || !step.targetSelector) {
-      targetRef.current = null
-      return
-    }
-
-    targetRef.current = null
-    const t = window.setTimeout(() => {
-      const selector = step.targetSelector
-      if (!selector) {
-        targetRef.current = null
-        return
-      }
-      const el = document.querySelector(selector)
-      targetRef.current = el instanceof HTMLElement ? el : null
-    }, 100)
-    return () => window.clearTimeout(t)
-  }, [currentStep, effectiveSteps, isTabTransition, showTutorial, tutorialActiveTab])
-
-  const handleTutorialNext = () => {
-    if (isTabTransition) return
-    nextStep()
-  }
+  const showToday = pathname === '/today' || pathname === '/'
+  const showGoals = pathname === '/goals'
+  const showLifestyle = pathname === '/lifestyle'
+  const showProgress = pathname === '/progress'
+  const showProfile = pathname === '/profile'
 
   return (
     <div className="relative flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden bg-app-bg">
       <PWAInstallPrompt />
       {showTutorial ? (
         <TutorialOverlay
-          steps={effectiveSteps}
+          steps={steps}
           currentStep={currentStep}
-          onNext={handleTutorialNext}
+          onNext={nextStep}
           onSkip={skipTutorial}
-          targetRef={targetRef}
-          isTabTransition={isTabTransition}
-          transitionLabel={transitionLabel}
         />
       ) : null}
       <div
@@ -405,9 +251,6 @@ export function Layout() {
                     className="shrink-0"
                     style={{ color: isActive ? '#ffffff' : TAB_MUTED }}
                     aria-hidden
-                    {...(to === '/lifestyle'
-                      ? { 'data-tutorial': 'lifestyle-tab' }
-                      : null)}
                   />
                   {badge === 'today' && todayTabBadge ? (
                     <span
