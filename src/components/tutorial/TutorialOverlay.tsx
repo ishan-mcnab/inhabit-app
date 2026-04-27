@@ -56,10 +56,6 @@ export function TutorialOverlay({
   const step = steps[clamp(currentStep, 0, steps.length - 1)]
 
   const [rect, setRect] = useState<Rect | null>(null)
-  const [tooltipTopLeft, setTooltipTopLeft] = useState<{
-    top: number
-    left: number
-  } | null>(null)
 
   const isEndCard = step?.targetSelector === null && step?.heading === "You're set."
 
@@ -72,48 +68,22 @@ export function TutorialOverlay({
   useLayoutEffect(() => {
     if (isTabTransition || isEndCard) {
       setRect(null)
-      setTooltipTopLeft(null)
       return
     }
 
     const el = targetRef?.current ?? null
     if (!el) {
       setRect(null)
-      setTooltipTopLeft(null)
       return
     }
 
     const r = el.getBoundingClientRect()
-    const nextRect = {
+    setRect({
       top: r.top,
       left: r.left,
       width: r.width,
       height: r.height,
-    }
-    setRect(nextRect)
-
-    const screenH = window.innerHeight
-    const screenW = window.innerWidth
-    const centerX = nextRect.left + nextRect.width / 2
-
-    const preferAbove =
-      nextRect.top + nextRect.height / 2 > screenH * 0.5 ||
-      (screenW <= 375 && nextRect.top + nextRect.height / 2 > screenH * 0.4)
-
-    const tooltipWidth = Math.min(300, Math.max(220, screenW - 32))
-    const left = clamp(centerX - tooltipWidth / 2, 16, screenW - 16 - tooltipWidth)
-
-    const gap = 12
-    const estimatedHeight = 120
-    const top = preferAbove
-      ? clamp(nextRect.top - gap - estimatedHeight, 16, screenH - 16 - estimatedHeight)
-      : clamp(
-          nextRect.top + nextRect.height + gap,
-          16,
-          screenH - 16 - estimatedHeight,
-        )
-
-    setTooltipTopLeft({ top, left })
+    })
   }, [currentStep, isEndCard, isTabTransition, targetRef])
 
   useEffect(() => {
@@ -130,7 +100,6 @@ export function TutorialOverlay({
       const el = targetRef?.current ?? null
       if (!el) {
         setRect(null)
-        setTooltipTopLeft(null)
         return
       }
       const r = el.getBoundingClientRect()
@@ -144,40 +113,128 @@ export function TutorialOverlay({
     }
   }, [isEndCard, isTabTransition, targetRef])
 
-  const handleBackdropTap = () => {
-    onNext()
-  }
+  const tooltipPlacement = useMemo(() => {
+    if (!rect) return { mode: 'center' as const, top: 0 }
+    const screenH = window.innerHeight
+    const below = rect.top + rect.height
+    const shouldGoBelow = below < screenH * 0.6
+    const gap = 14
+    return {
+      mode: 'anchored' as const,
+      top: shouldGoBelow ? below + gap : rect.top - gap,
+      above: !shouldGoBelow,
+    }
+  }, [rect])
+
+  const overlayPieces = useMemo(() => {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+
+    if (!rect) {
+      return {
+        top: { left: 0, top: 0, width: vw, height: vh },
+        left: { left: 0, top: 0, width: 0, height: 0 },
+        right: { left: vw, top: 0, width: 0, height: 0 },
+        bottom: { left: 0, top: vh, width: vw, height: 0 },
+      }
+    }
+
+    const topH = Math.max(0, rect.top)
+    const bottomTop = Math.max(0, rect.top + rect.height)
+    const bottomH = Math.max(0, vh - bottomTop)
+    const leftW = Math.max(0, rect.left)
+    const rightLeft = Math.max(0, rect.left + rect.width)
+    const rightW = Math.max(0, vw - rightLeft)
+
+    return {
+      top: { left: 0, top: 0, width: vw, height: topH },
+      bottom: { left: 0, top: bottomTop, width: vw, height: bottomH },
+      left: { left: 0, top: rect.top, width: leftW, height: rect.height },
+      right: { left: rightLeft, top: rect.top, width: rightW, height: rect.height },
+    }
+  }, [rect])
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Tutorial"
-      onClick={handleBackdropTap}
-    >
+    <>
+      <button
+        type="button"
+        onClick={() => onNext()}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9997,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          cursor: 'pointer',
+        }}
+        aria-label="Next tutorial step"
+      />
+
+      {/* Four-piece surround overlay (transparent hole) */}
       <div
         style={{
-          position: 'absolute',
-          inset: 0,
+          position: 'fixed',
+          left: overlayPieces.top.left,
+          top: overlayPieces.top.top,
+          width: overlayPieces.top.width,
+          height: overlayPieces.top.height,
           background: BACKDROP,
+          zIndex: 9998,
+          pointerEvents: 'none',
+        }}
+        aria-hidden
+      />
+      <div
+        style={{
+          position: 'fixed',
+          left: overlayPieces.bottom.left,
+          top: overlayPieces.bottom.top,
+          width: overlayPieces.bottom.width,
+          height: overlayPieces.bottom.height,
+          background: BACKDROP,
+          zIndex: 9998,
+          pointerEvents: 'none',
+        }}
+        aria-hidden
+      />
+      <div
+        style={{
+          position: 'fixed',
+          left: overlayPieces.left.left,
+          top: overlayPieces.left.top,
+          width: overlayPieces.left.width,
+          height: overlayPieces.left.height,
+          background: BACKDROP,
+          zIndex: 9998,
+          pointerEvents: 'none',
+        }}
+        aria-hidden
+      />
+      <div
+        style={{
+          position: 'fixed',
+          left: overlayPieces.right.left,
+          top: overlayPieces.right.top,
+          width: overlayPieces.right.width,
+          height: overlayPieces.right.height,
+          background: BACKDROP,
+          zIndex: 9998,
+          pointerEvents: 'none',
         }}
         aria-hidden
       />
 
       <div
         style={{
-          position: 'absolute',
+          position: 'fixed',
           top: 0,
           left: 0,
           height: 3,
           width: `${progressPct}%`,
           backgroundColor: '#534AB7',
           transition: 'width 0.3s ease',
+          zIndex: 10001,
         }}
         aria-hidden
       />
@@ -185,18 +242,19 @@ export function TutorialOverlay({
       <button
         type="button"
         onClick={(e) => {
-          e.stopPropagation()
+          e.preventDefault()
           void onSkip()
         }}
         style={{
-          position: 'absolute',
-          top: 'max(12px, env(safe-area-inset-top, 0px))',
-          right: 14,
+          position: 'fixed',
+          top: 16,
+          right: 16,
           zIndex: 10001,
-          padding: '8px 10px',
-          background: 'transparent',
-          border: 'none',
-          color: 'rgba(255,255,255,0.78)',
+          padding: '6px 14px',
+          background: 'rgba(0,0,0,0.5)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 20,
+          color: 'rgba(255,255,255,0.86)',
           fontSize: 13,
           fontWeight: 500,
           cursor: 'pointer',
@@ -204,6 +262,26 @@ export function TutorialOverlay({
       >
         Skip
       </button>
+
+      {/* Highlight border around the hole */}
+      {rect ? (
+        <div
+          style={{
+            position: 'fixed',
+            left: rect.left - 2,
+            top: rect.top - 2,
+            width: rect.width + 4,
+            height: rect.height + 4,
+            border: '2px solid rgba(83,74,183,0.8)',
+            borderRadius: 10,
+            boxShadow: '0 0 16px rgba(83,74,183,0.4)',
+            pointerEvents: 'none',
+            zIndex: 9999,
+            background: 'transparent',
+          }}
+          aria-hidden
+        />
+      ) : null}
 
       {isTabTransition ? (
         <TabTransitionCard
@@ -218,68 +296,58 @@ export function TutorialOverlay({
             void onSkip()
           }}
         />
-      ) : rect ? (
-        <>
-          <div
-            style={{
-              position: 'absolute',
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height,
-              borderRadius: 8,
-              boxShadow: `0 0 0 9999px ${BACKDROP}, 0 0 0 2px rgba(83,74,183,0.6)`,
-              pointerEvents: 'none',
-            }}
-            aria-hidden
-          />
-          <Tooltip
-            heading={step.heading}
-            copy={step.copy}
-            top={tooltipTopLeft?.top ?? window.innerHeight / 2 - 70}
-            left={tooltipTopLeft?.left ?? 16}
-          />
-        </>
       ) : (
         <Tooltip
           heading={step.heading}
           copy={step.copy}
-          top={window.innerHeight / 2 - 70}
-          left={Math.max(16, window.innerWidth / 2 - 150)}
-          centered
+          rect={rect}
+          placement={tooltipPlacement}
         />
       )}
-    </div>
+    </>
   )
 }
 
 function Tooltip({
   heading,
   copy,
-  top,
-  left,
-  centered,
+  rect,
+  placement,
 }: {
   heading: string
   copy: string
-  top: number
-  left: number
-  centered?: boolean
+  rect: Rect | null
+  placement:
+    | { mode: 'center' }
+    | { mode: 'anchored'; top: number; above: boolean }
 }) {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const maxWidth = Math.min(300, Math.floor(vw * 0.9))
+  const left = Math.round((vw - maxWidth) / 2)
+
+  let top = Math.round(vh / 2 - 70)
+  if (placement.mode === 'anchored' && rect) {
+    const approxHeight = 118
+    top = placement.above
+      ? Math.max(16, placement.top - approxHeight)
+      : Math.min(vh - 16 - approxHeight, placement.top)
+    // If anchored-above, `placement.top` is the rect.top - gap. We used approx height.
+    // If anchored-below, `placement.top` is rect.bottom + gap.
+  }
+
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top,
         left,
-        width: 'min(300px, calc(100vw - 32px))',
-        maxWidth: 300,
+        width: maxWidth,
         padding: '16px 20px',
         borderRadius: 12,
-        backgroundColor: '#141418',
-        border: '1px solid rgba(255,255,255,0.1)',
-        zIndex: 10001,
-        transform: centered ? 'translateX(-0%)' : undefined,
+        backgroundColor: '#1a1a1e',
+        border: '1px solid rgba(255,255,255,0.12)',
+        zIndex: 10000,
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -315,12 +383,12 @@ function TabTransitionCard({
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         inset: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 10001,
+        zIndex: 10000,
         pointerEvents: 'none',
       }}
       aria-hidden
@@ -349,7 +417,7 @@ function EndCard({ onGo }: { onGo: (e: React.MouseEvent) => void }) {
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         inset: 0,
         display: 'flex',
         alignItems: 'center',

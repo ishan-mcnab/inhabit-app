@@ -221,8 +221,17 @@ export function Layout() {
       return
     }
 
-    const el = document.querySelector(step.targetSelector)
-    targetRef.current = el instanceof HTMLElement ? el : null
+    targetRef.current = null
+    const t = window.setTimeout(() => {
+      const selector = step.targetSelector
+      if (!selector) {
+        targetRef.current = null
+        return
+      }
+      const el = document.querySelector(selector)
+      targetRef.current = el instanceof HTMLElement ? el : null
+    }, 100)
+    return () => window.clearTimeout(t)
   }, [currentStep, effectiveSteps, isTabTransition, showTutorial, tutorialActiveTab])
 
   const handleTutorialNext = () => {
