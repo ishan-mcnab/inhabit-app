@@ -572,16 +572,14 @@ export function Goals() {
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {goals.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => void openSuggestions()}
-              className="btn-press flex items-center gap-1.5 rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-2 text-sm font-bold text-[#534AB7] transition-colors hover:bg-white/5"
-            >
-              <Sparkles size={14} aria-hidden strokeWidth={2} />
-              Suggest goals
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={() => void openSuggestions()}
+            className="btn-press flex items-center gap-1.5 rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-2 text-sm font-bold text-[#534AB7] transition-colors hover:bg-white/5"
+          >
+            <Sparkles size={14} aria-hidden strokeWidth={2} />
+            Suggest goals
+          </button>
           <Link
             to="/goals/new"
             aria-label="Create new goal"
