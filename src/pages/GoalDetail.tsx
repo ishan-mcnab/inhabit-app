@@ -613,10 +613,12 @@ export function GoalDetail() {
     setGoal((g) => (g ? { ...g, status: 'active' } : g))
     appCache.invalidate(goalsCacheKey(userId))
     appCache.invalidate(missionsCacheKey(userId, formatLocalDate(new Date())))
-    try {
-      await ensureCurrentWeekMissionsForResumedGoal(userId, goalId)
-    } catch (e) {
-      console.error('ensureCurrentWeekMissionsForResumedGoal failed:', e)
+    const weekMissions = await ensureCurrentWeekMissionsForResumedGoal(
+      userId,
+      goalId,
+    )
+    if (!weekMissions.ok) {
+      setError(weekMissions.message)
     }
     setResumingGoal(false)
     setGoalToast('Goal resumed!')

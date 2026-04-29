@@ -101,6 +101,59 @@ type SubmitPhase =
   | 'saving_missions'
   | 'success'
   | 'partial_done'
+  | 'mission_gen_failed'
+
+type PendingAiMissionContext = {
+  goalId: string
+  userId: string
+  trimmedTitle: string
+  category: GoalCategoryId
+  targetDate: string
+  userContext: Record<string, unknown> | undefined
+  batchStartWeek: number
+  batchEndWeek: number
+  totalWeeks: number
+}
+
+async function persistAiMissionsForNewGoal(
+  goalId: string,
+  userId: string,
+  batchStartWeek: number,
+  missions: Awaited<ReturnType<typeof generateMissions>>,
+): Promise<'weekly_failed' | 'daily_failed' | 'ok'> {
+  const base = new Date()
+  base.setHours(0, 0, 0, 0)
+
+  const weeklyRows = missions.weekly_quests.map((questTitle, i) => ({
+    goal_id: goalId,
+    user_id: userId,
+    title: questTitle,
+    week_number: batchStartWeek + i,
+    completed: false,
+    xp_reward: 150,
+  }))
+
+  const { error: weeklyError } = await supabase
+    .from('weekly_quests')
+    .insert(weeklyRows)
+
+  if (weeklyError) return 'weekly_failed'
+
+  const dailyRows = missions.daily_missions.map((missionTitle, i) => ({
+    goal_id: goalId,
+    user_id: userId,
+    title: missionTitle,
+    completed: false,
+    xp_reward: 25,
+    due_date: formatLocalDate(addDays(base, i)),
+  }))
+
+  const { error: dailyError } = await supabase.from('daily_missions').insert(dailyRows)
+
+  if (dailyError) return 'daily_failed'
+
+  return 'ok'
+}
 
 type PlanType = 'ai' | 'custom'
 
@@ -158,6 +211,14 @@ export function CreateGoal() {
   const [infoBanner, setInfoBanner] = useState<string | null>(null)
   const [submitPhase, setSubmitPhase] = useState<SubmitPhase>('idle')
   const [planType, setPlanType] = useState<PlanType>('ai')
+  const [missionGenWorking, setMissionGenWorking] = useState(false)
+  const [missionGenFailureMessage, setMissionGenFailureMessage] = useState<
+    string | null
+  >(null)
+  const [missionFailedGoalId, setMissionFailedGoalId] = useState<string | null>(
+    null,
+  )
+  const pendingMissionRef = useRef<PendingAiMissionContext | null>(null)
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -207,8 +268,19 @@ export function CreateGoal() {
     customMaxStr,
   ])
 
-  const formLocked =
+  const inputLocked =
     submitPhase === 'saving_goal' ||
+    missionGenWorking ||
+    (planType === 'ai' &&
+      (submitPhase === 'generating' ||
+        submitPhase === 'saving_missions' ||
+        submitPhase === 'success' ||
+        submitPhase === 'partial_done' ||
+        submitPhase === 'mission_gen_failed'))
+
+  const primarySubmitLocked =
+    submitPhase === 'saving_goal' ||
+    missionGenWorking ||
     (planType === 'ai' &&
       (submitPhase === 'generating' ||
         submitPhase === 'saving_missions' ||
@@ -257,10 +329,78 @@ export function CreateGoal() {
     scheduleNavigateGoals(1600)
   }
 
+  async function handleRetryGenerateMissions() {
+    const ctx = pendingMissionRef.current
+    if (!ctx) return
+    setMissionGenWorking(true)
+    setMissionGenFailureMessage(null)
+    setFormError(null)
+    setInfoBanner(null)
+    setSubmitPhase('generating')
+    try {
+      let missions: Awaited<ReturnType<typeof generateMissions>>
+      try {
+        missions = await generateMissions(
+          ctx.trimmedTitle,
+          ctx.category,
+          ctx.targetDate,
+          ctx.userContext,
+          ctx.batchStartWeek,
+          ctx.batchEndWeek,
+          ctx.totalWeeks,
+        )
+      } catch {
+        await new Promise((r) => window.setTimeout(r, 3000))
+        missions = await generateMissions(
+          ctx.trimmedTitle,
+          ctx.category,
+          ctx.targetDate,
+          ctx.userContext,
+          ctx.batchStartWeek,
+          ctx.batchEndWeek,
+          ctx.totalWeeks,
+        )
+      }
+
+      const persist = await persistAiMissionsForNewGoal(
+        ctx.goalId,
+        ctx.userId,
+        ctx.batchStartWeek,
+        missions,
+      )
+      if (persist === 'weekly_failed' || persist === 'daily_failed') {
+        pendingMissionRef.current = null
+        setMissionFailedGoalId(null)
+        goPartialSuccess()
+        return
+      }
+
+      appCache.invalidate(goalsCacheKey(ctx.userId))
+      appCache.invalidate(
+        missionsCacheKey(ctx.userId, formatLocalDate(new Date())),
+      )
+      pendingMissionRef.current = null
+      setMissionFailedGoalId(null)
+      setSubmitPhase('success')
+      scheduleNavigateGoals(900)
+    } catch (err) {
+      console.error('generateMissions manual retry:', err)
+      setMissionGenFailureMessage(
+        err instanceof Error ? err.message : 'Mission generation failed.',
+      )
+      setSubmitPhase('mission_gen_failed')
+    } finally {
+      setMissionGenWorking(false)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setFormError(null)
     setInfoBanner(null)
+    setMissionGenFailureMessage(null)
+    setMissionFailedGoalId(null)
+    pendingMissionRef.current = null
 
     const trimmedTitle = title.trim()
     let valid = true
@@ -352,7 +492,33 @@ export function CreateGoal() {
 
     let missions: Awaited<ReturnType<typeof generateMissions>>
     try {
-      missions = await generateMissions(
+      try {
+        missions = await generateMissions(
+          trimmedTitle,
+          category,
+          targetDate,
+          userContext,
+          batchStartWeek,
+          batchEndWeek,
+          totalWeeks,
+        )
+      } catch {
+        await new Promise((r) => window.setTimeout(r, 3000))
+        missions = await generateMissions(
+          trimmedTitle,
+          category,
+          targetDate,
+          userContext,
+          batchStartWeek,
+          batchEndWeek,
+          totalWeeks,
+        )
+      }
+    } catch (err) {
+      console.error('generateMissions threw:', err)
+      pendingMissionRef.current = {
+        goalId,
+        userId: user.id,
         trimmedTitle,
         category,
         targetDate,
@@ -360,50 +526,23 @@ export function CreateGoal() {
         batchStartWeek,
         batchEndWeek,
         totalWeeks,
+      }
+      setMissionFailedGoalId(goalId)
+      setMissionGenFailureMessage(
+        err instanceof Error ? err.message : 'Mission generation failed.',
       )
-    } catch (err) {
-      console.error('generateMissions threw:', err)
-      goPartialSuccess()
+      setSubmitPhase('mission_gen_failed')
       return
     }
 
-    setSubmitPhase('saving_missions')
+    const persist = await persistAiMissionsForNewGoal(
+      goalId,
+      user.id,
+      batchStartWeek,
+      missions,
+    )
 
-    const base = new Date()
-    base.setHours(0, 0, 0, 0)
-
-    const weeklyRows = missions.weekly_quests.map((questTitle, i) => ({
-      goal_id: goalId,
-      user_id: user.id,
-      title: questTitle,
-      week_number: batchStartWeek + i,
-      completed: false,
-      xp_reward: 150,
-    }))
-
-    const { error: weeklyError } = await supabase
-      .from('weekly_quests')
-      .insert(weeklyRows)
-
-    if (weeklyError) {
-      goPartialSuccess()
-      return
-    }
-
-    const dailyRows = missions.daily_missions.map((missionTitle, i) => ({
-      goal_id: goalId,
-      user_id: user.id,
-      title: missionTitle,
-      completed: false,
-      xp_reward: 25,
-      due_date: formatLocalDate(addDays(base, i)),
-    }))
-
-    const { error: dailyError } = await supabase
-      .from('daily_missions')
-      .insert(dailyRows)
-
-    if (dailyError) {
+    if (persist === 'weekly_failed' || persist === 'daily_failed') {
       goPartialSuccess()
       return
     }
@@ -422,7 +561,7 @@ export function CreateGoal() {
           to="/goals"
           className={[
             'flex items-center gap-0.5 text-sm font-semibold text-zinc-400 transition-colors hover:text-white',
-            formLocked ? 'pointer-events-none opacity-40' : '',
+            inputLocked ? 'pointer-events-none opacity-40' : '',
           ].join(' ')}
         >
           <ChevronLeft size={20} aria-hidden strokeWidth={2} />
@@ -457,7 +596,7 @@ export function CreateGoal() {
                 if (titleError) setTitleError(null)
               }}
               placeholder="What's your goal?"
-              disabled={formLocked}
+              disabled={inputLocked}
               className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 disabled:opacity-50"
             />
             {titleError ? (
@@ -479,7 +618,7 @@ export function CreateGoal() {
                     key={pill.id}
                     type="button"
                     aria-pressed={selected}
-                    disabled={formLocked}
+                    disabled={inputLocked}
                     onClick={() => selectCategory(pill.id)}
                     className={[
                       'rounded-full border-2 px-3 py-3 text-left text-sm font-bold leading-tight text-white transition-colors',
@@ -519,7 +658,7 @@ export function CreateGoal() {
             >
               <button
                 type="button"
-                disabled={formLocked}
+                disabled={inputLocked}
                 aria-pressed={planType === 'ai'}
                 onClick={() => setPlanType('ai')}
                 className={[
@@ -552,7 +691,7 @@ export function CreateGoal() {
               </button>
               <button
                 type="button"
-                disabled={formLocked}
+                disabled={inputLocked}
                 aria-pressed={planType === 'custom'}
                 onClick={() => setPlanType('custom')}
                 className={[
@@ -598,7 +737,7 @@ export function CreateGoal() {
                     key={opt.id}
                     type="button"
                     aria-pressed={selected}
-                    disabled={formLocked}
+                    disabled={inputLocked}
                     onClick={() => selectPreset(opt.id)}
                     className={[
                       'rounded-full border-2 px-3 py-2.5 text-sm font-bold text-white transition-colors active:scale-[0.98] disabled:opacity-50',
@@ -622,7 +761,7 @@ export function CreateGoal() {
               <button
                 type="button"
                 aria-pressed={durationMode === 'custom'}
-                disabled={formLocked}
+                disabled={inputLocked}
                 onClick={selectCustomMode}
                 className={[
                   'rounded-full border-2 px-3 py-2.5 text-sm font-bold text-white transition-colors active:scale-[0.98] disabled:opacity-50',
@@ -659,7 +798,7 @@ export function CreateGoal() {
                   max={customMaxStr}
                   value={targetDate}
                   onChange={(ev) => setTargetDate(ev.target.value)}
-                  disabled={formLocked}
+                  disabled={inputLocked}
                   className="mt-2 w-full rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 [color-scheme:dark] disabled:opacity-50"
                 />
                 <p className="mt-1.5 text-xs font-medium text-zinc-500">
@@ -689,9 +828,18 @@ export function CreateGoal() {
               value={description}
               onChange={(ev) => setDescription(ev.target.value)}
               placeholder="Describe your goal..."
-              disabled={formLocked}
+              disabled={inputLocked}
               className="mt-2 w-full resize-none rounded-xl border border-zinc-800 bg-app-surface px-4 py-3.5 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus:border-zinc-600 focus:ring-2 focus:ring-app-accent/30 disabled:opacity-50"
             />
+
+            {planType === 'ai' && submitPhase === 'generating' ? (
+              <p
+                className="mission-gen-pulse-text mt-5 text-center text-sm font-medium text-zinc-500"
+                aria-live="polite"
+              >
+                Generating your missions...
+              </p>
+            ) : null}
 
             {formError ? (
               <p
@@ -714,13 +862,40 @@ export function CreateGoal() {
                 {infoBanner}
               </p>
             ) : null}
-            <button
-              type="submit"
-              disabled={formLocked}
-              className="btn-press w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {submitButtonLabel(submitPhase, planType)}
-            </button>
+            {submitPhase === 'mission_gen_failed' && planType === 'ai' ? (
+              <>
+                <p
+                  className="mb-3 text-center text-sm font-medium leading-snug text-red-300"
+                  role="alert"
+                >
+                  {missionGenFailureMessage}
+                </p>
+                <button
+                  type="button"
+                  disabled={missionGenWorking}
+                  onClick={() => void handleRetryGenerateMissions()}
+                  className="btn-press w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {missionGenWorking ? 'Generating…' : 'Generate Missions'}
+                </button>
+                {missionFailedGoalId ? (
+                  <Link
+                    to={`/goals/${missionFailedGoalId}`}
+                    className="mt-4 block text-center text-sm font-semibold text-zinc-400 underline-offset-2 transition-colors hover:text-zinc-200 hover:underline"
+                  >
+                    Open goal without missions
+                  </Link>
+                ) : null}
+              </>
+            ) : (
+              <button
+                type="submit"
+                disabled={primarySubmitLocked}
+                className="btn-press w-full rounded-xl bg-white py-4 text-base font-bold tracking-wide text-app-bg shadow-lg shadow-black/20 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitButtonLabel(submitPhase, planType)}
+              </button>
+            )}
           </div>
         </div>
       </form>

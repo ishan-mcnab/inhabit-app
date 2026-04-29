@@ -11,7 +11,13 @@ import { getMostRecentMondayYmd } from './xp'
 export type WeeklyMissionRegenResult = {
   regenerated: boolean
   goalsUpdated: number
+  /** Goals that needed new dailies but generation or DB insert failed */
+  missionsGenerationFailures: number
 }
+
+export type EnsureWeekMissionsResult =
+  | { ok: true }
+  | { ok: false; message: string }
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear()
@@ -101,7 +107,7 @@ export async function checkAndRegenerateWeeklyMissions(
   userId: string,
 ): Promise<WeeklyMissionRegenResult> {
   if (new Date().getDay() !== 1) {
-    return { regenerated: false, goalsUpdated: 0 }
+    return { regenerated: false, goalsUpdated: 0, missionsGenerationFailures: 0 }
   }
 
   const thisMonday = getMostRecentMondayYmd()
@@ -115,7 +121,7 @@ export async function checkAndRegenerateWeeklyMissions(
 
   if (userErr) {
     console.error('weeklyMissionReset: users fetch failed:', userErr)
-    return { regenerated: false, goalsUpdated: 0 }
+    return { regenerated: false, goalsUpdated: 0, missionsGenerationFailures: 0 }
   }
 
   const lastRaw = userRow?.last_mission_reset
@@ -125,7 +131,7 @@ export async function checkAndRegenerateWeeklyMissions(
       : null
 
   if (last !== null && last >= thisMonday) {
-    return { regenerated: false, goalsUpdated: 0 }
+    return { regenerated: false, goalsUpdated: 0, missionsGenerationFailures: 0 }
   }
 
   const { data: profile } = await supabase
@@ -145,11 +151,12 @@ export async function checkAndRegenerateWeeklyMissions(
   if (goalsErr) {
     console.error('weeklyMissionReset: goals fetch failed:', goalsErr)
     await setUserLastMissionReset(userId, thisMonday)
-    return { regenerated: true, goalsUpdated: 0 }
+    return { regenerated: true, goalsUpdated: 0, missionsGenerationFailures: 0 }
   }
 
   const list = (goals ?? []) as ActiveGoalRow[]
   let goalsUpdated = 0
+  let missionsGenerationFailures = 0
 
   for (const goal of list) {
     const preCount = await countMissionsForGoalInWeek(
@@ -186,6 +193,7 @@ export async function checkAndRegenerateWeeklyMissions(
         totalW,
       )
     } catch (e) {
+      missionsGenerationFailures += 1
       console.error(
         'weeklyMissionReset: generateMissions failed for goal',
         goal.id,
@@ -218,6 +226,7 @@ export async function checkAndRegenerateWeeklyMissions(
       .insert(dailyRows)
 
     if (insErr) {
+      missionsGenerationFailures += 1
       console.error(
         'weeklyMissionReset: daily_missions insert failed for goal',
         goal.id,
@@ -231,7 +240,7 @@ export async function checkAndRegenerateWeeklyMissions(
 
   await setUserLastMissionReset(userId, thisMonday)
 
-  return { regenerated: true, goalsUpdated }
+  return { regenerated: true, goalsUpdated, missionsGenerationFailures }
 }
 
 /**
@@ -241,7 +250,7 @@ export async function checkAndRegenerateWeeklyMissions(
 export async function ensureCurrentWeekMissionsForResumedGoal(
   userId: string,
   goalId: string,
-): Promise<void> {
+): Promise<EnsureWeekMissionsResult> {
   const { data: goalRow, error } = await supabase
     .from('goals')
     .select('id, title, category, target_date, created_at')
@@ -250,12 +259,12 @@ export async function ensureCurrentWeekMissionsForResumedGoal(
     .eq('status', 'active')
     .maybeSingle()
 
-  if (error || !goalRow) return
+  if (error || !goalRow) return { ok: true }
 
   const goal = goalRow as ActiveGoalRow
   const { mon, sun } = localWeekMondaySundayYmd(new Date())
   const preCount = await countMissionsForGoalInWeek(userId, goal.id, mon, sun)
-  if (preCount === null || preCount > 0) return
+  if (preCount === null || preCount > 0) return { ok: true }
 
   const { data: profile } = await supabase
     .from('users')
@@ -294,7 +303,11 @@ export async function ensureCurrentWeekMissionsForResumedGoal(
       goalId,
       e,
     )
-    return
+    const msg =
+      e instanceof Error
+        ? e.message
+        : "Could not generate this week's missions. Try again from the goal."
+    return { ok: false, message: msg }
   }
 
   const base = parseYmdLocal(mon)
@@ -317,5 +330,8 @@ export async function ensureCurrentWeekMissionsForResumedGoal(
       goalId,
       insErr,
     )
+    return { ok: false, message: insErr.message }
   }
+
+  return { ok: true }
 }

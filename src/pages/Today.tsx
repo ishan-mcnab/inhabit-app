@@ -884,6 +884,9 @@ export function Today() {
   const [missionRegenerating, setMissionRegenerating] = useState(false)
   const [weeklyNewMissionsBannerPhase, setWeeklyNewMissionsBannerPhase] =
     useState<'off' | 'visible' | 'fading'>('off')
+  const [weeklyMissionRegenWarning, setWeeklyMissionRegenWarning] = useState<
+    string | null
+  >(null)
   const [newWeekMotivationPhase, setNewWeekMotivationPhase] = useState<
     'off' | 'visible' | 'fading'
   >('off')
@@ -1026,11 +1029,22 @@ export function Today() {
   const handleRegenerateMissionsTap = useCallback(async () => {
     if (!userId) return
     setMissionRegenerateWorking(true)
+    setWeeklyMissionRegenWarning(null)
     try {
-      await checkAndRegenerateWeeklyMissions(userId)
+      const result = await checkAndRegenerateWeeklyMissions(userId)
       await reloadTodayMissions(userId)
+      if (result.missionsGenerationFailures > 0) {
+        setWeeklyMissionRegenWarning(
+          result.goalsUpdated > 0
+            ? `${result.missionsGenerationFailures} goal(s) still need missions. Tap Regenerate to try again.`
+            : 'Weekly missions could not be generated. Tap Regenerate to try again.',
+        )
+      }
     } catch (e) {
       console.error('Regenerate missions failed:', e)
+      setWeeklyMissionRegenWarning(
+        'Could not refresh missions. Check your connection and try again.',
+      )
     } finally {
       setMissionRegenerateWorking(false)
     }
@@ -1586,6 +1600,15 @@ export function Today() {
       try {
         const result = await checkAndRegenerateWeeklyMissions(uid)
         if (loadGenRef.current !== gen) return
+        if (result.regenerated && result.missionsGenerationFailures > 0) {
+          setWeeklyMissionRegenWarning(
+            result.goalsUpdated > 0
+              ? `${result.missionsGenerationFailures} goal(s) still need missions for this week. Tap Regenerate below.`
+              : "Some weekly missions couldn't be generated. Tap Regenerate below.",
+          )
+        } else if (result.regenerated) {
+          setWeeklyMissionRegenWarning(null)
+        }
         if (result.regenerated && result.goalsUpdated > 0) {
           setWeeklyNewMissionsBannerPhase('visible')
           window.setTimeout(
@@ -1596,9 +1619,14 @@ export function Today() {
             setWeeklyNewMissionsBannerPhase('off')
             void reloadTodayMissions(uid)
           }, 4300)
+        } else if (result.regenerated && result.missionsGenerationFailures > 0) {
+          void reloadTodayMissions(uid)
         }
       } catch (e) {
         console.error('checkAndRegenerateWeeklyMissions failed:', e)
+        setWeeklyMissionRegenWarning(
+          "Weekly mission refresh failed. Open Today again or tap Regenerate.",
+        )
       } finally {
         setMissionRegenerating(false)
       }
@@ -2645,6 +2673,28 @@ export function Today() {
               ) : null}
             </div>
           ) : null
+        ) : null}
+        {!loading &&
+        !loadError &&
+        !loadStallMessage &&
+        !isBrandNewUser &&
+        weeklyMissionRegenWarning ? (
+          <div
+            className="mt-2 mb-2 w-full min-w-0 max-w-full rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-3 ring-1 ring-amber-500/20"
+            role="status"
+          >
+            <p className="text-center text-[13px] font-semibold leading-snug text-amber-100/95">
+              {weeklyMissionRegenWarning}
+            </p>
+            <button
+              type="button"
+              disabled={missionRegenerateWorking}
+              onClick={() => void handleRegenerateMissionsTap()}
+              className="btn-press mx-auto mt-3 block rounded-lg bg-amber-500/25 px-4 py-2 text-xs font-bold text-amber-100 transition-opacity disabled:opacity-50"
+            >
+              {missionRegenerateWorking ? 'Retrying…' : 'Retry now'}
+            </button>
+          </div>
         ) : null}
         {loadError || loadStallMessage ? (
           <div className="flex min-h-[50vh] flex-col items-center justify-center px-2 py-8">

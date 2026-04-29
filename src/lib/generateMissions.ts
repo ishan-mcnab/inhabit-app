@@ -16,6 +16,17 @@ export type GeneratedMissions = {
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const MODEL = 'anthropic/claude-3-haiku'
+const OPENROUTER_FETCH_TIMEOUT_MS = 30_000
+
+const MISSION_GENERATION_TIMEOUT_MESSAGE =
+  'Mission generation timed out - please try again'
+
+function isAbortError(e: unknown): boolean {
+  return (
+    (e instanceof DOMException && e.name === 'AbortError') ||
+    (e instanceof Error && e.name === 'AbortError')
+  )
+}
 
 const SYSTEM_PROMPT =
   'You are an elite personal coach and life optimization expert ' +
@@ -531,6 +542,12 @@ export async function generateMissions(
     userContext,
   )
 
+  const ac = new AbortController()
+  const timeoutId = window.setTimeout(
+    () => ac.abort(),
+    OPENROUTER_FETCH_TIMEOUT_MS,
+  )
+
   let res: Response
   try {
     res = await fetch(OPENROUTER_URL, {
@@ -548,10 +565,16 @@ export async function generateMissions(
           { role: 'user', content: userPrompt },
         ],
       }),
+      signal: ac.signal,
     })
   } catch (e) {
+    if (isAbortError(e)) {
+      throw new Error(MISSION_GENERATION_TIMEOUT_MESSAGE)
+    }
     const msg = e instanceof Error ? e.message : String(e)
     throw new Error(`generateMissions: network request failed — ${msg}`)
+  } finally {
+    window.clearTimeout(timeoutId)
   }
 
   let data: unknown

@@ -22,6 +22,14 @@ const RED = '#E24B4A'
 const AMBER = '#BA7517'
 const GREEN = '#1D9E75'
 
+/** Full sheet; inner scroll area subtracts drag handle (~1.5rem). */
+const SHEET_MAX_HEIGHT =
+  'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)'
+const SHEET_SCROLL_MAX_HEIGHT =
+  'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem - 1.5rem)'
+const SHEET_BODY_PADDING_BOTTOM =
+  'max(1rem, env(safe-area-inset-bottom, 16px))'
+
 const MOOD_PICK = ['😔', '😐', '🙂', '😊', '😄'] as const
 const ENERGY_PICK = ['😴', '😪', '😐', '⚡', '🚀'] as const
 
@@ -161,9 +169,18 @@ function SleepLogModal({
         className="min-h-0 flex-1"
         onClick={onClose}
       />
-      <div className="max-h-[90vh] w-full overflow-hidden rounded-t-3xl border border-zinc-800 border-b-0 bg-app-bg shadow-2xl">
+      <div
+        className="w-full overflow-hidden rounded-t-3xl border border-zinc-800 border-b-0 bg-app-bg shadow-2xl"
+        style={{ maxHeight: SHEET_MAX_HEIGHT }}
+      >
         <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-zinc-700" />
-        <div className="max-h-[calc(90vh-2rem)] overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+        <div
+          className="overflow-y-auto px-4 pt-3"
+          style={{
+            maxHeight: SHEET_SCROLL_MAX_HEIGHT,
+            paddingBottom: SHEET_BODY_PADDING_BOTTOM,
+          }}
+        >
           <h2
             id="sleep-modal-title"
             className="text-center text-lg font-bold text-white"
@@ -369,9 +386,18 @@ function MoodLogModal({
         className="min-h-0 flex-1"
         onClick={onClose}
       />
-      <div className="max-h-[90vh] w-full overflow-hidden rounded-t-3xl border border-zinc-800 border-b-0 bg-app-bg shadow-2xl">
+      <div
+        className="w-full overflow-hidden rounded-t-3xl border border-zinc-800 border-b-0 bg-app-bg shadow-2xl"
+        style={{ maxHeight: SHEET_MAX_HEIGHT }}
+      >
         <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-zinc-700" />
-        <div className="max-h-[calc(90vh-2rem)] overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+        <div
+          className="overflow-y-auto px-4 pt-3"
+          style={{
+            maxHeight: SHEET_SCROLL_MAX_HEIGHT,
+            paddingBottom: SHEET_BODY_PADDING_BOTTOM,
+          }}
+        >
           <h2
             id="mood-modal-title"
             className="text-center text-lg font-bold text-white"
