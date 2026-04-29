@@ -22,13 +22,10 @@ const RED = '#E24B4A'
 const AMBER = '#BA7517'
 const GREEN = '#1D9E75'
 
-/** Full sheet; inner scroll area subtracts drag handle (~1.5rem). */
-const SHEET_MAX_HEIGHT =
-  'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)'
-const SHEET_SCROLL_MAX_HEIGHT =
-  'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem - 1.5rem)'
-const SHEET_BODY_PADDING_BOTTOM =
-  'max(1rem, env(safe-area-inset-bottom, 16px))'
+/** Android WebView often omits safe-area; fixed insets keep Save above the nav bar. */
+const SHEET_MAX_HEIGHT = 'calc(100dvh - 120px)'
+const SHEET_SCROLL_MAX_HEIGHT = 'calc(100dvh - 120px - 1.5rem)'
+const SHEET_SCROLL_PADDING_BOTTOM = '80px'
 
 const MOOD_PICK = ['😔', '😐', '🙂', '😊', '😄'] as const
 const ENERGY_PICK = ['😴', '😪', '😐', '⚡', '🚀'] as const
@@ -178,7 +175,7 @@ function SleepLogModal({
           className="overflow-y-auto px-4 pt-3"
           style={{
             maxHeight: SHEET_SCROLL_MAX_HEIGHT,
-            paddingBottom: SHEET_BODY_PADDING_BOTTOM,
+            paddingBottom: SHEET_SCROLL_PADDING_BOTTOM,
           }}
         >
           <h2
@@ -395,7 +392,7 @@ function MoodLogModal({
           className="overflow-y-auto px-4 pt-3"
           style={{
             maxHeight: SHEET_SCROLL_MAX_HEIGHT,
-            paddingBottom: SHEET_BODY_PADDING_BOTTOM,
+            paddingBottom: SHEET_SCROLL_PADDING_BOTTOM,
           }}
         >
           <h2

@@ -219,7 +219,6 @@ export function CreateGoal() {
     null,
   )
   const pendingMissionRef = useRef<PendingAiMissionContext | null>(null)
-  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (durationMode !== 'preset') return
@@ -289,22 +288,9 @@ export function CreateGoal() {
 
   useEffect(() => {
     return () => {
-      if (navTimerRef.current !== null) {
-        clearTimeout(navTimerRef.current)
-      }
       prefillConsumed.current = false
     }
   }, [])
-
-  function scheduleNavigateGoals(delayMs: number) {
-    if (navTimerRef.current !== null) {
-      clearTimeout(navTimerRef.current)
-    }
-    navTimerRef.current = setTimeout(() => {
-      navTimerRef.current = null
-      void navigate('/goals', { replace: true })
-    }, delayMs)
-  }
 
   function selectCategory(id: GoalCategoryId) {
     setCategoryId(id)
@@ -323,10 +309,11 @@ export function CreateGoal() {
     )
   }
 
-  function goPartialSuccess() {
+  function goPartialSuccess(userId: string) {
     setInfoBanner('Goal saved! Missions will generate shortly.')
     setSubmitPhase('partial_done')
-    scheduleNavigateGoals(1600)
+    appCache.invalidate('goals:' + userId)
+    void navigate('/goals', { replace: true, state: { forceRefresh: true } })
   }
 
   async function handleRetryGenerateMissions() {
@@ -371,18 +358,18 @@ export function CreateGoal() {
       if (persist === 'weekly_failed' || persist === 'daily_failed') {
         pendingMissionRef.current = null
         setMissionFailedGoalId(null)
-        goPartialSuccess()
+        goPartialSuccess(ctx.userId)
         return
       }
 
-      appCache.invalidate(goalsCacheKey(ctx.userId))
+      appCache.invalidate('goals:' + ctx.userId)
       appCache.invalidate(
         missionsCacheKey(ctx.userId, formatLocalDate(new Date())),
       )
       pendingMissionRef.current = null
       setMissionFailedGoalId(null)
       setSubmitPhase('success')
-      scheduleNavigateGoals(900)
+      void navigate('/goals', { replace: true, state: { forceRefresh: true } })
     } catch (err) {
       console.error('generateMissions manual retry:', err)
       setMissionGenFailureMessage(
@@ -543,15 +530,15 @@ export function CreateGoal() {
     )
 
     if (persist === 'weekly_failed' || persist === 'daily_failed') {
-      goPartialSuccess()
+      goPartialSuccess(user.id)
       return
     }
 
-    appCache.invalidate(goalsCacheKey(user.id))
+    appCache.invalidate('goals:' + user.id)
     appCache.invalidate(missionsCacheKey(user.id, formatLocalDate(new Date())))
 
     setSubmitPhase('success')
-    scheduleNavigateGoals(900)
+    void navigate('/goals', { replace: true, state: { forceRefresh: true } })
   }
 
   return (

@@ -84,7 +84,23 @@ const MUTED_BODY = '#888780'
 const PAUSED_AMBER = '#BA7517'
 
 const TAB_REFRESH_STALE_MS = 30_000
-const SKELETON_DELAY_MS = 200
+
+function GoalsLoadingSkeleton() {
+  return (
+    <div
+      className="mx-auto flex w-full min-w-0 max-w-lg flex-col gap-2.5"
+      aria-busy="true"
+      aria-label="Loading goals"
+    >
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="mission-skeleton-shell h-[90px] w-full rounded-2xl border border-zinc-800/60 bg-zinc-900/30"
+        />
+      ))}
+    </div>
+  )
+}
 
 type GoalsCachePayload = {
   goals: GoalRow[]
@@ -164,17 +180,7 @@ export function Goals() {
 
   const loadGenRef = useRef(0)
   const lastFetchedAtRef = useRef<number | null>(null)
-  const skeletonDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  )
-  const [showDelayedSkeleton, setShowDelayedSkeleton] = useState(false)
-
-  const clearSkeletonDelayTimer = useCallback(() => {
-    if (skeletonDelayTimerRef.current !== null) {
-      window.clearTimeout(skeletonDelayTimerRef.current)
-      skeletonDelayTimerRef.current = null
-    }
-  }, [])
+  const skipNextTabStaleRefreshRef = useRef(false)
 
   const load = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -195,8 +201,6 @@ export function Goals() {
       if (userError || !user) {
         if (loadGenRef.current !== gen) return
         if (!silent) {
-          clearSkeletonDelayTimer()
-          setShowDelayedSkeleton(false)
           setLoading(false)
           setGoalsNeedingAttention(0)
           setError(userError?.message ?? 'Not signed in')
@@ -215,14 +219,8 @@ export function Goals() {
           setHasFitnessCategory(Boolean(cached.hasFitnessCategory))
           setGoalsNeedingAttention(cached.goalsNeedingAttention)
           setLoading(false)
-          setShowDelayedSkeleton(false)
         } else {
           setLoading(true)
-          clearSkeletonDelayTimer()
-          skeletonDelayTimerRef.current = window.setTimeout(() => {
-            if (loadGenRef.current !== gen) return
-            setShowDelayedSkeleton(true)
-          }, SKELETON_DELAY_MS)
         }
       }
 
@@ -273,8 +271,6 @@ export function Goals() {
       setQuestPreviewByGoalId({})
       setGoalsNeedingAttention(0)
       setHasFitnessCategory(false)
-      clearSkeletonDelayTimer()
-      setShowDelayedSkeleton(false)
       if (!silent) setLoading(false)
       return
     }
@@ -405,13 +401,11 @@ export function Goals() {
       30_000,
     )
 
-    clearSkeletonDelayTimer()
-    setShowDelayedSkeleton(false)
     lastFetchedAtRef.current = Date.now()
     if (!silent) {
       setLoading(false)
     }
-  }, [setGoalsNeedingAttention, clearSkeletonDelayTimer])
+  }, [setGoalsNeedingAttention])
 
   const maybeRefreshGoals = useCallback(() => {
     const t = lastFetchedAtRef.current
@@ -422,23 +416,37 @@ export function Goals() {
 
   useEffect(() => {
     if (location.pathname !== '/goals') return
+    const st = location.state as { forceRefresh?: boolean; toast?: string } | null
+
+    if (st?.forceRefresh) {
+      skipNextTabStaleRefreshRef.current = true
+      lastFetchedAtRef.current = null
+      const nextState = st.toast ? { toast: st.toast } : {}
+      void navigate('/goals', { replace: true, state: nextState })
+      void load({ silent: false })
+      return
+    }
+
+    if (skipNextTabStaleRefreshRef.current) {
+      skipNextTabStaleRefreshRef.current = false
+      return
+    }
+
     void maybeRefreshGoals()
-  }, [location.pathname, maybeRefreshGoals])
+  }, [location.pathname, location.state, maybeRefreshGoals, navigate, load])
 
   useEffect(() => {
     if (!loading) return
     const gen = loadGenRef.current
     const t = window.setTimeout(() => {
       if (loadGenRef.current !== gen) return
-      clearSkeletonDelayTimer()
-      setShowDelayedSkeleton(false)
       setLoadStallMessage(
         'Taking longer than expected. Please check your connection and try again.',
       )
       setLoading(false)
     }, 10_000)
     return () => window.clearTimeout(t)
-  }, [loading, clearSkeletonDelayTimer])
+  }, [loading])
 
   useEffect(() => {
     if (location.pathname !== '/goals') return
@@ -597,10 +605,8 @@ export function Goals() {
             {toast}
           </div>
         ) : null}
-        {loading && showDelayedSkeleton ? (
-          <div className="flex flex-1 flex-col items-center justify-center py-16">
-            <p className="text-sm font-medium text-zinc-500">Loading goals…</p>
-          </div>
+        {loading ? (
+          <GoalsLoadingSkeleton />
         ) : error || loadStallMessage ? (
           <div className="mx-auto flex max-w-lg flex-col items-center gap-4 py-12 px-2">
             <SectionLoadErrorCard
