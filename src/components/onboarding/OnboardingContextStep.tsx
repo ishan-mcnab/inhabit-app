@@ -4,10 +4,11 @@ import {
   type ContextPillField,
 } from '../../constants/onboardingContextConfig'
 import type { GoalContextCategoryId } from '../../types/goalContext'
+import { getCategoryBorderColor } from '../../constants/goalCategoryPills'
 
-const GOAL_PURPLE = '#534AB7'
-const CARD_BG = '#141418'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const APP_ACCENT = '#F5A623'
+const CARD_BG = '#111827'
+const CARD_BORDER = '#1C2840'
 const MUTED_BODY = '#888780'
 
 type Props = {
@@ -74,7 +75,7 @@ export function OnboardingContextStep({
   return (
     <div
       className="flex min-h-screen flex-col px-4 pb-10 pt-[max(0.75rem,env(safe-area-inset-top))]"
-      style={{ backgroundColor: '#0D0D0F' }}
+      style={{ backgroundColor: '#0A0F1E' }}
     >
       <div className="relative flex h-11 shrink-0 items-center justify-center">
         <button
@@ -117,7 +118,7 @@ export function OnboardingContextStep({
               backgroundColor: CARD_BG,
               borderColor: CARD_BORDER,
               borderLeftWidth: 3,
-              borderLeftColor: GOAL_PURPLE,
+              borderLeftColor: getCategoryBorderColor('fitness_consistency'),
             }}
           >
             <span className="shrink-0 text-base leading-none" aria-hidden>
@@ -199,8 +200,8 @@ export function OnboardingContextStep({
                           style={
                             selected
                               ? {
-                                  borderColor: GOAL_PURPLE,
-                                  backgroundColor: 'rgba(83, 74, 183, 0.1)',
+                                  borderColor: APP_ACCENT,
+                                  backgroundColor: 'rgba(245, 166, 35, 0.15)',
                                   color: '#fff',
                                 }
                               : {
@@ -248,7 +249,7 @@ export function OnboardingContextStep({
                   }
                   onChange={(e) => onFieldChange(field.key, e.target.value)}
                   placeholder={field.placeholder}
-                  className="h-11 w-full rounded-xl border px-4 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus-visible:ring-2 focus-visible:ring-[#534AB7]/50"
+                  className="h-11 w-full rounded-xl border px-4 text-base font-medium text-white outline-none placeholder:text-zinc-600 focus-visible:ring-2 focus-visible:ring-[#F5A623]/50"
                   style={{
                     backgroundColor: CARD_BG,
                     borderColor: CARD_BORDER,
@@ -271,7 +272,7 @@ export function OnboardingContextStep({
             disabled={!canContinue || submitting}
             onClick={onContinue}
             className="btn-press h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-            style={{ backgroundColor: GOAL_PURPLE }}
+            style={{ backgroundColor: APP_ACCENT }}
           >
             {submitting ? 'Saving…' : 'Continue'}
           </button>

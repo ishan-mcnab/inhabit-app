@@ -6,8 +6,8 @@ type Props = {
   onFadeComplete?: () => void
 }
 
-const BG = '#0D0D0F'
-const PURPLE = '#534AB7'
+const BG = '#0A0F1E'
+const ACCENT = '#F5A623'
 
 export function SplashScreen({ show, onFadeComplete }: Props) {
   const [visible, setVisible] = useState(true)
@@ -42,7 +42,7 @@ export function SplashScreen({ show, onFadeComplete }: Props) {
                 width: 200,
                 height: 80,
                 background:
-                  'radial-gradient(ellipse, rgba(83,74,183,0.4) 0%, transparent 70%)',
+                  'radial-gradient(ellipse, rgba(245,166,35,0.4) 0%, transparent 70%)',
                 filter: 'blur(20px)',
               }}
               aria-hidden
@@ -61,15 +61,15 @@ export function SplashScreen({ show, onFadeComplete }: Props) {
           >
             <span
               className="splash-dot h-2 w-2 rounded-full"
-              style={{ backgroundColor: PURPLE }}
+              style={{ backgroundColor: ACCENT }}
             />
             <span
               className="splash-dot h-2 w-2 rounded-full"
-              style={{ backgroundColor: PURPLE }}
+              style={{ backgroundColor: ACCENT }}
             />
             <span
               className="splash-dot h-2 w-2 rounded-full"
-              style={{ backgroundColor: PURPLE }}
+              style={{ backgroundColor: ACCENT }}
             />
           </div>
 

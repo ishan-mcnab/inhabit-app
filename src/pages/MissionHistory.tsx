@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom'
 import { getMissionBoardAccent } from '../constants/missionBoardAccents'
 import { supabase } from '../supabase'
 
-const CARD_SURFACE = '#141418'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const CARD_SURFACE = '#111827'
+const CARD_BORDER = '#1C2840'
 const MUTED = '#888780'
 
 function formatYmd(d: Date): string {

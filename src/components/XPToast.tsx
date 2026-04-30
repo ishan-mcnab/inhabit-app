@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
-const BG = '#141418'
-const BORDER = 'rgba(255,255,255,0.08)'
+const BG = '#111827'
+const BORDER = '#1C2840'
 const XP_COLOR = '#EF9F27'
 
 type Props = {

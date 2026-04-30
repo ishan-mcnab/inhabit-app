@@ -5,10 +5,14 @@ import { ONBOARDING_CONTEXT_FIELDS } from '../constants/onboardingContextConfig'
 import type { GoalContextCategoryId } from '../types/goalContext'
 import { SplashScreen } from '../components/SplashScreen'
 import { supabase } from '../supabase'
+import {
+  categoryAccentTint,
+  getCategoryBorderColor,
+} from '../constants/goalCategoryPills'
 
 type Step = 'welcome' | 'name' | 'goals' | 'context'
 
-const GOAL_PURPLE = '#534AB7'
+const APP_ACCENT = '#F5A623'
 
 const GOAL_OPTIONS = [
   {
@@ -306,7 +310,7 @@ export function Onboarding() {
         className="flex min-h-screen flex-col px-4 pb-10 pt-[max(2.5rem,env(safe-area-inset-top))]"
         style={{
           background:
-            'radial-gradient(ellipse at 50% 30%, rgba(83,74,183,0.12) 0%, transparent 70%), #0D0D0F',
+            'radial-gradient(ellipse at 50% 30%, rgba(245,166,35,0.12) 0%, transparent 70%), #0A0F1E',
         }}
       >
         <div className="flex flex-1 flex-col items-center justify-center px-2 text-center">
@@ -318,7 +322,7 @@ export function Onboarding() {
                 position: 'absolute',
                 inset: 0,
                 background:
-                  'radial-gradient(ellipse at center, rgba(83,74,183,0.7) 0%, transparent 70%)',
+                  'radial-gradient(ellipse at center, rgba(245,166,35,0.5) 0%, transparent 70%)',
                 width: 280,
                 height: 100,
                 filter: 'blur(28px)',
@@ -345,7 +349,7 @@ export function Onboarding() {
           type="button"
           onClick={() => setStep('name')}
           className="btn-press mx-auto h-[52px] w-full max-w-[320px] rounded-xl text-base font-semibold text-white transition-opacity"
-          style={{ backgroundColor: GOAL_PURPLE }}
+          style={{ backgroundColor: APP_ACCENT }}
         >
           Get Started
         </button>
@@ -357,7 +361,7 @@ export function Onboarding() {
     return (
       <div
         className="flex min-h-screen flex-col px-4 py-10"
-        style={{ backgroundColor: '#0D0D0F' }}
+        style={{ backgroundColor: '#0A0F1E' }}
       >
         <div className="mx-auto flex w-full max-w-[22rem] flex-1 flex-col justify-center">
           <h1 className="mt-3 text-center text-2xl font-semibold tracking-tight text-white">
@@ -392,10 +396,10 @@ export function Onboarding() {
                   setDisplayName(ev.target.value)
                   if (nameError) setNameError(null)
                 }}
-                className="h-12 rounded-xl border px-4 text-base font-medium text-white outline-none transition-[border-color,box-shadow] placeholder:text-zinc-600 focus-visible:ring-2 focus-visible:ring-[#534AB7]/50"
+                className="h-12 rounded-xl border px-4 text-base font-medium text-white outline-none transition-[border-color,box-shadow] placeholder:text-zinc-600 focus-visible:ring-2 focus-visible:ring-[#F5A623]/50"
                 style={{
-                  backgroundColor: '#141418',
-                  borderColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: '#111827',
+                  borderColor: '#1C2840',
                 }}
                 placeholder="Your name"
               />
@@ -415,7 +419,7 @@ export function Onboarding() {
             <button
               type="submit"
               className="btn-press mx-auto mt-2 h-[52px] w-full max-w-[320px] rounded-xl text-base font-semibold text-white transition-opacity disabled:opacity-50"
-              style={{ backgroundColor: GOAL_PURPLE }}
+              style={{ backgroundColor: APP_ACCENT }}
             >
               Continue
             </button>
@@ -520,7 +524,7 @@ export function Onboarding() {
   return (
     <div
       className="flex min-h-screen flex-col px-4 pb-10 pt-8"
-      style={{ backgroundColor: '#0D0D0F' }}
+      style={{ backgroundColor: '#0A0F1E' }}
     >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
         <h1 className="text-[22px] font-semibold tracking-tight text-white">
@@ -546,12 +550,15 @@ export function Onboarding() {
                 style={
                   selected
                     ? {
-                        borderColor: GOAL_PURPLE,
-                        backgroundColor: 'rgba(83, 74, 183, 0.1)',
+                        borderColor: getCategoryBorderColor(opt.id),
+                        backgroundColor: categoryAccentTint(
+                          getCategoryBorderColor(opt.id),
+                          0.1,
+                        ),
                       }
                     : {
-                        backgroundColor: '#141418',
-                        borderColor: 'rgba(255,255,255,0.08)',
+                        backgroundColor: '#111827',
+                        borderColor: '#1C2840',
                       }
                 }
               >
@@ -591,7 +598,7 @@ export function Onboarding() {
             type="button"
             onClick={handleGoalsContinue}
             className="btn-press h-[52px] w-full rounded-xl text-base font-semibold text-white transition-opacity"
-            style={{ backgroundColor: GOAL_PURPLE }}
+            style={{ backgroundColor: APP_ACCENT }}
           >
             Let&apos;s go
           </button>

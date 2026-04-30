@@ -16,8 +16,8 @@ type Props = {
   onSkip: () => void
 }
 
-const BG = '#0D0D0F'
-const PURPLE = '#534AB7'
+const BG = '#0A0F1E'
+const ACCENT = '#F5A623'
 const MUTED = '#888780'
 
 function clamp(v: number, min: number, max: number) {
@@ -104,7 +104,7 @@ export function TutorialOverlay({ steps, currentStep, onNext, onSkip }: Props) {
           position: 'absolute',
           inset: 0,
           background:
-            'radial-gradient(ellipse at 50% 0%, rgba(83,74,183,0.15) 0%, transparent 60%)',
+            'radial-gradient(ellipse at 50% 0%, rgba(245,166,35,0.12) 0%, transparent 60%)',
           pointerEvents: 'none',
         }}
         aria-hidden
@@ -117,7 +117,7 @@ export function TutorialOverlay({ steps, currentStep, onNext, onSkip }: Props) {
           left: 0,
           height: 3,
           width: `${progressPct}%`,
-          backgroundColor: PURPLE,
+          backgroundColor: ACCENT,
           transition: 'width 0.3s ease',
           zIndex: 10001,
         }}
@@ -174,7 +174,7 @@ export function TutorialOverlay({ steps, currentStep, onNext, onSkip }: Props) {
             <>
               <CheckCircle2
                 size={64}
-                color={PURPLE}
+                color={ACCENT}
                 strokeWidth={2.25}
                 aria-hidden
               />
@@ -217,13 +217,13 @@ export function TutorialOverlay({ steps, currentStep, onNext, onSkip }: Props) {
                     width: 60,
                     height: 60,
                     borderRadius: 999,
-                    background: 'rgba(83,74,183,0.15)',
+                    background: 'rgba(245,166,35,0.15)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Icon size={48} color={PURPLE} strokeWidth={2.25} />
+                  <Icon size={48} color={ACCENT} strokeWidth={2.25} />
                 </div>
               </div>
 
@@ -262,9 +262,9 @@ export function TutorialOverlay({ steps, currentStep, onNext, onSkip }: Props) {
                     marginTop: 14,
                     padding: '6px 10px',
                     borderRadius: 999,
-                    backgroundColor: '#141418',
-                    border: '1px solid rgba(255,255,255,0.10)',
-                    color: 'rgba(255,255,255,0.72)',
+                    backgroundColor: '#111827',
+                    border: '1px solid rgba(245,166,35,0.45)',
+                    color: '#F5A623',
                     fontSize: 12,
                     fontWeight: 600,
                   }}
@@ -295,8 +295,8 @@ export function TutorialOverlay({ steps, currentStep, onNext, onSkip }: Props) {
             height: 52,
             borderRadius: 14,
             border: 'none',
-            backgroundColor: PURPLE,
-            color: '#fff',
+            backgroundColor: ACCENT,
+            color: '#0A0F1E',
             fontSize: 15,
             fontWeight: 800,
             cursor: 'pointer',
@@ -331,7 +331,7 @@ function Dots({ current }: { current: number }) {
             width: 8,
             height: 8,
             borderRadius: 999,
-            backgroundColor: i === current ? PURPLE : '#2a2a2e',
+            backgroundColor: i === current ? ACCENT : '#2a2a2e',
           }}
         />
       ))}

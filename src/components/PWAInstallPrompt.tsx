@@ -5,8 +5,8 @@ const LS_INSTALLED = 'inhabit_pwa_installed'
 const LS_ANDROID_DISMISSED = 'inhabit_pwa_install_dismissed'
 const LS_IOS_DISMISSED = 'inhabit_pwa_ios_hint_dismissed'
 
-const SURFACE = '#141418'
-const PURPLE = '#534AB7'
+const SURFACE = '#111827'
+const ACCENT = '#F5A623'
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -142,7 +142,7 @@ export function PWAInstallPrompt() {
       style={{
         top: 'env(safe-area-inset-top, 0px)',
         backgroundColor: SURFACE,
-        borderLeftColor: PURPLE,
+        borderLeftColor: ACCENT,
       }}
       role="region"
       aria-label={showBanner ? 'Install app' : 'Install on iOS'}
@@ -165,8 +165,8 @@ export function PWAInstallPrompt() {
           <button
             type="button"
             onClick={() => void onInstallClick()}
-            className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-            style={{ backgroundColor: PURPLE }}
+            className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-[#0A0F1E]"
+            style={{ backgroundColor: ACCENT }}
           >
             Install
           </button>

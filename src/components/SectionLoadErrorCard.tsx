@@ -5,8 +5,8 @@ type Props = {
   retryLabel?: string
 }
 
-const SURFACE = '#141418'
-const BORDER = 'rgba(255,255,255,0.08)'
+const SURFACE = '#111827'
+const BORDER = '#1C2840'
 
 export function SectionLoadErrorCard({
   sectionLabel,
@@ -31,7 +31,7 @@ export function SectionLoadErrorCard({
         <button
           type="button"
           onClick={onRetry}
-          className="mt-3 rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-1.5 text-xs font-semibold text-[#534AB7] transition-colors hover:bg-[#534AB7]/10"
+          className="mt-3 rounded-lg border-2 border-[#F5A623] bg-transparent px-3 py-1.5 text-xs font-semibold text-[#F5A623] transition-colors hover:bg-[#F5A623]/10"
         >
           {retryLabel}
         </button>

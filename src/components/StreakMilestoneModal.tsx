@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 
-const OVERLAY = 'rgba(13, 13, 15, 0.9)'
+const OVERLAY = 'rgba(10, 15, 30, 0.9)'
 const AMBER = '#EF9F27'
-const PURPLE = '#534AB7'
+const ACCENT = '#F5A623'
 
 type Props = {
   visible: boolean
@@ -87,8 +87,8 @@ export function StreakMilestoneModal({ visible, streakCount, onClose }: Props) {
         <button
           type="button"
           onClick={dismiss}
-          className="mt-10 w-full max-w-xs rounded-xl py-3.5 text-sm font-bold text-white transition-opacity active:opacity-90"
-          style={{ backgroundColor: PURPLE }}
+          className="mt-10 w-full max-w-xs rounded-xl py-3.5 text-sm font-bold transition-opacity active:opacity-90"
+          style={{ backgroundColor: ACCENT, color: '#0A0F1E' }}
         >
           Keep Going
         </button>

@@ -16,9 +16,9 @@ import {
 } from '../lib/xp'
 import { supabase } from '../supabase'
 
-const GOAL_PURPLE = '#534AB7'
-const CARD_BG = '#141418'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const APP_ACCENT = '#F5A623'
+const CARD_BG = '#111827'
+const CARD_BORDER = '#1C2840'
 const MUTED_BODY = '#888780'
 const MUTED_VERY = 'rgba(136, 135, 128, 0.65)'
 const BAR_TRACK = '#2A2A2E'
@@ -37,7 +37,7 @@ function SectionHeadingRow({ children }: { children: ReactNode }) {
   )
 }
 
-const STAT_PURPLE = '#534AB7'
+const STAT_PURPLE = '#F5A623'
 const STAT_AMBER = '#F59E0B'
 const STAT_ORANGE = '#FF6B35'
 const STAT_ORANGE_MUTED = 'rgba(255, 107, 53, 0.45)'
@@ -198,7 +198,7 @@ function NotificationToggleRow({
         onClick={() => onChange(!checked)}
         className={[
           'relative h-8 w-[3.25rem] shrink-0 rounded-full transition-colors',
-          checked ? 'bg-[#534AB7]' : 'bg-zinc-700',
+          checked ? 'bg-[#F5A623]' : 'bg-zinc-700',
           disabled ? 'opacity-50' : '',
         ].join(' ')}
       >
@@ -697,8 +697,8 @@ export function Profile() {
                 aria-label="Profile header"
               >
                 <div
-                  className="flex size-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold text-white ring-2 ring-purple-600/30"
-                  style={{ backgroundColor: GOAL_PURPLE }}
+                  className="flex size-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold text-white ring-2 ring-[#F5A623]/30"
+                  style={{ backgroundColor: APP_ACCENT }}
                   aria-hidden
                 >
                   {avatarInitials}
@@ -712,7 +712,7 @@ export function Profile() {
                     <button
                       type="button"
                       onClick={beginEditName}
-                      className="text-xs font-semibold text-[#534AB7] underline-offset-2 hover:underline"
+                      className="text-xs font-semibold text-[#F5A623] underline-offset-2 hover:underline"
                     >
                       Edit
                     </button>
@@ -741,7 +741,7 @@ export function Profile() {
                         type="button"
                         disabled={nameSaving}
                         onClick={() => void saveDisplayName()}
-                        className="rounded-xl bg-[#534AB7] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                        className="rounded-xl bg-[#F5A623] px-5 py-2.5 text-sm font-bold text-[#0A0F1E] disabled:opacity-50"
                       >
                         {nameSaving ? 'Saving…' : 'Save'}
                       </button>
@@ -1007,8 +1007,8 @@ export function Profile() {
                       style={
                         mode === 'weekly'
                           ? {
-                              backgroundColor: 'rgba(83, 74, 183, 0.22)',
-                              boxShadow: `inset 0 0 0 1px ${GOAL_PURPLE}55`,
+                              backgroundColor: 'rgba(245, 166, 35, 0.22)',
+                              boxShadow: `inset 0 0 0 1px ${APP_ACCENT}55`,
                             }
                           : undefined
                       }
@@ -1031,8 +1031,8 @@ export function Profile() {
                       style={
                         mode === 'completion'
                           ? {
-                              backgroundColor: 'rgba(83, 74, 183, 0.22)',
-                              boxShadow: `inset 0 0 0 1px ${GOAL_PURPLE}55`,
+                              backgroundColor: 'rgba(245, 166, 35, 0.22)',
+                              boxShadow: `inset 0 0 0 1px ${APP_ACCENT}55`,
                             }
                           : undefined
                       }
@@ -1208,7 +1208,7 @@ export function Profile() {
                   <button
                     type="button"
                     onClick={() => navigate('/share')}
-                    className="min-h-[44px] w-full rounded-xl border-2 border-[#534AB7] bg-transparent px-4 py-3 text-center text-sm font-bold text-[#534AB7] transition-colors hover:bg-[#534AB7]/10"
+                    className="min-h-[44px] w-full rounded-xl border-2 border-[#F5A623] bg-transparent px-4 py-3 text-center text-sm font-bold text-[#F5A623] transition-colors hover:bg-[#F5A623]/10"
                   >
                     Share My Stats
                   </button>

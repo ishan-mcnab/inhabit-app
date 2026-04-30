@@ -118,7 +118,7 @@ export function Layout() {
             width: '80%',
             height: '40%',
             background:
-              'radial-gradient(ellipse at 50% 0%, rgba(83,74,183,0.07) 0%, transparent 70%)',
+              'radial-gradient(ellipse at 50% 0%, rgba(245,166,35,0.05) 0%, transparent 70%)',
             pointerEvents: 'none',
           }}
         />
@@ -142,7 +142,7 @@ export function Layout() {
         ].join(' ')}
         style={{
           top: 'env(safe-area-inset-top, 0px)',
-          backgroundColor: '#141418',
+          backgroundColor: '#111827',
           borderLeftColor: '#FF6B35',
         }}
         role="status"
@@ -228,8 +228,8 @@ export function Layout() {
           right: 0,
           width: '100%',
           zIndex: 50,
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          background: 'rgba(13,13,15,0.95)',
+          borderTop: '1px solid #1C2840',
+          background: 'rgba(10,15,30,0.92)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
         }}
@@ -249,7 +249,7 @@ export function Layout() {
                     size={22}
                     strokeWidth={2}
                     className="shrink-0"
-                    style={{ color: isActive ? '#ffffff' : TAB_MUTED }}
+                    style={{ color: isActive ? '#F5A623' : TAB_MUTED }}
                     aria-hidden
                   />
                   {badge === 'today' && todayTabBadge ? (
@@ -257,7 +257,7 @@ export function Layout() {
                       className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500"
                       style={{
                         boxShadow:
-                          '0 0 0 2px var(--color-tab-bar, #141418)',
+                          '0 0 0 2px var(--color-tab-bar, #0A0F1E)',
                       }}
                       aria-hidden
                     />
@@ -267,7 +267,7 @@ export function Layout() {
                       className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500"
                       style={{
                         boxShadow:
-                          '0 0 0 2px var(--color-tab-bar, #141418)',
+                          '0 0 0 2px var(--color-tab-bar, #0A0F1E)',
                       }}
                       aria-hidden
                     />
@@ -275,7 +275,7 @@ export function Layout() {
                 </span>
                 <span
                   className="mt-0.5 text-[11px] font-medium leading-tight"
-                  style={{ color: isActive ? '#ffffff' : TAB_MUTED }}
+                  style={{ color: isActive ? '#F5A623' : TAB_MUTED }}
                 >
                   {label}
                 </span>
@@ -284,7 +284,7 @@ export function Layout() {
                   aria-hidden
                 >
                   {isActive ? (
-                    <span className="h-1 w-1 rounded-full bg-[#534AB7]" />
+                    <span className="h-1 w-1 rounded-full bg-[#F5A623]" />
                   ) : null}
                 </div>
               </div>

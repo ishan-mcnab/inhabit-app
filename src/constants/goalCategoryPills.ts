@@ -54,3 +54,16 @@ export function getCategoryBorderColor(slug: string | null | undefined): string 
   if (!slug) return '#3f3f46'
   return GOAL_CATEGORY_BORDER[slug] ?? '#3f3f46'
 }
+
+/** Selected pill / chip surface tint from a category accent hex. */
+export function categoryAccentTint(hex: string, alpha: number): string {
+  if (hex.length === 7 && hex.startsWith('#')) {
+    const r = Number.parseInt(hex.slice(1, 3), 16)
+    const g = Number.parseInt(hex.slice(3, 5), 16)
+    const b = Number.parseInt(hex.slice(5, 7), 16)
+    if ([r, g, b].every((n) => !Number.isNaN(n))) {
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`
+    }
+  }
+  return `rgba(245, 166, 35, ${alpha})`
+}

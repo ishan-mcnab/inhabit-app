@@ -1,6 +1,7 @@
-const OVERLAY_BG = 'rgba(13, 13, 15, 0.85)'
-const CARD_BG = '#141418'
-const PURPLE = '#534AB7'
+const OVERLAY_BG = 'rgba(10, 15, 30, 0.85)'
+const CARD_BG = '#111827'
+const ACCENT = '#F5A623'
+const ACCENT_TEXT = '#0A0F1E'
 
 type Props = {
   visible: boolean
@@ -41,7 +42,11 @@ export function GracePassModal({
         style={{ backgroundColor: CARD_BG }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-center text-5xl" aria-hidden>
+        <div
+          className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-2xl text-center text-5xl"
+          style={{ backgroundColor: 'rgba(245, 166, 35, 0.15)' }}
+          aria-hidden
+        >
           🛡️
         </div>
         <h2
@@ -64,8 +69,8 @@ export function GracePassModal({
                 type="button"
                 disabled={useInProgress}
                 onClick={() => void onUseGracePass()}
-                className="w-full rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity disabled:opacity-50"
-                style={{ backgroundColor: PURPLE }}
+                className="w-full rounded-xl py-3.5 text-center text-sm font-bold transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
               >
                 Use Grace Pass — Save My Streak
               </button>
@@ -76,7 +81,7 @@ export function GracePassModal({
                 type="button"
                 disabled={useInProgress}
                 onClick={onDismiss}
-                className="w-full rounded-xl border border-zinc-800/90 bg-[#16161a] py-3.5 text-center text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-900/80"
+                className="w-full rounded-xl border border-[#1C2840] bg-[#141C2E] py-3.5 text-center text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-900/80"
               >
                 Accept the Reset
               </button>
@@ -89,8 +94,8 @@ export function GracePassModal({
               <button
                 type="button"
                 onClick={onDismiss}
-                className="w-full rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity active:opacity-90"
-                style={{ backgroundColor: PURPLE }}
+                className="w-full rounded-xl py-3.5 text-center text-sm font-bold transition-opacity active:opacity-90"
+                style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
               >
                 Accept the Reset
               </button>

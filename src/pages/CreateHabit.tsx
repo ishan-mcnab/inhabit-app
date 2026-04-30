@@ -8,7 +8,7 @@ import {
 } from '../lib/habitTimeOfDay'
 import { supabase } from '../supabase'
 
-const PURPLE = '#534AB7'
+const ACCENT = '#F5A623'
 
 const HABIT_CATEGORIES: { id: string; label: string; emoji: string }[] = [
   { id: 'fitness_consistency', label: 'Fitness Consistency', emoji: '💪' },
@@ -160,12 +160,12 @@ export function CreateHabit() {
                     style={
                       active
                         ? {
-                            backgroundColor: 'rgba(83, 74, 183, 0.22)',
-                            boxShadow: `inset 0 0 0 1px ${PURPLE}55`,
+                            backgroundColor: 'rgba(245, 166, 35, 0.22)',
+                            boxShadow: `inset 0 0 0 1px ${ACCENT}55`,
                           }
                         : {
                             backgroundColor: 'rgba(255,255,255,0.04)',
-                            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
+                            boxShadow: 'inset 0 0 0 1px rgba(28,40,64,0.8)',
                           }
                     }
                   >
@@ -205,12 +205,12 @@ export function CreateHabit() {
                     style={
                       active
                         ? {
-                            backgroundColor: 'rgba(83, 74, 183, 0.22)',
-                            boxShadow: `inset 0 0 0 1px ${PURPLE}55`,
+                            backgroundColor: 'rgba(245, 166, 35, 0.22)',
+                            boxShadow: `inset 0 0 0 1px ${ACCENT}55`,
                           }
                         : {
                             backgroundColor: 'rgba(255,255,255,0.04)',
-                            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
+                            boxShadow: 'inset 0 0 0 1px rgba(28,40,64,0.8)',
                           }
                     }
                   >
@@ -258,12 +258,12 @@ export function CreateHabit() {
                     style={
                       active
                         ? {
-                            backgroundColor: 'rgba(83, 74, 183, 0.22)',
-                            boxShadow: `inset 0 0 0 1px ${PURPLE}55`,
+                            backgroundColor: 'rgba(245, 166, 35, 0.22)',
+                            boxShadow: `inset 0 0 0 1px ${ACCENT}55`,
                           }
                         : {
                             backgroundColor: 'rgba(255,255,255,0.04)',
-                            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
+                            boxShadow: 'inset 0 0 0 1px rgba(28,40,64,0.8)',
                           }
                     }
                   >
@@ -279,7 +279,7 @@ export function CreateHabit() {
             disabled={saving}
             onClick={() => void submit()}
             className="btn-press w-full rounded-2xl py-4 text-center text-sm font-bold text-white transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: PURPLE }}
+            style={{ backgroundColor: ACCENT }}
           >
             {saving ? 'Creating…' : 'Create Habit'}
           </button>

@@ -21,8 +21,8 @@ import {
 } from '../lib/routineUtils'
 import { supabase } from '../supabase'
 
-const GOAL_PURPLE = '#534AB7'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const ROUTINE_CTA = '#F5A623'
+const CARD_BORDER = '#1C2840'
 
 type ItemRow = {
   id: string
@@ -535,7 +535,7 @@ export function RoutineDetail() {
               disabled={!allChecked || saving}
               onClick={() => void handleCompleteRoutine()}
               className="mx-auto flex w-full max-w-lg justify-center rounded-xl py-4 text-base font-bold text-white shadow-lg transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-              style={{ backgroundColor: GOAL_PURPLE }}
+              style={{ backgroundColor: ROUTINE_CTA }}
             >
               Complete Routine
             </button>

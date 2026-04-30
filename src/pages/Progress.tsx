@@ -52,8 +52,8 @@ import { supabase } from '../supabase'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 
-const CARD_BG = '#141418'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const CARD_BG = '#111827'
+const CARD_BORDER = '#1C2840'
 const MUTED_BODY = '#888780'
 const MUTED_VERY = 'rgba(136, 135, 128, 0.65)'
 
@@ -61,13 +61,13 @@ const SECTION_HEAD_CLASS =
   'shrink-0 text-[10px] font-medium uppercase tracking-[0.08em]'
 
 const BAR_TRACK = '#2A2A2E'
-const BAR_PURPLE = '#534AB7'
-const BAR_HOVER = '#7F77DD'
-const BAR_CURRENT = '#9D94F0'
-const BAR_CURRENT_HOVER = '#C4BFFF'
+const BAR_PURPLE = '#F5A623'
+const BAR_HOVER = '#FFD080'
+const BAR_CURRENT = '#FFD080'
+const BAR_CURRENT_HOVER = '#ffe7b3'
 const GRID_LINE = '#2A2A2E'
 
-const STAT_PURPLE = '#534AB7'
+const STAT_PURPLE = '#F5A623'
 const STAT_AMBER = '#F59E0B'
 const STAT_ORANGE = '#FF6B35'
 const STAT_GREEN = '#34D399'
@@ -267,7 +267,7 @@ function WeeklyXpBarChart({
   )
 }
 
-const SLEEP_BAR_PURPLE = '#534AB7'
+const SLEEP_BAR_PURPLE = '#F5A623'
 const SLEEP_BAR_AMBER = '#BA7517'
 const SLEEP_BAR_RED = '#E24B4A'
 const SLEEP_BAR_EMPTY = '#2A2A2E'
@@ -1117,7 +1117,7 @@ export function Progress() {
                         className="rounded-xl border px-4 py-3 text-left opacity-50 backdrop-blur-[2px]"
                         style={{
                           backgroundColor: 'rgba(20,20,24,0.8)',
-                          borderColor: 'rgba(255,255,255,0.06)',
+                          borderColor: 'rgba(28,40,64,0.8)',
                         }}
                       >
                         <p className="text-sm font-semibold text-zinc-300">
@@ -1545,7 +1545,7 @@ export function Progress() {
                               {showExpandToggle && needsReadMore ? (
                                 <button
                                   type="button"
-                                  className="mt-3 text-xs font-semibold text-[#534AB7] transition-colors hover:underline"
+                                  className="mt-3 text-xs font-semibold text-[#F5A623] transition-colors hover:underline"
                                   onClick={() =>
                                     setExpanded((prev) => ({
                                       ...prev,

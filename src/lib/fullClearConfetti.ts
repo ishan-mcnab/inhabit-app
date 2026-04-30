@@ -1,6 +1,6 @@
 import confetti from 'canvas-confetti'
 
-const CONFETTI_COLORS = ['#534AB7', '#1D9E75', '#FF6B35', '#ffffff']
+const CONFETTI_COLORS = ['#F5A623', '#1D9E75', '#FF6B35', '#ffffff']
 
 /**
  * Full-screen confetti for ~2s, then runs onComplete (e.g. show banner).

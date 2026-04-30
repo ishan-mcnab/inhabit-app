@@ -11,13 +11,15 @@ import { hasXpReasonToday } from '../../lib/healthTrackers'
 import { awardXP } from '../../lib/xp'
 import { supabase } from '../../supabase'
 
-const CARD_SURFACE = '#141418'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const CARD_SURFACE = '#111827'
+const CARD_BORDER = '#1C2840'
 const MUTED = '#888780'
 const MUTED_HEADING = '#888780'
 const WATER_BLUE = '#185FA5'
 const BAR_TRACK = '#2A2A2E'
-const PURPLE = '#534AB7'
+const ACCENT = '#F5A623'
+const ACCENT_TINT_15 = 'rgba(245,166,35,0.15)'
+const ACCENT_TINT_20 = 'rgba(245,166,35,0.2)'
 const RED = '#E24B4A'
 const AMBER = '#BA7517'
 const GREEN = '#1D9E75'
@@ -221,15 +223,15 @@ function SleepLogModal({
                   onClick={() => setRestRating(n)}
                   className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-bold transition-colors"
                   style={{
-                    borderColor: sel ? PURPLE : 'rgba(255,255,255,0.1)',
-                    backgroundColor: sel ? 'rgba(83,74,183,0.15)' : 'transparent',
+                    borderColor: sel ? ACCENT : 'rgba(255,255,255,0.1)',
+                    backgroundColor: sel ? ACCENT_TINT_15 : 'transparent',
                     color: sel ? '#fff' : MUTED,
                   }}
                 >
                   <span
                     className="flex size-9 items-center justify-center rounded-full text-sm"
                     style={{
-                      backgroundColor: sel ? fill : 'rgba(255,255,255,0.06)',
+                      backgroundColor: sel ? fill : 'rgba(28,40,64,0.8)',
                     }}
                   >
                     {n}
@@ -264,7 +266,7 @@ function SleepLogModal({
             disabled={saving}
             onClick={() => void save()}
             className="mt-5 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: PURPLE }}
+            style={{ backgroundColor: ACCENT }}
           >
             {saving ? 'Saving…' : 'Save Sleep Log'}
           </button>
@@ -417,8 +419,8 @@ function MoodLogModal({
                   onClick={() => setMood(n)}
                   className="flex flex-1 items-center justify-center rounded-xl border py-2 text-2xl transition-colors"
                   style={{
-                    borderColor: sel ? PURPLE : 'rgba(255,255,255,0.1)',
-                    backgroundColor: sel ? 'rgba(83,74,183,0.2)' : 'transparent',
+                    borderColor: sel ? ACCENT : 'rgba(255,255,255,0.1)',
+                    backgroundColor: sel ? ACCENT_TINT_20 : 'transparent',
                   }}
                 >
                   {emo}
@@ -439,8 +441,8 @@ function MoodLogModal({
                   onClick={() => setEnergy(n)}
                   className="flex flex-1 items-center justify-center rounded-xl border py-2 text-2xl transition-colors"
                   style={{
-                    borderColor: sel ? PURPLE : 'rgba(255,255,255,0.1)',
-                    backgroundColor: sel ? 'rgba(83,74,183,0.2)' : 'transparent',
+                    borderColor: sel ? ACCENT : 'rgba(255,255,255,0.1)',
+                    backgroundColor: sel ? ACCENT_TINT_20 : 'transparent',
                   }}
                 >
                   {emo}
@@ -471,7 +473,7 @@ function MoodLogModal({
             disabled={saving}
             onClick={() => void save()}
             className="mt-5 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: PURPLE }}
+            style={{ backgroundColor: ACCENT }}
           >
             {saving ? 'Saving…' : 'Save Check In'}
           </button>
@@ -664,7 +666,7 @@ export function HealthTrackersSection({
                   )}
                   <span
                     className="mt-3 inline-block rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-                    style={{ backgroundColor: PURPLE }}
+                    style={{ backgroundColor: ACCENT }}
                   >
                     {sleepLogged ? 'Edit Sleep Log' : 'Log Sleep'}
                   </span>

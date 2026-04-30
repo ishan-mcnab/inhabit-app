@@ -16,7 +16,7 @@ import { weeklyReflectionCoachInsight } from '../lib/openRouterSingle'
 import { awardXP, localWeekStartEndIso } from '../lib/xp'
 import { supabase } from '../supabase'
 
-const REFLECTION_PURPLE = '#534AB7'
+const REFLECTION_ACCENT = '#F5A623'
 const MAX_CHARS = 500
 const MIN_SUBMIT = 10
 const TEXTAREA_MIN_PX = 100
@@ -84,7 +84,7 @@ function AutoGrowTextarea({
       rows={4}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value.slice(0, MAX_CHARS))}
-      className="min-h-[100px] w-full resize-none rounded-xl border border-zinc-800 bg-[#141418] px-3 py-2.5 text-sm text-white outline-none transition-[border-color,box-shadow] placeholder:text-zinc-600 focus:border-[#534AB7] focus:ring-2 focus:ring-[#534AB7]/35 disabled:opacity-60"
+      className="min-h-[100px] w-full resize-none rounded-xl border border-zinc-800 bg-[#111827] px-3 py-2.5 text-sm text-white outline-none transition-[border-color,box-shadow] placeholder:text-zinc-600 focus:border-[#F5A623] focus:ring-2 focus:ring-[#F5A623]/35 disabled:opacity-60"
     />
   )
 }
@@ -145,7 +145,7 @@ function CompletionView({
       ) : null}
       <div
         className="mt-8 rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-4 pl-5"
-        style={{ borderLeftWidth: 4, borderLeftColor: REFLECTION_PURPLE }}
+        style={{ borderLeftWidth: 4, borderLeftColor: REFLECTION_ACCENT }}
       >
         <p
           className={[
@@ -167,7 +167,7 @@ function CompletionView({
         type="button"
         onClick={() => navigate('/today')}
         className="mt-8 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity active:opacity-90"
-        style={{ backgroundColor: REFLECTION_PURPLE }}
+        style={{ backgroundColor: REFLECTION_ACCENT }}
       >
         Back to Today
       </button>
@@ -473,7 +473,7 @@ export function WeeklyReflection() {
           if (consecutive) {
             const bonus = await awardXP(user.id, 50, 'reflection_streak')
             newWeeklyXpAfter = bonus.newWeeklyXp
-            enqueueStreakToast('3-week reflection streak! +50 XP', REFLECTION_PURPLE)
+            enqueueStreakToast('3-week reflection streak! +50 XP', REFLECTION_ACCENT)
           }
         }
       }
@@ -735,7 +735,7 @@ export function WeeklyReflection() {
               disabled={!canSubmit || phase === 'submitting'}
               onClick={() => void handleSubmit()}
               className="btn-press mt-10 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
-              style={{ backgroundColor: REFLECTION_PURPLE }}
+              style={{ backgroundColor: REFLECTION_ACCENT }}
             >
               {phase === 'submitting' ? 'Saving...' : 'Submit Reflection'}
             </button>
@@ -809,7 +809,7 @@ export function WeeklyReflection() {
 
             <div
               className="mt-8 rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-4 pl-5"
-              style={{ borderLeftWidth: 4, borderLeftColor: REFLECTION_PURPLE }}
+              style={{ borderLeftWidth: 4, borderLeftColor: REFLECTION_ACCENT }}
             >
               <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
                 Your coach says:
@@ -824,7 +824,7 @@ export function WeeklyReflection() {
                 type="button"
                 onClick={() => navigate('/today')}
                 className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity active:opacity-90"
-                style={{ backgroundColor: REFLECTION_PURPLE }}
+                style={{ backgroundColor: REFLECTION_ACCENT }}
               >
                 Back to Today
               </button>

@@ -11,10 +11,10 @@ import {
 } from '../lib/xp'
 import { supabase } from '../supabase'
 
-const CARD_BG = '#0D0D0F'
+const CARD_BG = '#0A0F1E'
 const CARD_BORDER = '#2A2A2E'
-const PURPLE = '#534AB7'
-const CARD_GLOW = '0 0 40px rgba(83, 74, 183, 0.15)'
+const ACCENT = '#F5A623'
+const CARD_GLOW = '0 0 40px rgba(245, 166, 35, 0.2)'
 const BAR_TRACK = '#2A2A2E'
 
 const CARD_MAX_W = 375
@@ -310,7 +310,7 @@ export function Share() {
                   </span>
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: PURPLE }}
+                    style={{ backgroundColor: ACCENT }}
                     aria-hidden
                   />
                   <span className="ml-auto text-xs font-medium text-zinc-500">
@@ -352,7 +352,7 @@ export function Share() {
                     ) : (
                       <p
                         className="text-[28px] font-bold tabular-nums leading-none"
-                        style={{ color: PURPLE }}
+                        style={{ color: ACCENT }}
                       >
                         {weeklyXp.toLocaleString()}
                       </p>
@@ -392,7 +392,7 @@ export function Share() {
                       className="h-full rounded-full transition-[width] duration-500"
                       style={{
                         width: `${completionPct}%`,
-                        backgroundColor: PURPLE,
+                        backgroundColor: ACCENT,
                       }}
                     />
                   </div>
@@ -438,7 +438,7 @@ export function Share() {
                   type="button"
                   onClick={() => void screenshotAndShare()}
                   className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity active:opacity-90"
-                  style={{ backgroundColor: PURPLE }}
+                  style={{ backgroundColor: ACCENT }}
                 >
                   Screenshot &amp; Share
                 </button>
@@ -446,7 +446,7 @@ export function Share() {
                   type="button"
                   onClick={() => void copyStatsText()}
                   className="w-full rounded-xl border border-zinc-800/80 py-3.5 text-sm font-bold text-white transition-colors hover:border-zinc-700"
-                  style={{ backgroundColor: '#141418' }}
+                  style={{ backgroundColor: '#111827' }}
                 >
                   Copy Stats Text
                 </button>

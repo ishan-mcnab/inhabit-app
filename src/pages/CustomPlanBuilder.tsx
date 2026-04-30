@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, Plus } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { GOAL_PURPLE } from '../constants/goalCategoryPills'
 import { calculateTotalWeeks } from '../lib/goalProgress'
 import { appCache, goalsCacheKey, missionsCacheKey } from '../lib/cache'
 import { supabase } from '../supabase'
+
+const APP_ACCENT = '#F5A623'
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear()
@@ -522,10 +523,10 @@ export function CustomPlanBuilder() {
                         className="rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
                         style={{
                           borderColor: selected
-                            ? GOAL_PURPLE
+                            ? APP_ACCENT
                             : 'rgba(255,255,255,0.12)',
                           backgroundColor: selected
-                            ? 'rgba(83,74,183,0.18)'
+                            ? 'rgba(245,166,35,0.18)'
                             : 'transparent',
                           color: selected ? '#ffffff' : '#888780',
                         }}
@@ -547,7 +548,7 @@ export function CustomPlanBuilder() {
                 disabled={saving}
                 onClick={addAnotherMissionField}
                 className="inline-flex items-center gap-2 text-[13px] font-semibold disabled:opacity-50"
-                style={{ color: GOAL_PURPLE }}
+                style={{ color: APP_ACCENT }}
               >
                 <Plus size={14} aria-hidden strokeWidth={2.5} />
                 + Add mission
@@ -583,7 +584,7 @@ export function CustomPlanBuilder() {
             disabled={saving}
             onClick={() => void handleSave()}
             className="btn-press w-full rounded-xl py-4 text-base font-bold tracking-wide text-white shadow-lg shadow-black/20 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ backgroundColor: GOAL_PURPLE }}
+            style={{ backgroundColor: APP_ACCENT }}
           >
             {saving ? 'Saving…' : 'Save My Plan'}
           </button>

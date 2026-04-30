@@ -35,8 +35,8 @@ import {
 } from '../lib/weeklyQuestPick'
 import { supabase } from '../supabase'
 
-const QUEST_PURPLE = '#534AB7'
-const OVERLAY_BG = 'rgba(13,13,15,0.8)'
+const QUEST_ACCENT = '#F5A623'
+const OVERLAY_BG = 'rgba(10,15,30,0.8)'
 
 const QUEST_COMPLETE_MESSAGES = [
   'Quest complete. One step closer.',
@@ -1408,8 +1408,8 @@ export function GoalDetail() {
                       style={
                         selected
                           ? {
-                              borderColor: QUEST_PURPLE,
-                              backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                              borderColor: QUEST_ACCENT,
+                              backgroundColor: 'rgba(245, 166, 35, 0.14)',
                             }
                           : undefined
                       }
@@ -1432,8 +1432,8 @@ export function GoalDetail() {
                   style={
                     targetMode === 'custom'
                       ? {
-                          borderColor: QUEST_PURPLE,
-                          backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                          borderColor: QUEST_ACCENT,
+                          backgroundColor: 'rgba(245, 166, 35, 0.14)',
                         }
                       : undefined
                   }
@@ -1621,8 +1621,8 @@ export function GoalDetail() {
           <div
             className="w-full max-w-md rounded-lg border px-5 py-6 text-center"
             style={{
-              backgroundColor: '#141418',
-              borderColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: '#111827',
+              borderColor: '#1C2840',
             }}
           >
             <p className="text-[13px] font-semibold text-white">
@@ -1634,7 +1634,7 @@ export function GoalDetail() {
             <button
               type="button"
               onClick={() => void navigate('/goals')}
-              className="mt-5 w-full rounded-lg border-2 border-[#534AB7] bg-transparent py-2.5 text-xs font-semibold text-[#534AB7]"
+              className="mt-5 w-full rounded-lg border-2 border-[#F5A623] bg-transparent py-2.5 text-xs font-semibold text-[#F5A623]"
             >
               Back to Goals
             </button>
@@ -1928,7 +1928,7 @@ export function GoalDetail() {
                               void handleMarkQuestComplete(currentQuest)
                             }
                             className="btn-press w-full rounded-xl px-5 py-3 text-sm font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                            style={{ backgroundColor: QUEST_PURPLE }}
+                            style={{ backgroundColor: QUEST_ACCENT }}
                           >
                             {markingId === currentQuest.id
                               ? 'Saving…'
@@ -2030,7 +2030,7 @@ export function GoalDetail() {
                                 ? 'border-zinc-800/60 opacity-50'
                                 : 'border-zinc-800/80',
                             isHighlighted
-                              ? 'border-[#534AB7]/45 shadow-[0_0_0_1px_rgba(83,74,183,0.2)]'
+                              ? 'border-[#F5A623]/45 shadow-[0_0_0_1px_rgba(245,166,35,0.2)]'
                               : '',
                           ].join(' ')}
                         >
@@ -2218,7 +2218,7 @@ export function GoalDetail() {
                         className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-4 pl-5"
                         style={{
                           borderLeftWidth: 4,
-                          borderLeftColor: QUEST_PURPLE,
+                          borderLeftColor: QUEST_ACCENT,
                         }}
                       >
                         <p className="text-xs font-semibold text-zinc-500">

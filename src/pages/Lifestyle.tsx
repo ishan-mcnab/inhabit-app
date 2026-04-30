@@ -11,8 +11,8 @@ import { HealthTrackersSection } from '../components/lifestyle/HealthTrackersSec
 import type { HealthSnapshot } from '../lib/healthTrackers'
 import { supabase } from '../supabase'
 
-const CARD_SURFACE = '#141418'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const CARD_SURFACE = '#111827'
+const CARD_BORDER = '#1C2840'
 const MUTED = '#888780'
 const MUTED_HEADING = '#888780'
 

@@ -27,13 +27,13 @@ export class PageErrorBoundary extends Component<Props, State> {
       return (
         <div
           className="flex min-h-[50vh] flex-1 flex-col items-center justify-center px-4 py-12"
-          style={{ backgroundColor: '#0D0D0F' }}
+          style={{ backgroundColor: '#0A0F1E' }}
         >
           <div
             className="w-full max-w-md rounded-lg border p-4"
             style={{
-              backgroundColor: '#141418',
-              borderColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: '#111827',
+              borderColor: '#1C2840',
             }}
             role="alert"
           >
@@ -51,7 +51,7 @@ export class PageErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={this.reset}
-              className="mt-4 w-full rounded-lg border-2 border-[#534AB7] bg-transparent py-2.5 text-xs font-semibold text-[#534AB7] transition-colors hover:bg-[#534AB7]/10"
+              className="mt-4 w-full rounded-lg border-2 border-[#F5A623] bg-transparent py-2.5 text-xs font-semibold text-[#F5A623] transition-colors hover:bg-[#F5A623]/10"
             >
               Try again
             </button>

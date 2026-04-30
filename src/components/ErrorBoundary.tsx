@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div
           className="flex min-h-screen flex-col items-center justify-center px-6 py-10"
-          style={{ backgroundColor: '#0D0D0F' }}
+          style={{ backgroundColor: '#0A0F1E' }}
         >
           <div className="flex w-full max-w-md flex-col items-center text-center">
             <span className="text-5xl" aria-hidden>
@@ -44,8 +44,8 @@ export class ErrorBoundary extends Component<Props, State> {
             </p>
             <button
               type="button"
-              className="mt-8 w-full max-w-xs rounded-xl py-3.5 text-sm font-semibold text-white"
-              style={{ backgroundColor: '#534AB7' }}
+              className="mt-8 w-full max-w-xs rounded-xl py-3.5 text-sm font-semibold text-[#0A0F1E]"
+              style={{ backgroundColor: '#F5A623' }}
               onClick={() => window.location.reload()}
             >
               Reload App
@@ -54,8 +54,8 @@ export class ErrorBoundary extends Component<Props, State> {
               type="button"
               className="mt-3 w-full max-w-xs rounded-xl border py-3.5 text-sm font-semibold text-white transition-colors"
               style={{
-                backgroundColor: '#141418',
-                borderColor: 'rgba(255,255,255,0.08)',
+                backgroundColor: '#111827',
+                borderColor: '#1C2840',
               }}
               onClick={() => {
                 window.location.href = '/today'
@@ -66,7 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {isDev ? (
               <div
                 className="mt-8 max-h-48 w-full overflow-auto rounded-lg border bg-black/50 p-3 text-left"
-                style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+                style={{ borderColor: '#1C2840' }}
               >
                 <p className="break-all font-mono text-xs text-red-300">
                   {err.message}

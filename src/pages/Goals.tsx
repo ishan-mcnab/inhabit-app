@@ -3,10 +3,11 @@ import { Flag, Plus, Sparkles } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationContext'
 import {
-  GOAL_PURPLE,
   getCategoryBorderColor,
   getGoalCategoryDisplay,
 } from '../constants/goalCategoryPills'
+
+const APP_ACCENT = '#F5A623'
 import {
   calculateCurrentWeekFromGoalStart,
   calculateTotalWeeks,
@@ -78,8 +79,8 @@ function clampPercent(n: number): number {
   return Math.min(100, Math.max(0, n))
 }
 
-const CARD_SURFACE = '#141418'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const CARD_SURFACE = '#111827'
+const CARD_BORDER = '#1C2840'
 const MUTED_BODY = '#888780'
 const PAUSED_AMBER = '#BA7517'
 
@@ -583,7 +584,7 @@ export function Goals() {
           <button
             type="button"
             onClick={() => void openSuggestions()}
-            className="btn-press flex items-center gap-1.5 rounded-lg border-2 border-[#534AB7] bg-transparent px-3 py-2 text-sm font-bold text-[#534AB7] transition-colors hover:bg-white/5"
+            className="btn-press flex items-center gap-1.5 rounded-lg border-2 border-[#F5A623] bg-transparent px-3 py-2 text-sm font-bold text-[#F5A623] transition-colors hover:bg-white/5"
           >
             <Sparkles size={14} aria-hidden strokeWidth={2} />
             Suggest goals
@@ -592,7 +593,7 @@ export function Goals() {
             to="/goals/new"
             aria-label="Create new goal"
             className="btn-press flex size-9 items-center justify-center rounded-lg text-white shadow-md transition-colors hover:opacity-90"
-            style={{ backgroundColor: GOAL_PURPLE }}
+            style={{ backgroundColor: APP_ACCENT }}
           >
             <Plus size={18} aria-hidden strokeWidth={2.5} />
           </Link>
@@ -641,7 +642,7 @@ export function Goals() {
                   <Link
                     to="/goals/new"
                     className="btn-press mt-8 w-full max-w-[280px] rounded-xl py-3.5 text-center text-sm font-bold text-white transition-opacity hover:opacity-95"
-                    style={{ backgroundColor: GOAL_PURPLE }}
+                    style={{ backgroundColor: APP_ACCENT }}
                   >
                     Set your first goal →
                   </Link>
@@ -963,9 +964,11 @@ export function Goals() {
                 <div
                   className="flex gap-3 rounded-xl border border-zinc-800/80 px-3 py-3"
                   style={{
-                    backgroundColor: '#141418',
+                    backgroundColor: '#111827',
                     borderLeftWidth: 3,
-                    borderLeftColor: GOAL_PURPLE,
+                    borderLeftColor: getCategoryBorderColor(
+                      'fitness_consistency',
+                    ),
                   }}
                 >
                   <p className="text-[13px] font-medium leading-snug text-zinc-500">
@@ -1086,7 +1089,7 @@ export function Goals() {
                           type="button"
                           onClick={() => addSuggestedGoal(sg)}
                           className="mt-4 w-full rounded-xl py-3 text-sm font-bold text-white"
-                          style={{ backgroundColor: GOAL_PURPLE }}
+                          style={{ backgroundColor: APP_ACCENT }}
                         >
                           Add this goal
                         </button>

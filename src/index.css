@@ -1,11 +1,15 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-app-bg: #0d0d0f;
-  --color-app-surface: #16161a;
-  --color-app-muted: #a1a1aa;
-  --color-app-accent: #a78bfa;
-  --color-tab-bar: #141418;
+  --color-app-bg: #0a0f1e;
+  --color-app-surface: #111827;
+  --color-app-surface-2: #141c2e;
+  --color-app-accent: #f5a623;
+  --color-app-accent-light: #ffd080;
+  --color-app-text: #e8edf8;
+  --color-app-muted: #888780;
+  --color-app-border: #1c2840;
+  --color-tab-bar: #0a0f1e;
 }
 
 :root {
@@ -58,8 +62,16 @@
   input:focus-visible,
   textarea:focus-visible,
   a:focus-visible {
-    outline: 2px solid #534ab7;
+    outline: 2px solid #f5a623;
     outline-offset: 2px;
+  }
+
+  body {
+    background-color: #0a0f1e;
+  }
+
+  #root {
+    background-color: #0a0f1e;
   }
 }
 
@@ -130,7 +142,7 @@
 }
 
 .card-sheen {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(245, 166, 35, 0.08);
 }
 
 @keyframes rank-shield-shimmer {
@@ -160,7 +172,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.08),
+    rgba(245, 166, 35, 0.12),
     transparent
   );
   transform: translateX(-150%);

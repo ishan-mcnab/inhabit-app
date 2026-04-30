@@ -272,14 +272,16 @@ function StateCard({ children }: { children: React.ReactNode }) {
   )
 }
 
-const LEVEL_CARD_BG = 'rgba(83, 74, 183, 0.05)'
-const LEVEL_CARD_BORDER = '1px solid rgba(83, 74, 183, 0.2)'
+const LEVEL_CARD_BG = 'rgba(245, 166, 35, 0.05)'
+const LEVEL_CARD_BORDER = '1px solid rgba(245, 166, 35, 0.2)'
 const BAR_TRACK = '#2A2A2E'
-const BAR_FILL = '#534AB7'
-const LEVEL_UP_PURPLE = '#534AB7'
+const BAR_FILL_GRADIENT = 'linear-gradient(90deg, #F5A623, #FFD080)'
+const LEVEL_UP_BANNER_BG = '#F5A623'
 const MUTED_HEADING = '#888780'
-const CARD_SURFACE = '#141418'
-const CARD_BORDER = 'rgba(255,255,255,0.08)'
+const CARD_SURFACE = '#111827'
+const CARD_BORDER = '#1C2840'
+const MISSION_DONE_BG = 'rgba(14, 21, 32, 0.8)'
+const MISSION_DONE_BORDER = 'rgba(26, 32, 16, 0.5)'
 
 function AnimatedMissionProgress({
   done,
@@ -499,7 +501,13 @@ function LevelProgressCard({
                 className="h-full rounded-full"
                 style={{
                   width: `${fillPct}%`,
-                  backgroundColor: barFlash ? '#ffffff' : BAR_FILL,
+                  ...(barFlash
+                    ? {
+                        backgroundColor: '#ffffff',
+                      }
+                    : {
+                        background: BAR_FILL_GRADIENT,
+                      }),
                   transition: barFlash
                     ? 'background-color 0.18s ease'
                     : `${barTransition}, background-color 0.18s ease`,
@@ -633,8 +641,8 @@ function LevelProgressCard({
         </div>
         {levelUpBannerLevel !== null ? (
           <div
-            className="-mx-3 mt-2.5 w-[calc(100%+1.5rem)] max-w-none py-2.5 text-center text-sm font-bold text-white"
-            style={{ backgroundColor: LEVEL_UP_PURPLE }}
+            className="-mx-3 mt-2.5 w-[calc(100%+1.5rem)] max-w-none py-2.5 text-center text-sm font-bold text-[#0A0F1E]"
+            style={{ backgroundColor: LEVEL_UP_BANNER_BG }}
             role="status"
           >
             LEVEL UP! You reached Level {levelUpBannerLevel}
@@ -2367,7 +2375,7 @@ export function Today() {
       setStreakCurrent(graceStreakBeforeMiss)
       setGracePassesRemaining((g) => Math.max(0, g - 1))
       setGraceModalOpen(false)
-      enqueueStreakToast('🛡️ Streak saved! -30 XP', '#534AB7')
+      enqueueStreakToast('🛡️ Streak saved! -30 XP', '#F5A623')
     } catch (e) {
       console.error('redeemGracePass failed:', e)
     } finally {
@@ -2469,9 +2477,11 @@ export function Today() {
         <div
           className={[
             'inhabit-banner-fade-in flex w-full min-w-0 max-w-full items-center justify-between gap-3 overflow-hidden rounded-lg px-4 py-3',
-            lastChance ? 'border-l-4 border-[#E24B4A]' : '',
+            lastChance
+              ? 'border-l-4 border-[#E24B4A]'
+              : 'border border-[#F5A623]',
           ].join(' ')}
-          style={{ backgroundColor: '#534AB7' }}
+          style={{ backgroundColor: '#141C2E' }}
           role="status"
         >
           <div className="min-w-0">
@@ -2527,7 +2537,7 @@ export function Today() {
           style={{
             backgroundColor: CARD_SURFACE,
             borderLeftWidth: 4,
-            borderLeftColor: '#534AB7',
+            borderLeftColor: '#F5A623',
           }}
           role="status"
         >
@@ -2735,7 +2745,7 @@ export function Today() {
                   <div
                     className="flex w-full flex-col items-center rounded-[12px] border p-4 text-center"
                     style={{
-                      backgroundColor: '#141418',
+                      backgroundColor: CARD_SURFACE,
                       borderColor: CARD_BORDER,
                     }}
                   >
@@ -2757,7 +2767,7 @@ export function Today() {
                     <Link
                       to="/goals/new"
                       className="btn-press mt-4 w-full rounded-[12px] py-3 text-center text-sm font-bold text-white transition-opacity"
-                      style={{ backgroundColor: '#534AB7' }}
+                      style={{ backgroundColor: '#F5A623' }}
                     >
                       Create a Goal →
                     </Link>
@@ -2765,7 +2775,7 @@ export function Today() {
                   <div
                     className="flex w-full flex-col items-center rounded-[12px] border p-4 text-center"
                     style={{
-                      backgroundColor: '#141418',
+                      backgroundColor: CARD_SURFACE,
                       borderColor: CARD_BORDER,
                     }}
                   >
@@ -2787,7 +2797,7 @@ export function Today() {
                     <Link
                       to="/habits/new"
                       className="btn-press mt-4 w-full rounded-[12px] py-3 text-center text-sm font-bold text-white transition-opacity"
-                      style={{ backgroundColor: '#534AB7' }}
+                      style={{ backgroundColor: '#F5A623' }}
                     >
                       Add Habit
                     </Link>
@@ -2812,7 +2822,7 @@ export function Today() {
                   <div
                     className="flex w-full flex-col items-center rounded-[12px] border p-4 text-center"
                     style={{
-                      backgroundColor: '#141418',
+                      backgroundColor: CARD_SURFACE,
                       borderColor: CARD_BORDER,
                     }}
                   >
@@ -2834,7 +2844,7 @@ export function Today() {
                     <Link
                       to="/goals/new"
                       className="btn-press mt-4 w-full rounded-[12px] py-3 text-center text-sm font-bold text-white transition-opacity"
-                      style={{ backgroundColor: '#534AB7' }}
+                      style={{ backgroundColor: '#F5A623' }}
                     >
                       Create a Goal →
                     </Link>
@@ -2870,7 +2880,7 @@ export function Today() {
                       disabled={missionRegenerateWorking}
                       onClick={() => void handleRegenerateMissionsTap()}
                       className="btn-press mt-6 w-full rounded-xl py-3.5 text-sm font-bold text-white transition-opacity disabled:opacity-50"
-                      style={{ backgroundColor: '#534AB7' }}
+                      style={{ backgroundColor: '#F5A623' }}
                     >
                       {missionRegenerateWorking ? 'Regenerating…' : 'Regenerate'}
                     </button>
@@ -2921,15 +2931,18 @@ export function Today() {
                   <div
                     className={[
                       'card-interactive card-sheen relative flex min-h-[64px] w-full min-w-0 max-w-full transform-gpu items-stretch gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm will-change-transform transition-colors hover:bg-white/[0.04]',
-                      m.completed ? 'opacity-[0.45]' : 'opacity-100',
                       removing ? 'opacity-0' : '',
                       isPressing
                         ? 'scale-[0.98] transition-none'
                         : 'scale-100 transition-[transform,opacity,background-color] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] active:scale-[0.98]',
                     ].join(' ')}
                     style={{
-                      backgroundColor: CARD_SURFACE,
-                      borderColor: CARD_BORDER,
+                      backgroundColor: m.completed
+                        ? MISSION_DONE_BG
+                        : CARD_SURFACE,
+                      borderColor: m.completed
+                        ? MISSION_DONE_BORDER
+                        : CARD_BORDER,
                     }}
                     onPointerDownCapture={(e) => {
                       if (m.completed) return
@@ -3477,7 +3490,7 @@ export function Today() {
           <button
             type="button"
             className="absolute inset-0"
-            style={{ backgroundColor: 'rgba(13,13,15,0.8)' }}
+            style={{ backgroundColor: 'rgba(10,15,30,0.8)' }}
             aria-label="Close remove mission confirmation"
             onClick={() => setConfirmRemoveMission(null)}
           />
@@ -3655,7 +3668,7 @@ export function Today() {
           <button
             type="button"
             className="absolute inset-0"
-            style={{ backgroundColor: 'rgba(13,13,15,0.8)' }}
+            style={{ backgroundColor: 'rgba(10,15,30,0.8)' }}
             aria-label="Close delete habit confirmation"
             onClick={() => setConfirmDeleteHabit(null)}
           />

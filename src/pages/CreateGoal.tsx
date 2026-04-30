@@ -3,9 +3,13 @@ import { ChevronLeft, PenLine, Sparkles } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   GOAL_CATEGORY_PILLS,
-  GOAL_PURPLE,
+  categoryAccentTint,
+  getCategoryBorderColor,
   type GoalCategoryId,
 } from '../constants/goalCategoryPills'
+
+const FORM_ACCENT = '#F5A623'
+const FORM_ACCENT_TINT = 'rgba(245, 166, 35, 0.14)'
 import { generateMissions } from '../lib/generateMissions'
 import { goalContextSliceHasAnswers } from '../lib/goalContextSlice'
 import { calculateTotalWeeks } from '../lib/goalProgress'
@@ -615,8 +619,11 @@ export function CreateGoal() {
                     style={
                       selected
                         ? {
-                            borderColor: GOAL_PURPLE,
-                            backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                            borderColor: getCategoryBorderColor(pill.id),
+                            backgroundColor: categoryAccentTint(
+                              getCategoryBorderColor(pill.id),
+                              0.14,
+                            ),
                           }
                         : undefined
                     }
@@ -657,8 +664,8 @@ export function CreateGoal() {
                 style={
                   planType === 'ai'
                     ? {
-                        borderColor: GOAL_PURPLE,
-                        backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                        borderColor: FORM_ACCENT,
+                        backgroundColor: FORM_ACCENT_TINT,
                       }
                     : undefined
                 }
@@ -666,7 +673,7 @@ export function CreateGoal() {
                 <Sparkles
                   size={20}
                   className="shrink-0"
-                  style={{ color: GOAL_PURPLE }}
+                  style={{ color: FORM_ACCENT }}
                   aria-hidden
                 />
                 <span className="text-sm font-bold text-white">
@@ -690,8 +697,8 @@ export function CreateGoal() {
                 style={
                   planType === 'custom'
                     ? {
-                        borderColor: GOAL_PURPLE,
-                        backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                        borderColor: FORM_ACCENT,
+                        backgroundColor: FORM_ACCENT_TINT,
                       }
                     : undefined
                 }
@@ -735,8 +742,8 @@ export function CreateGoal() {
                     style={
                       selected
                         ? {
-                            borderColor: GOAL_PURPLE,
-                            backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                            borderColor: FORM_ACCENT,
+                            backgroundColor: FORM_ACCENT_TINT,
                           }
                         : undefined
                     }
@@ -759,8 +766,8 @@ export function CreateGoal() {
                 style={
                   durationMode === 'custom'
                     ? {
-                        borderColor: GOAL_PURPLE,
-                        backgroundColor: 'rgba(83, 74, 183, 0.14)',
+                        borderColor: FORM_ACCENT,
+                        backgroundColor: FORM_ACCENT_TINT,
                       }
                     : undefined
                 }
