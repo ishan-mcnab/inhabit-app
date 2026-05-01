@@ -14,6 +14,11 @@ import {
   getWeeklyRankBandProgress,
   rankColor,
 } from '../lib/xp'
+import {
+  initPushNotifications,
+  isPushSupported,
+  removePushToken,
+} from '../lib/pushNotifications'
 import { supabase } from '../supabase'
 
 const GOAL_PURPLE = '#534AB7'
@@ -309,6 +314,7 @@ export function Profile() {
   const [nameError, setNameError] = useState<string | null>(null)
 
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false)
+  const [pushToggleBusy, setPushToggleBusy] = useState(false)
 
   const nameBlockRef = useRef<HTMLDivElement>(null)
   const loadGenRef = useRef(0)
@@ -1072,6 +1078,34 @@ export function Profile() {
                     boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03)',
                   }}
                 >
+                  {isPushSupported() ? (
+                    <>
+                      <NotificationToggleRow
+                        label="Push Notifications"
+                        description="Daily reminders sent to your device"
+                        checked={notificationPrefs.pushNotifications}
+                        onChange={async (v) => {
+                          setNotificationPrefsPatch({ pushNotifications: v })
+                          const {
+                            data: { user },
+                          } = await supabase.auth.getUser()
+                          if (!user) return
+                          setPushToggleBusy(true)
+                          try {
+                            if (v) {
+                              await initPushNotifications(user.id)
+                            } else {
+                              await removePushToken(user.id)
+                            }
+                          } finally {
+                            setPushToggleBusy(false)
+                          }
+                        }}
+                        disabled={loading || pushToggleBusy}
+                      />
+                      <div className="h-px bg-zinc-800/80" aria-hidden />
+                    </>
+                  ) : null}
                   <NotificationToggleRow
                     label="Urgency banners"
                     description="Show reminders when missions are incomplete"

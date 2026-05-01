@@ -1,4 +1,5 @@
 export type NotificationPrefs = {
+  pushNotifications: boolean
   urgencyBanners: boolean
   streakWarnings: boolean
   newWeekBanner: boolean
@@ -7,6 +8,7 @@ export type NotificationPrefs = {
 const STORAGE_KEY = 'inhabit_notification_prefs'
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  pushNotifications: true,
   urgencyBanners: true,
   streakWarnings: true,
   newWeekBanner: true,
@@ -21,6 +23,7 @@ function normalizeNotificationPrefs(raw: string | null): NotificationPrefs {
   if (!raw) return DEFAULT_NOTIFICATION_PREFS
   const o = JSON.parse(raw) as Partial<NotificationPrefs>
   return {
+    pushNotifications: o.pushNotifications !== false,
     urgencyBanners: o.urgencyBanners !== false,
     streakWarnings: o.streakWarnings !== false,
     newWeekBanner: o.newWeekBanner !== false,

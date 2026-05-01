@@ -2,10 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
+import { initPushNotifications } from '../lib/pushNotifications'
+import { useAuth } from './AuthContext'
 
 export type TodayNotificationSignals = {
   incompleteMissionsCount: number
@@ -31,6 +35,24 @@ const defaultValue: NotificationContextValue = {
 }
 
 const NotificationContext = createContext<NotificationContextValue>(defaultValue)
+
+function OnboardedPushBootstrap() {
+  const { session } = useAuth()
+  const userId = session?.user.id ?? null
+  const lastBootstrappedUser = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!userId) {
+      lastBootstrappedUser.current = null
+      return
+    }
+    if (lastBootstrappedUser.current === userId) return
+    lastBootstrappedUser.current = userId
+    void initPushNotifications(userId)
+  }, [userId])
+
+  return null
+}
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [incompleteMissionsCount, setIncompleteMissionsCount] = useState(0)
@@ -79,6 +101,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider value={value}>
+      <OnboardedPushBootstrap />
       {children}
     </NotificationContext.Provider>
   )

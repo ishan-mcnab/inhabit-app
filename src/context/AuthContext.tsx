@@ -6,6 +6,7 @@ import {
   useState,
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { cleanupPushOnSignOut } from '../lib/pushNotifications'
 import { supabase } from '../supabase'
 
 type AuthContextValue = {
@@ -30,7 +31,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, next) => {
+    } = supabase.auth.onAuthStateChange((event, next) => {
+      if (event === 'SIGNED_OUT') {
+        void cleanupPushOnSignOut()
+      }
       setSession(next)
       setLoading(false)
     })
